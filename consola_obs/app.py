@@ -164,6 +164,10 @@ def main():
     # Si el usuario ya había elegido una tipografía en el menú de
     # ajustes, se aplica por encima de la detección automática.
     mod_ui_ventana.aplicar_fuente_elegida(E.config_interfaz_previa.get("fuente_ui", ""), guardar=False)
+    # Salida de audio local (parlantes de la PC) en paralelo a OBS.
+    E.escuchar_en_pc = E.config_interfaz_previa.get("escuchar_en_pc", True)
+    if not isinstance(E.escuchar_en_pc, bool):
+        E.escuchar_en_pc = str(E.escuchar_en_pc).lower() in ("1", "true", "sí", "si")
 
     try:
         E._ico = os.path.join(R.CARPETA_ICONOS, "app_icon.ico")
@@ -476,6 +480,22 @@ def main():
     E.selector_fuente.bind(
         "<<ComboboxSelected>>",
         lambda e: mod_ui_ventana.cambiar_fuente(E.variable_fuente.get())
+    )
+
+    mod_ui_cabecera._seccion_menu("AUDIO")
+
+    E.variable_escuchar = tk.StringVar(value="Sí" if E.escuchar_en_pc else "No")
+    E.selector_escuchar = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Escuchar acá"),
+        textvariable=E.variable_escuchar,
+        values=["Sí", "No"],
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_escuchar.pack(side="left", fill="x", expand=True)
+    E.selector_escuchar.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_audio_reproduccion.cambiar_escuchar_en_pc(E.variable_escuchar.get())
     )
 
     tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")

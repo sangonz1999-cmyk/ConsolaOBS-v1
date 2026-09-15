@@ -866,13 +866,13 @@ def _insertar_pad_al_principio(datos_nuevos):
 
 
 def detectar_sonidos_carpeta(avisar=True):
-    """Crea un pad por cada archivo de audio de la carpeta Sondidos_pad
-    que todavía no tenga pad asignado, con el nombre del archivo y, si
-    existe, su imagen gemela de la carpeta Imagenes_pad. Los nuevos
+    """Detecta el contenido de las carpetas: crea un pad por cada audio
+    de Sondidos_pad que todavía no tenga pad (con su imagen gemela si
+    existe) y, además, les completa la imagen a los pads que ya tienen
+    sonido pero todavía no tienen imagen asignada. Los sonidos nuevos
     tienen prioridad: entran primeros (posición 0) y los que ya estaban
     se corren una posición a la derecha; sólo si no hay ningún hueco
-    se agregan pads nuevos al final. Nunca borra ni modifica el
-    contenido de los pads existentes."""
+    se agregan pads nuevos al final. Nunca borra pads existentes."""
     try:
         archivos = sorted(os.listdir(R.CARPETA_SONIDOS_PAD))
     except Exception:
@@ -901,19 +901,38 @@ def detectar_sonidos_carpeta(avisar=True):
     for datos_nuevos in reversed(pendientes):
         _insertar_pad_al_principio(datos_nuevos)
     nuevos = len(pendientes)
-    if nuevos:
+    # Completar imágenes faltantes en pads que ya existían: se busca la
+    # gemela por el nombre del ARCHIVO de sonido (no por el nombre del
+    # pad, que el usuario puede haber renombrado).
+    imagenes = 0
+    for clave, datos in E.config_soundboard.items():
+        if not isinstance(datos, dict) or not datos.get("archivo") or datos.get("imagen"):
+            continue
+        gemela = _imagen_gemela(os.path.splitext(os.path.basename(datos["archivo"]))[0])
+        if gemela:
+            datos["imagen"] = gemela
+            try:
+                indice_int = int(clave)
+            except (TypeError, ValueError):
+                indice_int = None
+            for mini in [c for c in E.miniaturas_cargadas if c[0] == indice_int]:
+                E.miniaturas_cargadas.pop(mini, None)
+            imagenes += 1
+    if nuevos or imagenes:
         mod_configuracion.guardar_config_soundboard()
         mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
         construir_soundboard()
     if avisar:
+        partes = []
         if nuevos:
-            messagebox.showinfo(
-                "Sonidos detectados",
-                f"Se agregaron {nuevos} pad(s) al principio desde la carpeta Sondidos_pad."
-            )
+            partes.append(f"{nuevos} pad(s) nuevo(s) al principio")
+        if imagenes:
+            partes.append(f"{imagenes} imagen(es) asignada(s)")
+        if partes:
+            messagebox.showinfo("Carpetas detectadas", "Desde las carpetas: " + ", ".join(partes) + ".")
         else:
             messagebox.showinfo(
-                "Sonidos detectados",
-                "No hay sonidos nuevos en la carpeta Sondidos_pad."
+                "Carpetas detectadas",
+                "No hay sonidos ni imágenes nuevas en las carpetas."
             )
     return nuevos
