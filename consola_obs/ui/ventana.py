@@ -464,20 +464,14 @@ def _actualizar_imagen_velo(forzar=False):
 
 
 def _mostrar_velo_redimension():
-    # El congelado nativo (WM_SETREDRAW) sólo frena el repintado de la
-    # VENTANA como tal; en Windows cada pad/botón es su propia ventana
-    # nativa hija (Tk crea un HWND por widget), así que cuando se
-    # destruyen y recrean durante una reconstrucción, cada uno se pinta
-    # solo apenas existe, sin que el freeze de la ventana lo tape (eso
-    # es el parpadeo "por capas"). El velo de Tk sí lo tapa siempre,
-    # sea cual sea la cantidad de ventanas nativas por debajo, porque
-    # es un hermano posicionado ENCIMA dentro del mismo árbol de Tk. Por
-    # eso en todas las plataformas usamos el velo como tapa real, y en
-    # Windows además sumamos el freeze nativo como refuerzo (evita el
-    # micro-destello que Windows pinta solo, por su cuenta, al
-    # redimensionar el marco de la ventana).
-    if P._ES_WINDOWS:
-        P._congelar_pintado_ventana()
+    # El velo de Tk tapa siempre, sea cual sea la cantidad de ventanas
+    # nativas por debajo, porque es un hermano posicionado ENCIMA dentro
+    # del mismo árbol de Tk. A propósito NO se congela el pintado acá:
+    # la gracia del velo es que su foto se repinta en vivo siguiendo al
+    # borde (ver _actualizar_imagen_velo); con el freeze puesto esos
+    # repintados no saldrían y el arrastre se vería como un cuadro
+    # congelado. El freeze se usa sólo alrededor de la reconstrucción
+    # (ver _reconstruir_interfaz_con_velo y _aplicar_redimension).
     _actualizar_imagen_velo(forzar=True)
     E.velo_redimension.place(x=0, y=0, relwidth=1, relheight=1)
     E.velo_redimension.lift()
@@ -485,8 +479,6 @@ def _mostrar_velo_redimension():
 
 def _ocultar_velo_redimension():
     E.velo_redimension.place_forget()
-    if P._ES_WINDOWS:
-        P._descongelar_pintado_ventana()
     # La interfaz de verdad ya está armada y visible: es el momento
     # justo para renovar la foto, así el PRÓXIMO arrastre arranca
     # mostrando este estado (y no uno viejo).
@@ -499,12 +491,18 @@ def _reconstruir_interfaz_con_velo():
     necesite reconstruir todo de golpe —cambiar el tamaño de ícono,
     cambiar el diseño de paneles, soltar un panel arrastrado a otro
     lado— y no sólo al redimensionar la ventana, para que ninguna de
-    esas acciones deje ver un instante con la interfaz a medio armar."""
+    esas acciones deje ver un instante con la interfaz a medio armar.
+    En Windows se suma el freeze nativo sólo acá (durante el armado),
+    nunca durante el arrastre (ver _mostrar_velo_redimension)."""
     _mostrar_velo_redimension()
+    if P._ES_WINDOWS:
+        P._congelar_pintado_ventana()
     try:
         construir_cuerpo()
         E.ventana.update_idletasks()
     finally:
+        if P._ES_WINDOWS:
+            P._descongelar_pintado_ventana()
         _ocultar_velo_redimension()
 
 
@@ -577,14 +575,18 @@ def _aplicar_redimension():
     E._ultimo_factor_escala["valor"] = nuevo_factor
 
     E._reconstruccion_en_curso["activa"] = True
+    if P._ES_WINDOWS:
+        P._congelar_pintado_ventana()
     try:
-        # El velo (con la foto congelada) ya está puesto desde que
-        # arrancó el arrastre (ver _al_redimensionar_ventana), así que
-        # durante toda esta reconstrucción el usuario sigue viendo esa
-        # foto, nunca los paneles a medio armar.
+        # El velo (con la foto) ya está puesto desde que arrancó el
+        # arrastre (ver _al_redimensionar_ventana), así que durante toda
+        # esta reconstrucción el usuario sigue viendo esa foto, nunca
+        # los paneles a medio armar. El freeze va sólo acá adentro.
         construir_cuerpo()
         E.ventana.update_idletasks()
     finally:
+        if P._ES_WINDOWS:
+            P._descongelar_pintado_ventana()
         _ocultar_velo_redimension()
         E._reconstruccion_en_curso["activa"] = False
 
