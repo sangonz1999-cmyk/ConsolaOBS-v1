@@ -380,9 +380,17 @@ def aplicar_fuente_elegida(nombre, guardar=True):
 def cambiar_fuente(nombre):
     """Se llama desde el combobox de tipografía del menú de ajustes:
     aplica la fuente elegida y reconstruye la interfaz para que el
-    cambio se vea reflejado en todas las letras."""
+    cambio se vea reflejado en todas las letras. La cabecera superior
+    (título, subtítulo y estado) no se reconstruye con el resto, así
+    que su fuente se actualiza acá en el acto."""
     aplicar_fuente_elegida(nombre)
     _reconstruir_interfaz_con_velo()
+    try:
+        E.titulo.configure(font=(E.FUENTE_TITULO, 19, "bold"))
+        E.subtitulo.configure(font=(E.FUENTE_UI, 9))
+        E.estado.configure(font=(E.FUENTE_UI, 10, "bold"))
+    except Exception:
+        pass
 
 
 def _capturar_snapshot_ventana():

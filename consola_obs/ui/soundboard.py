@@ -818,12 +818,43 @@ def _imagen_gemela(nombre_base):
     return None
 
 
+def _pad_ocupado(indice):
+    """Un pad cuenta como ocupado si tiene un archivo de sonido asignado
+    (los vacíos, los quitados o los que sólo tienen color no cuentan)."""
+    datos = E.config_soundboard.get(str(indice))
+    return bool(isinstance(datos, dict) and datos.get("archivo"))
+
+
+def _insertar_pad_al_principio(datos_nuevos):
+    """Mete el pad nuevo en la posición 0 corriendo los existentes una
+    posición a la derecha, hasta el primer hueco vacío. Si no hay ningún
+    hueco (todos ocupados), primero se agrega un pad nuevo al final y
+    recién ahí se corre. Nunca se pierde ningún pad existente."""
+    hueco = None
+    for i in range(E.num_pads_soundboard):
+        if not _pad_ocupado(i):
+            hueco = i
+            break
+    if hueco is None:
+        hueco = E.num_pads_soundboard
+        E.num_pads_soundboard += 1
+    for i in range(hueco, 0, -1):
+        anterior = E.config_soundboard.pop(str(i - 1), None)
+        if anterior is None:
+            E.config_soundboard.pop(str(i), None)
+        else:
+            E.config_soundboard[str(i)] = anterior
+    E.config_soundboard["0"] = datos_nuevos
+
+
 def detectar_sonidos_carpeta(avisar=True):
     """Crea un pad por cada archivo de audio de la carpeta Sondidos_pad
     que todavía no tenga pad asignado, con el nombre del archivo y, si
-    existe, su imagen gemela de la carpeta Imagenes_pad. Nunca borra ni
-    modifica los pads que ya existen: sólo agrega los nuevos."""
-    nuevos = 0
+    existe, su imagen gemela de la carpeta Imagenes_pad. Los nuevos
+    tienen prioridad: entran primeros (posición 0) y los que ya estaban
+    se corren una posición a la derecha; sólo si no hay ningún hueco
+    se agregan pads nuevos al final. Nunca borra ni modifica el
+    contenido de los pads existentes."""
     try:
         archivos = sorted(os.listdir(R.CARPETA_SONIDOS_PAD))
     except Exception:
@@ -832,6 +863,7 @@ def detectar_sonidos_carpeta(avisar=True):
     for datos in E.config_soundboard.values():
         if isinstance(datos, dict) and datos.get("archivo"):
             existentes.add(_normalizar_ruta(datos["archivo"]))
+    pendientes = []
     for archivo in archivos:
         if not archivo.lower().endswith(EXTENSIONES_AUDIO):
             continue
@@ -839,15 +871,18 @@ def detectar_sonidos_carpeta(avisar=True):
         if _normalizar_ruta(ruta) in existentes:
             continue
         nombre_base = os.path.splitext(archivo)[0]
-        E.config_soundboard[str(E.num_pads_soundboard)] = {
+        pendientes.append({
             "nombre": nombre_base,
             "archivo": ruta,
             "imagen": _imagen_gemela(nombre_base),
             "color": None,
-        }
+        })
         existentes.add(_normalizar_ruta(ruta))
-        E.num_pads_soundboard += 1
-        nuevos += 1
+    # Se insertan en orden inverso para que el primero de la lista quede
+    # primero en la fila (cada inserción entra en la posición 0).
+    for datos_nuevos in reversed(pendientes):
+        _insertar_pad_al_principio(datos_nuevos)
+    nuevos = len(pendientes)
     if nuevos:
         mod_configuracion.guardar_config_soundboard()
         mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
@@ -856,7 +891,7 @@ def detectar_sonidos_carpeta(avisar=True):
         if nuevos:
             messagebox.showinfo(
                 "Sonidos detectados",
-                f"Se agregaron {nuevos} pad(s) desde la carpeta Sondidos_pad."
+                f"Se agregaron {nuevos} pad(s) al principio desde la carpeta Sondidos_pad."
             )
         else:
             messagebox.showinfo(

@@ -25,14 +25,20 @@ def guardar_config_conexion(host, puerto, password):
 
 
 def cargar_config_soundboard():
+    # OJO: antes esta función cargaba el JSON en una variable local y lo
+    # descartaba (los pads asignados se perdían al cerrar el programa).
+    # Ahora sí se restaura en E.config_soundboard, validando la forma.
+    E.config_soundboard = {}
     if os.path.exists(R.ARCHIVO_SOUNDBOARD):
         try:
             with open(R.ARCHIVO_SOUNDBOARD, "r", encoding="utf-8") as f:
-                config_soundboard = json.load(f)
-                return
+                datos = json.load(f)
+            if isinstance(datos, dict):
+                for clave, valor in datos.items():
+                    if isinstance(valor, dict):
+                        E.config_soundboard[str(clave)] = valor
         except Exception as e:
             print(f"No se pudo leer la configuración del soundboard: {e}")
-    E.config_soundboard = {}
 
 
 def guardar_config_soundboard():
