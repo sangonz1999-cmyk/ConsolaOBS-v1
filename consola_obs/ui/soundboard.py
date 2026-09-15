@@ -831,9 +831,9 @@ def construir_soundboard():
     canvas_mas = tk.Canvas(celda_mas, bg=C.COLOR_PANEL_SOUNDBOARD, highlightthickness=0, cursor="hand2")
     canvas_mas.pack(fill="both", expand=True)
 
-    _estado_mas = {"hover": False, "ancho": 0, "alto": 0}
+    _estado_mas = {"hover": False, "ancho": 0, "alto": 0, "pendiente": None}
 
-    def _redibujar_boton_mas(event=None, forzar=False):
+    def _pintar_boton_mas(forzar=False):
         ancho_mas = canvas_mas.winfo_width() or 240
         alto_mas = canvas_mas.winfo_height() or alto_barra_agregar
         if not forzar and (ancho_mas, alto_mas) == (_estado_mas["ancho"], _estado_mas["alto"]):
@@ -880,6 +880,43 @@ def construir_soundboard():
             x_agregar, alto_mas / 2, text=texto_agregar, fill="#c3cee5",
             font=(E.FUENTE_UI, tam_agregar, "bold")
         )
+
+    def _redibujar_boton_mas(event=None, forzar=False):
+        # El render de la placa (PIL supersampleado) es lo más caro que
+        # se repinta en cada evento de redimensionado: con debounce se
+        # limita a ~12 renders por segundo durante el arrastre, y el
+        # pendiente garantiza que igual converge al tamaño final. El
+        # hover va con forzar=True (respuesta inmediata, sin espera).
+        if forzar:
+            if _estado_mas.get("pendiente") is not None:
+                try:
+                    E.ventana.after_cancel(_estado_mas["pendiente"])
+                except Exception:
+                    pass
+                _estado_mas["pendiente"] = None
+            try:
+                _pintar_boton_mas(forzar=True)
+            except Exception:
+                pass
+            return
+        if _estado_mas["ancho"] == 0:
+            try:
+                _pintar_boton_mas(forzar=True)
+            except Exception:
+                pass
+            return
+        if _estado_mas.get("pendiente") is not None:
+            try:
+                E.ventana.after_cancel(_estado_mas["pendiente"])
+            except Exception:
+                pass
+        def _pendiente():
+            _estado_mas["pendiente"] = None
+            try:
+                _pintar_boton_mas()
+            except Exception:
+                pass
+        _estado_mas["pendiente"] = E.ventana.after(80, _pendiente)
 
     def _hover_mas(_e, encendido):
         _estado_mas["hover"] = encendido
