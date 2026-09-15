@@ -1,14 +1,10 @@
 @echo off
 REM ============================================================
-REM  Recompila ConsolaOBS.exe DIRECTO en:
-REM      .\dist\ConsolaOBS.exe
-REM  (siempre con el icono asignado).
+REM  Recompila ConsolaOBS.exe en ESTA MISMA CARPETA
+REM      (junto a este .bat y a main.py, con el icono asignado).
 REM
-REM  Sin pasos de copia intermedios: PyInstaller compila
-REM  directamente en esa carpeta con --distpath. En modo --onefile
-REM  PyInstaller solo crea/pisa el .exe ahi, no toca ni borra el
-REM  resto de lo que haya en esa carpeta (assets\, los .json de
-REM  configuracion, etc.).
+REM  En modo --onefile PyInstaller solo crea/pisa el .exe aca,
+REM  no toca ni borra el resto (assets\, consola_obs\, etc.).
 REM
 REM  Poner este archivo en la RAIZ del proyecto (junto a main.py)
 REM  y doble clic cada vez que cambies el codigo.
@@ -16,7 +12,7 @@ REM ============================================================
 
 cd /d "%~dp0"
 
-set CARPETA_DESTINO=%~dp0dist
+set CARPETA_DESTINO=%~dp0
 set CARPETA_BUILD=%~dp0_build_tmp
 
 REM El icono se busca en assets\iconos\app_icon.ico. Si no esta ahi,
@@ -30,6 +26,9 @@ echo.
 echo (Si esa fecha/hora no es de ahora hace un rato, este NO es el
 echo  archivo que pensas que es: revisa que estes editando el codigo
 echo  dentro de la carpeta consola_obs\.)
+echo.
+echo El ejecutable se va a generar en:
+echo   %CARPETA_DESTINO%ConsolaOBS.exe
 echo.
 
 if exist "%ICONO%" (
@@ -50,11 +49,12 @@ echo Borrando restos de compilaciones anteriores...
 rmdir /s /q "%CARPETA_BUILD%" 2>nul
 del ConsolaOBS.spec 2>nul
 
-if not exist "%CARPETA_DESTINO%" mkdir "%CARPETA_DESTINO%"
-
 echo.
 echo Compilando ConsolaOBS.exe...
-py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --distpath "%CARPETA_DESTINO%" --workpath "%CARPETA_BUILD%" main.py
+REM OJO: no quitar el \. de --distpath: como CARPETA_DESTINO termina en
+REM barra invertida, "...\" escaparia la comilla de cierre y PyInstaller
+REM recibiria mal los argumentos (diria que falta el script).
+py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD%" main.py
 
 if not exist "%CARPETA_DESTINO%\ConsolaOBS.exe" (
     echo.
@@ -63,11 +63,6 @@ if not exist "%CARPETA_DESTINO%\ConsolaOBS.exe" (
     echo ======================================================
     pause
     exit /b 1
-)
-
-if not exist "%CARPETA_DESTINO%\assets" (
-    echo Copiando assets (primera vez en esta carpeta)...
-    xcopy assets "%CARPETA_DESTINO%\assets" /E /I /Y >nul
 )
 
 echo Limpiando carpeta temporal...

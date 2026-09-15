@@ -6,6 +6,8 @@ dist/
 build/
 *.spec
 *.log
+# El .exe se genera localmente con compilar.bat, no se versiona
+*.exe
 # Configuracion local (config_conexion.json contiene la contrasena de OBS)
 config_*.json
 .DS_Store
