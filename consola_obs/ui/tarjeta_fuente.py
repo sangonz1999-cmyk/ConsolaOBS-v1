@@ -93,6 +93,9 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
     tam, ancho_wrap_texto, lineas_nombre = _ajustar_texto_tarjeta(
         nombre_visible, E.FUENTE_TITULO, tam_max, ancho_texto, tam_min
     )
+    if lineas_nombre >= 3:
+        tam, ancho_wrap_texto, lineas_nombre = _ajustar_titulo_largo(
+            nombre_visible, tam, ancho_texto)
 
     cabecera_canal = widgets["cabecera"]
     fuente_nueva = (E.FUENTE_TITULO, tam, "bold")
@@ -101,7 +104,7 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
 
     if lineas_nombre >= 3:
         fuente_real = tkfont.Font(family=E.FUENTE_TITULO, size=tam, weight="bold")
-        alto_cabecera = max(alto_cabecera_base, fuente_real.metrics("linespace") * lineas_nombre + 16)
+        alto_cabecera = max(alto_cabecera_base, fuente_real.metrics("linespace") * lineas_nombre + 20)
     else:
         alto_cabecera = alto_cabecera_base
     if int(cabecera_canal.cget("height")) != int(alto_cabecera):
@@ -232,6 +235,26 @@ def _ajustar_texto_tarjeta(texto, familia, tam_max, ancho_max, tam_min=8, max_li
     return tam_min, ancho_max, max(1, len(lineas_min))
 
 
+def _ajustar_titulo_largo(nombre_visible, tam_actual, ancho_texto):
+    """Segunda pasada para títulos que necesitan 3 renglones o más:
+    se reintenta con más aire a los costados (para que no toque los
+    bordes) permitiendo hasta 4 renglones y letra más chica (mínimo 6).
+    Devuelve (tamaño, ancho_de_envoltura, cantidad_de_renglones).
+
+    El texto ya queda centrado verticalmente solo: la cabecera crece
+    según el alto real y el texto está anclado al centro del canvas
+    (ver _redibujar_gradiente_cabecera_fuente)."""
+    ancho_respirado = max(50, ancho_texto - 16)
+    tam, wrap, lineas = _ajustar_texto_tarjeta(
+        nombre_visible, E.FUENTE_TITULO, max(6, int(tam_actual)),
+        ancho_respirado, 6, 3, "bold")
+    if lineas <= 3:
+        return tam, wrap, lineas
+    return _ajustar_texto_tarjeta(
+        nombre_visible, E.FUENTE_TITULO, max(6, int(tam_actual)),
+        ancho_respirado, 6, 4, "bold")
+
+
 def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None):
 
     if nombre_visible is None:
@@ -302,8 +325,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     _fuente_medicion = tkfont.Font(family=E.FUENTE_TITULO, size=fuente_nombre_tam_max, weight="bold")
     alto_cabecera_base = max(26, _fuente_medicion.metrics("linespace") * 2 + 16)
     if lineas_nombre >= 3:
+        fuente_nombre_tam, ancho_wrap_texto, lineas_nombre = _ajustar_titulo_largo(
+            nombre_visible, fuente_nombre_tam, ancho_texto)
         _fuente_real = tkfont.Font(family=E.FUENTE_TITULO, size=fuente_nombre_tam, weight="bold")
-        alto_cabecera = max(alto_cabecera_base, _fuente_real.metrics("linespace") * lineas_nombre + 16)
+        alto_cabecera = max(alto_cabecera_base, _fuente_real.metrics("linespace") * lineas_nombre + 20)
     else:
         alto_cabecera = alto_cabecera_base
     cabecera_canal = tk.Canvas(contenedor, height=alto_cabecera, highlightthickness=0, bg=color_cabecera_base, cursor="fleur")

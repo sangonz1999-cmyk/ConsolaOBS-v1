@@ -2,6 +2,7 @@ import os
 import tkinter as tk
 
 from tkinter import filedialog, messagebox, simpledialog
+from tkinter import font as tkfont
 
 from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageOps, ImageTk
 from consola_obs import estado as E
@@ -765,13 +766,30 @@ def construir_soundboard():
         else:
             mod_ui_dibujo._dibujar_boton_vidrio(canvas_mas, 1, 1, ancho_mas - 1, alto_mas - 1, "#2a3243", grosor=3)
 
+        # El "+" y el texto crecen con la barra (en vez de un tamaño
+        # fijo chico): se miden y se centran como un solo conjunto.
+        tam_mas = max(22, round(alto_mas * 0.50))
+        tam_agregar = max(11, round(alto_mas * 0.30))
+        texto_agregar = "AGREGAR PAD"
+        fuente_mas = tkfont.Font(family=E.FUENTE_UI, size=tam_mas, weight="bold")
+        fuente_agregar = tkfont.Font(family=E.FUENTE_UI, size=tam_agregar, weight="bold")
+        while (fuente_mas.measure("+") + 18 + fuente_agregar.measure(texto_agregar)
+               > max(120, ancho_mas - 40)) and tam_agregar > 10:
+            tam_mas = max(18, tam_mas - 2)
+            tam_agregar -= 1
+            fuente_mas = tkfont.Font(family=E.FUENTE_UI, size=tam_mas, weight="bold")
+            fuente_agregar = tkfont.Font(family=E.FUENTE_UI, size=tam_agregar, weight="bold")
+        ancho_mas_txt = fuente_mas.measure("+")
+        ancho_agregar_txt = fuente_agregar.measure(texto_agregar)
+        x_mas = ancho_mas / 2 - (ancho_mas_txt + 18 + ancho_agregar_txt) / 2 + ancho_mas_txt / 2
+        x_agregar = x_mas + ancho_mas_txt / 2 + 18 + ancho_agregar_txt / 2
         canvas_mas.create_text(
-            ancho_mas / 2 - 72, alto_mas / 2, text="+", fill="#4fe3ae",
-            font=(E.FUENTE_UI, medida["fuente_pad_icono"] + 10, "bold")
+            x_mas, alto_mas / 2, text="+", fill="#4fe3ae",
+            font=(E.FUENTE_UI, tam_mas, "bold")
         )
         canvas_mas.create_text(
-            ancho_mas / 2 + 16, alto_mas / 2, text="AGREGAR PAD", fill="#c3cee5",
-            font=(E.FUENTE_UI, medida["fuente_pad_texto"] + 1, "bold")
+            x_agregar, alto_mas / 2, text=texto_agregar, fill="#c3cee5",
+            font=(E.FUENTE_UI, tam_agregar, "bold")
         )
 
     def _hover_mas(_e, encendido):
