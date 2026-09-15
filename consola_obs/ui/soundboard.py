@@ -272,6 +272,79 @@ def asignar_imagen(indice):
     construir_soundboard()
 
 
+def _partir_palabra_larga(palabra, fuente, ancho_max):
+    """Corta a la fuerza una palabra que ni sola entra en el ancho
+    (nombres sin espacios, como 'sali-de-ahi-maravilla...'): Tk hace lo
+    mismo al dibujar, así la medición coincide con lo que se ve."""
+    partes, actual = [], ""
+    for caracter in palabra:
+        if fuente.measure(actual + caracter) <= ancho_max:
+            actual += caracter
+        else:
+            if actual:
+                partes.append(actual)
+            actual = caracter.lstrip()
+    if actual:
+        partes.append(actual)
+    return partes or [palabra]
+
+
+def _envolver_nombre_pad(texto, fuente, ancho_max):
+    """Parte el nombre en líneas que entran en ancho_max píxeles,
+    cortando por palabra completa (igual criterio que las tarjetas).
+    Las continuaciones de una palabra larga se pegan SIN espacio, tal
+    cual las dibuja Tk."""
+    palabras = texto.split()
+    if not palabras:
+        return [texto]
+    piezas = []
+    for indice_palabra, palabra in enumerate(palabras):
+        if fuente.measure(palabra) <= ancho_max:
+            piezas.append((palabra, indice_palabra > 0))
+        else:
+            partes = _partir_palabra_larga(palabra, fuente, ancho_max)
+            for i, parte in enumerate(partes):
+                piezas.append((parte, indice_palabra > 0 and i == 0))
+    lineas = []
+    actual = ""
+    for parte, con_espacio in piezas:
+        if actual:
+            candidato = actual + (" " if con_espacio else "") + parte
+        else:
+            candidato = parte
+        if fuente.measure(candidato) <= ancho_max:
+            actual = candidato
+        else:
+            lineas.append(actual)
+            actual = parte
+    lineas.append(actual)
+    return lineas
+
+
+RENGLONES_NOMBRE_PAD = 2
+TAM_MIN_NOMBRE_PAD = 6
+
+
+def _ajustar_nombre_pad(texto, familia, tam_max, ancho_max):
+    """Achica la letra hasta que el nombre entre en RENGLONES_NOMBRE_PAD
+    renglones; si ni al mínimo entra, lo recorta con …. Devuelve
+    (tamaño, texto_a_mostrar). Así todas las etiquetas miden lo mismo
+    y las celdas de la grilla quedan alineadas y del mismo tamaño."""
+    tam = max(TAM_MIN_NOMBRE_PAD, int(tam_max))
+    while tam > TAM_MIN_NOMBRE_PAD:
+        fuente = tkfont.Font(family=familia, size=tam, weight="bold")
+        if len(_envolver_nombre_pad(texto, fuente, ancho_max)) <= RENGLONES_NOMBRE_PAD:
+            return tam, texto
+        tam -= 1
+    fuente = tkfont.Font(family=familia, size=TAM_MIN_NOMBRE_PAD, weight="bold")
+    if len(_envolver_nombre_pad(texto, fuente, ancho_max)) <= RENGLONES_NOMBRE_PAD:
+        return TAM_MIN_NOMBRE_PAD, texto
+    recortado = texto
+    while recortado and len(_envolver_nombre_pad(recortado + "…", fuente, ancho_max)) > RENGLONES_NOMBRE_PAD:
+        recortado = recortado[:-1].rstrip()
+    return TAM_MIN_NOMBRE_PAD, (recortado.rstrip() + "…") if recortado else "…"
+
+
 def _geometria_cara_placa(ancho, alto):
     """Calcula la caja (x0, y0, x1, y1) y el radio de esquina de la CARA
     de un pad de 'ancho' x 'alto', con las mismas proporciones que usa
@@ -680,13 +753,24 @@ def construir_soundboard():
         pad_canvas.bind("<ButtonRelease-1>", _al_soltar)
         pad_canvas.bind("<Button-3>", lambda e, idx=i: _abrir_menu_contextual_pad(idx, e))
 
+        # La etiqueta mide SIEMPRE lo mismo (alto fijo de 2 renglones,
+        # texto centrado): así todas las celdas quedan del mismo tamaño
+        # y alineadas entre sí, tengan el nombre corto o largo.
+        if tiene_sonido:
+            tam_nombre_pad, nombre_mostrado = _ajustar_nombre_pad(
+                datos["nombre"], E.FUENTE_UI, medida["fuente_pad_texto"], ancho_celda - 16)
+        else:
+            tam_nombre_pad, nombre_mostrado = medida["fuente_pad_texto"], "— VACÍO —"
         etiqueta_nombre_pad = tk.Label(
             celda,
-            text=datos["nombre"] if tiene_sonido else "— VACÍO —",
+            text=nombre_mostrado,
             bg=C.COLOR_PANEL_SOUNDBOARD,
             fg="white" if tiene_sonido else "#79859f",
-            font=(E.FUENTE_UI, medida["fuente_pad_texto"], "bold"),
-            wraplength=ancho_celda - 16
+            font=(E.FUENTE_UI, tam_nombre_pad, "bold"),
+            wraplength=ancho_celda - 16,
+            justify="center",
+            anchor="center",
+            height=RENGLONES_NOMBRE_PAD,
         )
         etiqueta_nombre_pad.pack(pady=(0, 4))
         etiqueta_nombre_pad.bind("<ButtonPress-1>", lambda e, idx=i: _iniciar_arrastre_pad(idx, e))
