@@ -11,14 +11,43 @@ from consola_obs.ui import soundboard as mod_ui_soundboard
 
 _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
+DURACION_FUNDIDO_LOCAL_SEG = 1.0
 
 
-def _detener_local(token=None):
+def _aplicar_ganancia(trozo, ganancia):
+    """Multiplica las muestras por la ganancia (0.0 a 1.0), con saturación
+    según el formato. Se usa para el fundido de salida del audio local."""
+    if ganancia >= 1.0:
+        return trozo
+    formato = getattr(trozo, "typecode", None)
+    try:
+        if formato == "h":
+            for j in range(len(trozo)):
+                valor = int(trozo[j] * ganancia)
+                trozo[j] = 32767 if valor > 32767 else (-32768 if valor < -32768 else valor)
+        elif formato in ("f", "d"):
+            for j in range(len(trozo)):
+                valor = trozo[j] * ganancia
+                trozo[j] = 1.0 if valor > 1.0 else (-1.0 if valor < -1.0 else valor)
+    except Exception:
+        pass
+    return trozo
+
+
+def _detener_local(token=None, fundido=False):
     """Corta el sonido que esté saliendo por la PC. Si se pasa un token,
-    sólo lo corta cuando sigue siendo la sesión vigente (para que el
-    fundido de una sesión vieja no corte el sonido nuevo)."""
+    sólo lo toca cuando sigue siendo la sesión vigente (para que el
+    fundido de una sesión vieja no corte el sonido nuevo).
+
+    Con fundido=True no corta en seco: marca el inicio de una rampa de
+    1 segundo igual que la de OBS y el stream se apaga solo al llegar a
+    silencio. Devuelve True si se inició un fundido."""
     if token is not None and _reproduccion_local.get("token") != token:
-        return
+        return False
+    if fundido and _reproduccion_local.get("dispositivo") is not None:
+        _reproduccion_local["fundido_inicio"] = time.time()
+        return True
+    _reproduccion_local.pop("fundido_inicio", None)
     cancelado = _reproduccion_local.pop("cancelar", None)
     if cancelado is not None:
         try:
@@ -28,7 +57,7 @@ def _detener_local(token=None):
     dispositivo = _reproduccion_local.pop("dispositivo", None)
     _reproduccion_local["token"] = None
     if dispositivo is None:
-        return
+        return False
     try:
         dispositivo.stop()
     except Exception:
@@ -37,6 +66,7 @@ def _detener_local(token=None):
         dispositivo.close()
     except Exception:
         pass
+    return False
 
 
 def _reproducir_local(ruta, token):
@@ -92,6 +122,13 @@ def _reproducir_local(ruta, token):
             while True:
                 if cancelado.is_set():
                     break
+                inicio_fundido = _reproduccion_local.get("fundido_inicio")
+                if inicio_fundido is not None:
+                    ganancia = max(0.0, 1.0 - (time.time() - inicio_fundido)
+                                   / DURACION_FUNDIDO_LOCAL_SEG)
+                    if ganancia <= 0.0:
+                        break
+                    trozo = _aplicar_ganancia(trozo, ganancia)
                 try:
                     pedido = yield trozo
                 except GeneratorExit:
@@ -131,6 +168,7 @@ def _reproducir_local(ruta, token):
             _reproduccion_local.pop("dispositivo", None)
             _reproduccion_local["token"] = None
             _reproduccion_local.pop("cancelar", None)
+            _reproduccion_local.pop("fundido_inicio", None)
         try:
             dispositivo.close()
         except Exception:
@@ -210,9 +248,16 @@ def _fundido_y_detener(indice, token, duracion=1.0, pasos=20):
     dura el fundido, el sonido técnicamente sigue activo en OBS, así
     que la luz se mantiene prendida hasta el STOP final."""
     if not E.conectado:
-        _detener_local()
-        E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+        # Sin OBS no hay fundido de aquel lado, pero el local sí se
+        # desvanece igual; la luz se apaga cuando termina (~1 s).
+        if _detener_local(token, fundido=True):
+            E.ventana.after(1100, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+        else:
+            E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
+
+    # El fundido local arranca en paralelo al de OBS (los dos duran 1 s).
+    _detener_local(token, fundido=True)
 
     try:
         respuesta = E.cliente_obs.get_input_volume(C.NOMBRE_FUENTE_EFECTOS)
