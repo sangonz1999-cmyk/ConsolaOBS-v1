@@ -19,6 +19,12 @@ def _detener_local(token=None):
     fundido de una sesión vieja no corte el sonido nuevo)."""
     if token is not None and _reproduccion_local.get("token") != token:
         return
+    cancelado = _reproduccion_local.pop("cancelar", None)
+    if cancelado is not None:
+        try:
+            cancelado.set()
+        except Exception:
+            pass
     dispositivo = _reproduccion_local.pop("dispositivo", None)
     _reproduccion_local["token"] = None
     if dispositivo is None:
@@ -36,7 +42,11 @@ def _detener_local(token=None):
 def _reproducir_local(ruta, token):
     """Reproduce el archivo por la salida de audio de la PC (parlantes /
     auriculares) con miniaudio, en paralelo a OBS. Corre en su propio
-    hilo: device.start() bloquea hasta que termina el sonido."""
+    hilo.
+
+    OJO: device.start() NO bloquea (arranca y vuelve enseguida), así
+    que hay que quedarse esperando a que el stream se agote o a que lo
+    cancelen; si se cerrara el dispositivo al salir, no sonaría nada."""
     try:
         import miniaudio
     except Exception:
@@ -55,16 +65,64 @@ def _reproducir_local(ruta, token):
     except Exception as e:
         print(f"No se pudo abrir la salida de audio de la PC: {e}")
         return
+    terminado = threading.Event()
+    cancelado = threading.Event()
+
+    def _flujo_envuelto():
+        # El primer yield vacío es el apretón de manos: miniaudio exige
+        # el generador ya arrancado (device.start le hace send() con la
+        # cantidad de frames que quiere) y arrancar con next() evita el
+        # TypeError sin consumir audio real del decodificador. Además,
+        # cada pedido del device se reenvía al decodificador tal cual,
+        # para darle siempre la cantidad exacta que pidió.
+        pedido = yield b""
+        try:
+            try:
+                trozo = next(flujo)
+            except StopIteration:
+                return
+            while True:
+                if cancelado.is_set():
+                    break
+                try:
+                    pedido = yield trozo
+                except GeneratorExit:
+                    break
+                try:
+                    trozo = flujo.send(pedido) if pedido else next(flujo)
+                except StopIteration:
+                    break
+        finally:
+            try:
+                flujo.close()
+            except Exception:
+                pass
+            terminado.set()
+
+    generador = _flujo_envuelto()
+    try:
+        next(generador)
+    except StopIteration:
+        try:
+            dispositivo.close()
+        except Exception:
+            pass
+        return
     _reproduccion_local["dispositivo"] = dispositivo
     _reproduccion_local["token"] = token
+    _reproduccion_local["cancelar"] = cancelado
     try:
-        dispositivo.start(flujo)
+        dispositivo.start(generador)
+        while not terminado.wait(timeout=0.1):
+            if cancelado.is_set():
+                break
     except Exception as e:
         print(f"Error reproduciendo en la PC: {e}")
     finally:
         if _reproduccion_local.get("dispositivo") is dispositivo:
             _reproduccion_local.pop("dispositivo", None)
             _reproduccion_local["token"] = None
+            _reproduccion_local.pop("cancelar", None)
         try:
             dispositivo.close()
         except Exception:
@@ -84,8 +142,19 @@ def _cargar_y_disparar(indice, accion, token):
     if not datos or not datos.get("archivo"):
         return
 
+    # El audio local sale siempre que esté habilitado, haya o no
+    # conexión a OBS: es independiente del trigger de OBS de abajo.
+    suena_local = bool(getattr(E, "escuchar_en_pc", True))
+    if suena_local:
+        threading.Thread(
+            target=_reproducir_local,
+            args=(datos["archivo"], token),
+            daemon=True
+        ).start()
+
     if not E.conectado:
-        messagebox.showwarning("Sin conexión", "Conectate a OBS para poder reproducir los efectos.")
+        if not suena_local:
+            messagebox.showwarning("Sin conexión", "Conectate a OBS para poder reproducir los efectos.")
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
 
@@ -101,14 +170,6 @@ def _cargar_y_disparar(indice, accion, token):
             True
         )
         E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
-        # En paralelo a OBS, el mismo efecto sale por la salida de audio
-        # de la PC (si está habilitado en los ajustes).
-        if getattr(E, "escuchar_en_pc", True):
-            threading.Thread(
-                target=_reproducir_local,
-                args=(datos["archivo"], token),
-                daemon=True
-            ).start()
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}")
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
@@ -141,6 +202,7 @@ def _fundido_y_detener(indice, token, duracion=1.0, pasos=20):
     dura el fundido, el sonido técnicamente sigue activo en OBS, así
     que la luz se mantiene prendida hasta el STOP final."""
     if not E.conectado:
+        _detener_local()
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
 
