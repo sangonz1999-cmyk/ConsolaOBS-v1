@@ -171,10 +171,13 @@ def _al_redimensionar_fuentes(event=None):
 
 def _aplicar_redimension_fuentes():
     E._trabajo_redimension_fuentes["id"] = None
-    if E._reconstruccion_en_curso["activa"]:
-        # Hay una reconstrucción completa de la interfaz en curso (ver
-        # _aplicar_redimension): no tocar la grilla ahora, la
-        # reconstrucción ya va a dejarla acomodada al tamaño final.
+    if (E._reconstruccion_en_curso["activa"] or E._arrastre_ventana["activo"]
+            or E._trabajo_redimension["id"] is not None):
+        # A mitad de un arrastre de la ventana no se reacomoda nada: la
+        # reconstrucción de fin de arrastre deja todo en su lugar. Se
+        # reintenta más tarde por si ese arrastre termina sin
+        # reconstruir (cambio chico): el reintento se agota solo.
+        E._trabajo_redimension_fuentes["id"] = E.ventana.after(150, _aplicar_redimension_fuentes)
         return
     nuevas_columnas = _columnas_disponibles_fuentes()
     if nuevas_columnas != E.columnas_fuentes:

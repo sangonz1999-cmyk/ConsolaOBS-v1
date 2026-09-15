@@ -383,7 +383,7 @@ Escala de UI:
 ### Anti-parpadeo al redimensionar (win32):
 - _congelar_pintado_ventana/_descongelar: WM_SETREDRAW=0/1 + RedrawWindow para que Windows no repinte a mitad del arrastre del borde.
 - _fijar_color_fondo_nativo: cambia el pincel de fondo de la clase de ventana (SetClassLongPtrW + CreateSolidBrush) para que el fondo sea del color oscuro correcto (evita el flash blanco).
-- Velo de redimensionado: mientras se arrastra se muestra una "foto" congelada (ImageGrab de la ventana escalada) cubriendo todo, y solo al soltar se reconstruye la interfaz de verdad debajo del velo (se redibuja 1 vez completa). Usa ventana.after(180ms) y throttling.
+- Velo de redimensionado: mientras se arrastra se muestra una "foto" congelada (ImageGrab de la ventana escalada) cubriendo todo, y solo al soltar se reconstruye la interfaz de verdad debajo del velo (se redibuja 1 vez completa). Modelo de sesión de arrastre: del primer evento hasta 300 ms de calma total no se reconstruye nada (antes se reconstruía en cada pausa y eso era el parpadeo); las grillas hijas tampoco se reacomodan a mitad del arrastre.
 - De esta forma NUNCA se ve la interfaz "a medio armar" durante el arrastre.
 
 ### Supersampling (antialias sin pixelado):

@@ -1,3 +1,4 @@
+import time
 import tkinter as tk
 
 from tkinter import ttk
@@ -11,6 +12,17 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
+
+
+# Cuánto tiene que quedarse quieta la ventana para dar por terminado un
+# arrastre y recién ahí reconstruir (antes: 180 ms, que con movimientos
+# suaves se cumplía a mitad del arrastre y reconstruía a cada pausa,
+# y eso era el parpadeo).
+DEMORA_FIN_ARRASTRE_MS = 300
+# La foto del velo no se reescala más seguido que esto durante el
+# arrastre (reescalar la foto completa en cada evento traba el hilo
+# de la interfaz y se nota como tironeo).
+INTERVALO_MINIMO_FOTO_VELO_SEG = 0.06
 
 
 def cambiar_tamano_icono(nuevo_tamano):
@@ -416,13 +428,20 @@ def _capturar_snapshot_ventana():
         pass
 
 
-def _actualizar_imagen_velo():
+def _actualizar_imagen_velo(forzar=False):
     """Escala la última foto guardada al tamaño actual de la ventana y
     la deja puesta en el velo. Escalar una imagen ya capturada es
     barato (no reconstruye ningún widget), así que esto sí se puede
     llamar en cada evento de arrastre sin volver a generar el lag que
     se quería eliminar: es lo que da la sensación de que la interfaz
-    "sigue" al mouse en tiempo real."""
+    "sigue" al mouse en tiempo real. Igual se limita a una tasa máxima
+    (salvo forzar=True al mostrar el velo) porque el reescalado en el
+    hilo de la interfaz, evento tras evento, se nota como tironeo."""
+    if not forzar:
+        ahora = time.monotonic()
+        if ahora - E._foto_velo.get("t", 0.0) < INTERVALO_MINIMO_FOTO_VELO_SEG:
+            return
+        E._foto_velo["t"] = ahora
     imagen = E._captura_ventana["imagen_pil"]
     ancho, alto = max(1, E.ventana.winfo_width()), max(1, E.ventana.winfo_height())
     if imagen is None:
@@ -459,7 +478,7 @@ def _mostrar_velo_redimension():
     # redimensionar el marco de la ventana).
     if P._ES_WINDOWS:
         P._congelar_pintado_ventana()
-    _actualizar_imagen_velo()
+    _actualizar_imagen_velo(forzar=True)
     E.velo_redimension.place(x=0, y=0, relwidth=1, relheight=1)
     E.velo_redimension.lift()
 
@@ -490,33 +509,45 @@ def _reconstruir_interfaz_con_velo():
 
 
 def _al_redimensionar_ventana(event):
-    """Cuando el usuario cambia el tamaño de la ventana, esperamos a
-    que se quede quieta (cada nuevo evento reinicia la espera) y ahí
-    sí recalculamos el factor de escala y, si cambió lo suficiente,
-    reconstruimos toda la interfaz para que faders, botones y pads del
-    soundboard queden proporcionados al nuevo tamaño.
-
-    Mientras dura el arrastre, los widgets de verdad NO se tocan (nada
-    se reacomoda ni se recrea): lo único que pasa en cada evento es que
-    la foto congelada del velo se reescala al nuevo tamaño (ver
-    _actualizar_imagen_velo), así que lo que el usuario ve moverse en
-    vivo es esa foto siguiendo al borde de la ventana, no la interfaz
-    real reconstruyéndose a los tirones."""
+    """Modelo de sesión de arrastre: del primer evento hasta que la
+    ventana se queda quieta del todo se considera UN solo arrastre.
+    Durante la sesión no se reconstruye nada (antes se reconstruía en
+    cada pausa de 180 ms, y con movimientos suaves eso disparaba un
+    rebuild a mitad del arrastre una y otra vez: ese era el parpadeo).
+    Lo único que pasa en cada evento es que la foto del velo sigue al
+    borde; la reconstrucción (una sola) llega con _fin_arrastre_ventana.
+    """
     if event.widget is not E.ventana:
         return
-    if E._trabajo_redimension["id"] is None:
+    if E._reconstruccion_en_curso["activa"]:
+        # El usuario movió el borde justo mientras se estaba armando:
+        # no se toca nada, sólo se extiende la espera de calma.
+        if E._trabajo_redimension["id"] is not None:
+            E.ventana.after_cancel(E._trabajo_redimension["id"])
+        E._trabajo_redimension["id"] = E.ventana.after(
+            DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_ventana)
+        return
+    if not E._arrastre_ventana["activo"]:
+        E._arrastre_ventana["activo"] = True
         _mostrar_velo_redimension()
     else:
-        E.ventana.after_cancel(E._trabajo_redimension["id"])
-        # El velo (con su foto) es ahora la tapa real en todas las
-        # plataformas, así que en todas hay que ir reescalando la foto
-        # en cada evento para que siga el borde de la ventana en vivo.
+        if E._trabajo_redimension["id"] is not None:
+            E.ventana.after_cancel(E._trabajo_redimension["id"])
+        # El velo (con su foto) es la tapa real, así que hay que ir
+        # reescalando la foto en cada evento para que siga al borde.
         _actualizar_imagen_velo()
-    # Este delay es el que define qué tan "quieta" tiene que quedarse
-    # la ventana antes de actualizar: cada evento nuevo lo reinicia,
-    # así que mientras el usuario siga moviendo el borde esto nunca
-    # llega a dispararse.
-    E._trabajo_redimension["id"] = E.ventana.after(180, _aplicar_redimension)
+    # Cada evento nuevo reinicia la espera: mientras el usuario siga
+    # moviendo, _fin_arrastre_ventana nunca llega a dispararse.
+    E._trabajo_redimension["id"] = E.ventana.after(
+        DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_ventana)
+
+
+def _fin_arrastre_ventana():
+    """La ventana se quedó quieta: termina la sesión de arrastre y
+    recién ahora se evalúa si hace falta reconstruir (una sola vez)."""
+    E._trabajo_redimension["id"] = None
+    E._arrastre_ventana["activo"] = False
+    _aplicar_redimension()
 
 
 def _aplicar_redimension():
@@ -530,13 +561,17 @@ def _aplicar_redimension():
     # raras, tarjetas duplicadas un instante). El velo (con su foto)
     # sigue puesto mientras tanto, así que no se ve nada raro en el medio.
     if E._reconstruccion_en_curso["activa"]:
-        E._trabajo_redimension["id"] = E.ventana.after(180, _aplicar_redimension)
+        E._trabajo_redimension["id"] = E.ventana.after(
+            DEMORA_FIN_ARRASTRE_MS, _aplicar_redimension)
         return
 
     nuevo_factor = mod_utilidades.factor_escala_ui()
     if abs(nuevo_factor - E._ultimo_factor_escala["valor"]) < 0.03:
         # El arrastre terminó pero el cambio de tamaño fue chico y no
-        # amerita reconstruir nada: destapamos y listo.
+        # amerita reconstruir nada: se reacomoda la grilla una vez (los
+        # reacomodos de a mitad del arrastre se saltearon a propósito)
+        # y se destapa.
+        mod_ui_tarjeta._reubicar_fuentes()
         _ocultar_velo_redimension()
         return
     E._ultimo_factor_escala["valor"] = nuevo_factor

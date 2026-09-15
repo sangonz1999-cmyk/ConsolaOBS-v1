@@ -231,6 +231,7 @@ def main():
     E._trabajo_redimension = {"id": None}
     E._ultimo_factor_escala = {"valor": mod_utilidades.factor_escala_ui()}
     E._reconstruccion_en_curso = {"activa": False}
+    E._arrastre_ventana = {"activo": False}
 
     # ------------------------------------------------------------------
     # VELO DE REDIMENSIONADO
@@ -269,7 +270,7 @@ def main():
     E.velo_redimension = tk.Label(E.ventana, bg="#10141b", bd=0, highlightthickness=0)
 
     E._captura_ventana = {"imagen_pil": None}   # última foto buena de la interfaz completa
-    E._foto_velo = {"tk": None}                 # referencia viva de la imagen actualmente mostrada en el velo
+    E._foto_velo = {"tk": None, "t": 0.0}       # imagen del velo + cuándo se actualizó por última vez
 
 
     E.ventana.bind("<Configure>", mod_ui_ventana._al_redimensionar_ventana)

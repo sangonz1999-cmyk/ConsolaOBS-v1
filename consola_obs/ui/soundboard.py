@@ -568,7 +568,12 @@ def _al_redimensionar_soundboard(event=None):
 
 def _aplicar_redimension_soundboard():
     E._trabajo_redimension_soundboard["id"] = None
-    if E._reconstruccion_en_curso["activa"]:
+    if (E._reconstruccion_en_curso["activa"] or E._arrastre_ventana["activo"]
+            or E._trabajo_redimension["id"] is not None):
+        # Idem grilla de fuentes: a mitad de un arrastre no se
+        # reconstruye nada (la reconstrucción de fin de arrastre deja
+        # todo en su lugar). El reintento se agota solo.
+        E._trabajo_redimension_soundboard["id"] = E.ventana.after(150, _aplicar_redimension_soundboard)
         return
     nuevas_columnas = _columnas_disponibles()
     ancho_actual = E.canvas_sb.winfo_width()
