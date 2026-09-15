@@ -488,6 +488,12 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     )
     boton_monitor.pack(side="left", padx=6)
 
+    def _abrir_menu_monitor(evento, n=nombre):
+        _menu_monitor(n, evento)
+        return "break"
+
+    boton_monitor.bind("<Button-3>", _abrir_menu_monitor)
+
     E.fuentes[nombre] = {
         "contenedor": contenedor,
         "tarjeta_sombra": tarjeta_sombra,
@@ -787,21 +793,56 @@ def cambiar_mute(nombre):
         print(f"Error cambiando mute de {nombre}: {e}")
 
 
+def _fijar_monitor(nombre, tipo):
+    """Pone el monitoreo de la fuente en 'tipo' (uno de TIPOS_MONITOREO)
+    y actualiza el color del botón. Lo usan el toggle, el menú y vale
+    para cualquier estado, incluido el azul."""
+    if not E.conectado:
+        return
+    try:
+        E.cliente_obs.set_input_audio_monitor_type(nombre, tipo)
+
+        widgets = E.fuentes[nombre]
+        widgets["tipo_monitor"] = tipo
+        mod_ui_dibujo._actualizar_boton_circular(
+            widgets["monitor"], color_nuevo=C.COLORES_MONITOREO[tipo])
+    except Exception as e:
+        print(f"Error cambiando monitoreo de {nombre}: {e}")
+
+
 def cambiar_monitor(nombre):
+    """Clic IZQUIERDO del auricular: alterna sólo entre apagado y verde
+    (monitoreo + salida). A propósito nunca pasa por el azul (solo
+    monitoreo), porque ese estado saca la fuente del stream y llegar a
+    él de paso cortaría el audio un instante."""
     if not E.conectado:
         return
     try:
         actual = E.cliente_obs.get_input_audio_monitor_type(nombre).monitor_type
-        indice_actual = E.TIPOS_MONITOREO.index(actual) if actual in E.TIPOS_MONITOREO else 0
-        siguiente = E.TIPOS_MONITOREO[(indice_actual + 1) % len(E.TIPOS_MONITOREO)]
+    except Exception:
+        actual = E.fuentes.get(nombre, {}).get("tipo_monitor", "OBS_MONITORING_TYPE_NONE")
+    if actual == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT":
+        _fijar_monitor(nombre, "OBS_MONITORING_TYPE_NONE")
+    else:
+        _fijar_monitor(nombre, "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT")
 
-        E.cliente_obs.set_input_audio_monitor_type(nombre, siguiente)
 
-        widgets = E.fuentes[nombre]
-        widgets["tipo_monitor"] = siguiente
-        mod_ui_dibujo._actualizar_boton_circular(widgets["monitor"], color_nuevo=C.COLORES_MONITOREO[siguiente])
-    except Exception as e:
-        print(f"Error cambiando monitoreo de {nombre}: {e}")
+def _menu_monitor(nombre, event):
+    """Clic DERECHO del auricular: menú para elegir entre los tres
+    estados (apagado, solo yo/azul, yo + stream/verde)."""
+    if nombre not in E.fuentes:
+        return
+    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
+                   activebackground="#323b4c", activeforeground="white")
+    for tipo in E.TIPOS_MONITOREO:
+        menu.add_command(
+            label=C.ETIQUETAS_MONITOREO.get(tipo, tipo),
+            command=lambda t=tipo: _fijar_monitor(nombre, t)
+        )
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
 
 
 def _renombrar_fuente_localmente(nombre_viejo, nombre_nuevo):

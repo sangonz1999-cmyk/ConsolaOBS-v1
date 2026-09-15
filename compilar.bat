@@ -46,6 +46,9 @@ if exist "%ICONO%" (
 echo.
 
 echo Borrando restos de compilaciones anteriores...
+REM Si el .exe anterior sigue abierto, Windows lo bloquea y la
+REM compilación falla: se cierra primero.
+taskkill /F /IM ConsolaOBS.exe 2>nul
 rmdir /s /q "%CARPETA_BUILD%" 2>nul
 del ConsolaOBS.spec 2>nul
 
