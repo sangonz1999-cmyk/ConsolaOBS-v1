@@ -49,10 +49,18 @@ def _reproducir_local(ruta, token):
     cancelen; si se cerrara el dispositivo al salir, no sonaría nada."""
     try:
         import miniaudio
-    except Exception:
+    except Exception as e:
         if not _aviso_miniaudio["mostrado"]:
             _aviso_miniaudio["mostrado"] = True
-            print("miniaudio no está instalado: el sonido sólo saldrá por OBS (pip install miniaudio).")
+            print(f"miniaudio no disponible ({e}): el sonido sólo saldrá por OBS.")
+            try:
+                # Aviso visible (en el .exe no hay consola donde ver el print).
+                messagebox.showwarning(
+                    "Sin audio local",
+                    f"No se pudo cargar el motor de audio local ({e}).\n\nEl sonido sólo saldrá por OBS."
+                )
+            except Exception:
+                pass
         return
     _detener_local()
     try:

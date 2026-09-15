@@ -54,7 +54,9 @@ echo Compilando ConsolaOBS.exe...
 REM OJO: no quitar el \. de --distpath: como CARPETA_DESTINO termina en
 REM barra invertida, "...\" escaparia la comilla de cierre y PyInstaller
 REM recibiria mal los argumentos (diria que falta el script).
-py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD%" main.py
+REM --hidden-import cffi: miniaudio lo necesita a nivel C (_miniaudio.pyd)
+REM y PyInstaller no lo detecta solo; sin esto el .exe no tiene audio local.
+py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --hidden-import cffi --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD%" main.py
 
 if not exist "%CARPETA_DESTINO%\ConsolaOBS.exe" (
     echo.
