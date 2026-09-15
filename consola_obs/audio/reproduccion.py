@@ -11,7 +11,7 @@ from consola_obs.ui import soundboard as mod_ui_soundboard
 
 _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
-DURACION_FUNDIDO_LOCAL_SEG = 1.0
+DURACION_FUNDIDO_LOCAL_SEG = 2.0
 
 
 def _aplicar_ganancia(trozo, ganancia):
@@ -34,20 +34,33 @@ def _aplicar_ganancia(trozo, ganancia):
     return trozo
 
 
-def _detener_local(token=None, fundido=False):
+def _ganancia_fundido(progreso, db_inicial=0.0):
+    """Ganancia del fundido local para un progreso 0.0→1.0, con la MISMA
+    curva que el fundido de OBS (lineal en dB desde db_inicial hasta
+    silencio): así los dos se callan juntos en vez de ir desfasados."""
+    try:
+        db = db_inicial + (E.UMBRAL_SILENCIO - db_inicial) * min(1.0, max(0.0, progreso))
+        return 10.0 ** (db / 20.0)
+    except Exception:
+        return max(0.0, 1.0 - progreso)
+
+
+def _detener_local(token=None, fundido=False, db_inicial=0.0):
     """Corta el sonido que esté saliendo por la PC. Si se pasa un token,
     sólo lo toca cuando sigue siendo la sesión vigente (para que el
     fundido de una sesión vieja no corte el sonido nuevo).
 
-    Con fundido=True no corta en seco: marca el inicio de una rampa de
-    1 segundo igual que la de OBS y el stream se apaga solo al llegar a
-    silencio. Devuelve True si se inició un fundido."""
+    Con fundido=True no corta en seco: marca el inicio de una rampa
+    igual que la de OBS y el stream se apaga solo al llegar a silencio.
+    Devuelve True si se inició un fundido."""
     if token is not None and _reproduccion_local.get("token") != token:
         return False
     if fundido and _reproduccion_local.get("dispositivo") is not None:
         _reproduccion_local["fundido_inicio"] = time.time()
+        _reproduccion_local["fundido_db"] = db_inicial
         return True
     _reproduccion_local.pop("fundido_inicio", None)
+    _reproduccion_local.pop("fundido_db", None)
     cancelado = _reproduccion_local.pop("cancelar", None)
     if cancelado is not None:
         try:
@@ -124,11 +137,12 @@ def _reproducir_local(ruta, token):
                     break
                 inicio_fundido = _reproduccion_local.get("fundido_inicio")
                 if inicio_fundido is not None:
-                    ganancia = max(0.0, 1.0 - (time.time() - inicio_fundido)
-                                   / DURACION_FUNDIDO_LOCAL_SEG)
-                    if ganancia <= 0.0:
+                    progreso = (time.time() - inicio_fundido) / DURACION_FUNDIDO_LOCAL_SEG
+                    if progreso >= 1.0:
                         break
-                    trozo = _aplicar_ganancia(trozo, ganancia)
+                    trozo = _aplicar_ganancia(
+                        trozo, _ganancia_fundido(
+                            progreso, _reproduccion_local.get("fundido_db", 0.0)))
                 try:
                     pedido = yield trozo
                 except GeneratorExit:
@@ -156,6 +170,8 @@ def _reproducir_local(ruta, token):
     _reproduccion_local["dispositivo"] = dispositivo
     _reproduccion_local["token"] = token
     _reproduccion_local["cancelar"] = cancelado
+    _reproduccion_local.pop("fundido_inicio", None)
+    _reproduccion_local.pop("fundido_db", None)
     try:
         dispositivo.start(generador)
         while not terminado.wait(timeout=0.1):
@@ -169,6 +185,7 @@ def _reproducir_local(ruta, token):
             _reproduccion_local["token"] = None
             _reproduccion_local.pop("cancelar", None)
             _reproduccion_local.pop("fundido_inicio", None)
+            _reproduccion_local.pop("fundido_db", None)
         try:
             dispositivo.close()
         except Exception:
@@ -238,7 +255,7 @@ def _iniciar_reproduccion(indice):
     ).start()
 
 
-def _fundido_y_detener(indice, token, duracion=1.0, pasos=20):
+def _fundido_y_detener(indice, token, duracion=2.0, pasos=20):
     """Baja el volumen de la fuente de efectos desde su nivel actual
     hasta silencio en 'duracion' segundos y, al llegar abajo, detiene
     el medio. Al final (llegue a terminar o se cancele en el camino)
@@ -249,15 +266,12 @@ def _fundido_y_detener(indice, token, duracion=1.0, pasos=20):
     que la luz se mantiene prendida hasta el STOP final."""
     if not E.conectado:
         # Sin OBS no hay fundido de aquel lado, pero el local sí se
-        # desvanece igual; la luz se apaga cuando termina (~1 s).
+        # desvanece igual; la luz se apaga cuando termina (~2 s).
         if _detener_local(token, fundido=True):
-            E.ventana.after(1100, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            E.ventana.after(2100, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         else:
             E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
-
-    # El fundido local arranca en paralelo al de OBS (los dos duran 1 s).
-    _detener_local(token, fundido=True)
 
     try:
         respuesta = E.cliente_obs.get_input_volume(C.NOMBRE_FUENTE_EFECTOS)
@@ -267,6 +281,10 @@ def _fundido_y_detener(indice, token, duracion=1.0, pasos=20):
     except Exception as e:
         print(f"No se pudo leer el volumen para el fundido: {e}")
         vol_inicial = 0.0
+
+    # El fundido local arranca en paralelo al de OBS (misma duración y
+    # misma curva en dB, para que se callen juntos sin delay).
+    _detener_local(token, fundido=True, db_inicial=vol_inicial)
 
     intervalo = duracion / pasos
     cancelado = False
@@ -338,7 +356,7 @@ def _esperar_a_que_se_detenga(token, tope_seg=1.0):
 def reproducir_sonido(indice):
     if E._sesion_reproduccion.get("indice") == indice:
         # Se volvió a apretar el mismo pad mientras sonaba: en vez de
-        # reiniciarlo, se apaga con un fundido de volumen de 1 segundo.
+        # reiniciarlo, se apaga con un fundido de volumen de 2 segundos.
         token = E._sesion_reproduccion["token"]
         threading.Thread(
             target=_fundido_y_detener,
