@@ -1,0 +1,354 @@
+from tkinter import messagebox
+import obsws_python as obs
+
+from consola_obs import estado as E
+from consola_obs import constantes as C
+from consola_obs import configuracion as mod_configuracion
+from consola_obs.obs import eventos as mod_obs_eventos
+from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+
+
+class _ClienteOBSSincronizado:
+    """Envoltorio fino sobre el ReqClient real: cada llamada a un método
+    (get_input_list, set_input_volume, etc.) pasa por _lock_pedidos_obs
+    antes de tocar el socket, así nunca hay dos pedidos en simultáneo
+    sin importar desde qué hilo se llamen."""
+
+    def __init__(self, cliente_real):
+        self._cliente_real = cliente_real
+
+    def __getattr__(self, nombre_attr):
+        atributo = getattr(self._cliente_real, nombre_attr)
+        if not callable(atributo):
+            return atributo
+
+        def _llamada_con_lock(*args, **kwargs):
+            with E._lock_pedidos_obs:
+                return atributo(*args, **kwargs)
+
+        return _llamada_con_lock
+
+
+def _leer_fuentes_globales_obs():
+    """Los canales de audio 'globales' de OBS (Desktop Audio 1/2, Mic/Aux
+    1 a 4, los que se eligen desde Configuración > Audio, no desde una
+    escena puntual) no son parte de NINGUNA escena: suenan siempre,
+    tanto si la escena al aire los tiene como si no, porque OBS los
+    mezcla por canal y no como ítem de escena. Como get_scene_item_list()
+    nunca los va a devolver, sin este chequeo aparte el programa no podía
+    detectarlos como "activos" y los pintaba en gris permanentemente
+    (como si estuvieran fuera de la escena), aunque en realidad sonaran
+    siempre. Achican esto tratándolos igual que una fuente 'principal':
+    siempre cuentan como en escena."""
+    try:
+        especiales = E.cliente_obs.get_special_inputs()
+    except Exception as e:
+        print(f"No se pudieron leer las fuentes de audio globales de OBS: {e}")
+        return set()
+
+    nombres = set()
+    for campo in ("desktop1", "desktop2", "mic1", "mic2", "mic3", "mic4"):
+        nombre = mod_obs_eventos._valor(especiales, campo)
+        if nombre:
+            nombres.add(nombre)
+    return nombres
+
+
+def _refrescar_membresia_escena():
+    """Vuelve a leer qué fuentes están presentes Y activas en la escena
+    que está al aire ahora mismo, para poder mostrar en gris las que no
+    lo están. Se llama al conectar, al actualizar fuentes, y cada vez
+    que la escena activa cambia (evento de OBS)."""
+    if not E.conectado:
+        return
+    try:
+        respuesta_escena = E.cliente_obs.get_current_program_scene()
+        escena_actual = mod_obs_eventos._valor(
+            respuesta_escena,
+            "current_program_scene_name", "currentProgramSceneName",
+            "scene_name", "sceneName"
+        )
+        nombres_en_escena = set()
+        if escena_actual:
+            items = E.cliente_obs.get_scene_item_list(escena_actual).scene_items
+            for it in items:
+                nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
+                habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
+                if nombre_item and habilitado:
+                    nombres_en_escena.add(nombre_item)
+        nombres_en_escena |= _leer_fuentes_globales_obs()
+        E.ventana.after(0, lambda: _aplicar_membresia_escena(nombres_en_escena))
+    except Exception as e:
+        print(f"No se pudo actualizar la escena activa: {e}")
+
+
+def _aplicar_membresia_escena(nombres_en_escena):
+    E.escena_actual_nombres = nombres_en_escena
+    E.escena_actual_obtenida = True
+    for nombre in list(E.fuentes.keys()):
+        mod_ui_tarjeta._actualizar_estado_gris(nombre)
+
+
+def conectar_obs():
+
+    if E.conectado:
+        desconectar_obs()
+        return
+
+    host = E.entrada_host.get().strip() or "localhost"
+    texto_puerto = E.entrada_puerto.get().strip() or "4455"
+    password = E.entrada_password.get()
+
+    try:
+        puerto = int(texto_puerto)
+    except ValueError:
+        messagebox.showerror("Puerto inválido", "El puerto debe ser un número.")
+        return
+
+    try:
+        nuevo_cliente = obs.ReqClient(host=host, port=puerto, password=password, timeout=5)
+        nuevo_cliente.get_version()                                                 
+
+        nuevo_cliente_eventos = obs.EventClient(
+            host=host, port=puerto, password=password,
+            subs=(
+                obs.Subs.LOW_VOLUME | obs.Subs.INPUTVOLUMEMETERS |
+                obs.Subs.INPUTS | obs.Subs.SCENES | obs.Subs.SCENEITEMS |
+                obs.Subs.FILTERS
+            )
+        )
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_meters)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_created)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_program_scene_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_enable_state_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_created)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_removed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_mute_state_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_audio_monitor_type_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_name_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_created)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_removed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_enable_state_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_list_reindexed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_name_changed)
+
+    except Exception as e:
+        conectado = False
+        messagebox.showerror("Error de conexión", f"No se pudo conectar a OBS.\n\n{e}")
+        return
+
+    E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
+    E.cliente_eventos = nuevo_cliente_eventos
+    E.conectado = True
+
+    mod_configuracion.guardar_config_conexion(host, puerto, password)
+    actualizar_estado_conexion()
+    mod_ui_tarjeta.actualizar()
+
+
+def desconectar_obs():
+
+    E.conectado = False
+
+    for cliente in (E.cliente_obs, E.cliente_eventos):
+        try:
+            if cliente is not None:
+                cliente.disconnect()
+        except Exception:
+            pass
+
+    E.cliente_obs = None
+    E.cliente_eventos = None
+
+    for nombre in list(E.fuentes.keys()):
+        E.fuentes[nombre]["tarjeta_sombra"].destroy()
+        del E.fuentes[nombre]
+    E.niveles_actuales.clear()
+    E.niveles_crudos.clear()
+    E.niveles_entrada.clear()
+    E.niveles_antes_mute.clear()
+    E.ultima_vez_saturado.clear()
+    E.orden_fuentes.clear()
+    E.escena_actual_nombres = set()
+    E.escena_actual_obtenida = False
+
+    actualizar_estado_conexion()
+
+
+def actualizar_estado_conexion():
+    if E.conectado:
+        E.estado.config(text="● CONECTADO", fg="#2fd693")
+        E.estado_chip.config(highlightbackground="#2fd693")
+        E.boton_conectar.config(text="DESCONECTAR", bg="#ff5567", activebackground="#cb3542")
+    else:
+        E.estado.config(text="● DESCONECTADO", fg="#ff5d6c")
+        E.estado_chip.config(highlightbackground="#3f4a5e")
+        E.boton_conectar.config(text="CONECTAR", bg="#2fd693", activebackground="#4fe3ae")
+
+
+def _asegurar_fuente_en_todas_las_escenas(nombre_fuente):
+    """Se asegura de que 'nombre_fuente' esté presente Y ACTIVA en TODAS
+    las escenas de OBS: si falta en alguna, se agrega; si está pero
+    deshabilitada ('ojito' apagado), se habilita. Se usa tanto para la
+    fuente interna de efectos como para las fuentes marcadas como
+    'principales'. Serializada con _lock_sincronizar_escenas (ver más
+    arriba) para que no se pueda ejecutar en paralelo con otra operación
+    del mismo tipo y terminar creando la fuente dos veces en la misma
+    escena."""
+    if not E.conectado:
+        return
+    with E._lock_sincronizar_escenas:
+        try:
+            escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName") for e in E.cliente_obs.get_scene_list().scenes]
+        except Exception as e:
+            print(f"No se pudieron listar las escenas: {e}")
+            return
+
+        for escena in escenas:
+            if not escena:
+                continue
+            try:
+                items = E.cliente_obs.get_scene_item_list(escena).scene_items
+                item_existente = None
+                for it in items:
+                    if mod_obs_eventos._valor(it, "source_name", "sourceName") == nombre_fuente:
+                        item_existente = it
+                        break
+
+                if item_existente is None:
+                    E.cliente_obs.create_scene_item(escena, nombre_fuente, True)
+                else:
+                    habilitado = mod_obs_eventos._valor(item_existente, "scene_item_enabled", "sceneItemEnabled")
+                    if not habilitado:
+                        item_id = mod_obs_eventos._valor(item_existente, "scene_item_id", "sceneItemId")
+                        if item_id is not None:
+                            E.cliente_obs.set_scene_item_enabled(escena, item_id, True)
+            except Exception as e:
+                print(f"No se pudo asegurar '{nombre_fuente}' en la escena '{escena}': {e}")
+
+
+def asegurar_fuentes_principales_en_todas_las_escenas():
+    """Antes esto igualaba TODAS las fuentes de audio en TODAS las
+    escenas (invasivo: tocaba escenas del usuario sin que lo pidiera).
+    Ahora sólo se hace con las fuentes marcadas explícitamente como
+    'principales' (ver _alternar_principal); el resto de las fuentes
+    sólo se muestran (grises si no están en la escena activa)."""
+    for nombre in list(E.fuentes_principales):
+        _asegurar_fuente_en_todas_las_escenas(nombre)
+
+
+def preparar_fuente_efectos():
+    """Crea (si hace falta) la fuente compartida del soundboard y se
+    asegura de que esté presente en todas las escenas. Serializada con
+    _lock_sincronizar_escenas: si esto se dispara dos veces casi al
+    mismo tiempo (por ejemplo al crear una escena nueva, que dispara
+    esta misma función Y, por separado, la de las fuentes "principales"
+    — ver on_scene_created), sin este lock las dos podían preguntar "¿ya
+    existe la fuente de efectos en la escena nueva?" al mismo tiempo,
+    recibir "no" las dos, y terminar creándola dos veces: de ahí salían
+    las dos "Soundboard_Efectos" duplicadas e idénticas en la escena
+    recién creada, aunque esa fuente no esté (ni se pueda estar) marcada
+    con la estrella. Con el lock, la segunda espera a que la primera
+    termine y ya la encuentra creada."""
+    if not E.conectado:
+        return
+
+    with E._lock_sincronizar_escenas:
+        try:
+            escenas = [
+                mod_obs_eventos._valor(e, "scene_name", "sceneName")
+                for e in E.cliente_obs.get_scene_list().scenes
+            ]
+            escenas = [e for e in escenas if e]
+
+            if not escenas:
+                return
+
+            entradas = [
+                mod_obs_eventos._valor(i, "input_name", "inputName")
+                for i in E.cliente_obs.get_input_list().inputs
+            ]
+
+            if C.NOMBRE_FUENTE_EFECTOS not in entradas:
+                E.cliente_obs.create_input(
+                    escenas[0],
+                    C.NOMBRE_FUENTE_EFECTOS,
+                    "ffmpeg_source",
+                    C.AJUSTES_FUENTE_EFECTOS,
+                    True
+                )
+                try:
+                    E.cliente_obs.trigger_media_input_action(
+                        C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                    )
+                except Exception:
+                    pass
+            else:
+                try:
+                    E.cliente_obs.set_input_settings(
+                        C.NOMBRE_FUENTE_EFECTOS,
+                        {
+                            "local_file": "",
+                            "restart_on_activate": False,
+                            "close_when_inactive": False,
+                        },
+                        True
+                    )
+                except Exception as e:
+                    print(f"No se pudo ajustar 'restart_on_activate': {e}")
+
+            for escena in escenas:
+                try:
+                    items = E.cliente_obs.get_scene_item_list(
+                        escena
+                    ).scene_items
+
+                    nombres_en_escena = [
+                        mod_obs_eventos._valor(it, "source_name", "sourceName")
+                        for it in items
+                    ]
+
+                    if C.NOMBRE_FUENTE_EFECTOS not in nombres_en_escena:
+                        E.cliente_obs.create_scene_item(
+                            escena,
+                            C.NOMBRE_FUENTE_EFECTOS,
+                            True
+                        )
+                        try:
+                            E.cliente_obs.trigger_media_input_action(
+                                C.NOMBRE_FUENTE_EFECTOS,
+                                "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                            )
+                        except Exception:
+                            pass
+
+                except Exception as e:
+                    print(
+                        f"No se pudo agregar la fuente de efectos a "
+                        f"'{escena}': {e}"
+                    )
+
+            try:
+                E.cliente_obs.trigger_media_input_action(
+                    C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            print(
+                f"No se pudo preparar la fuente de efectos: {e}"
+            )
+
+
+def preparar_fuentes_en_todas_las_escenas():
+    """OBSOLETA a propósito: antes esto forzaba TODAS las fuentes de
+    audio a existir en TODAS las escenas, lo cual era invasivo (tocaba
+    escenas del usuario sin que lo pidiera explícitamente). Ahora sólo
+    se muestran (en gris si no están en la escena al aire) y sólo se
+    fuerzan a todas las escenas las que el usuario marca como
+    'principales' — ver asegurar_fuentes_principales_en_todas_las_escenas().
+    Se deja esta función vacía (en vez de borrarla) por si algo viejo
+    todavía la llama."""
+    pass

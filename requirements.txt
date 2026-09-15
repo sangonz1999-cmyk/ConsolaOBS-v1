@@ -1,0 +1,2 @@
+obsws-python>=1.8
+Pillow>=10

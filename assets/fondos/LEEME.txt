@@ -1,0 +1,6 @@
+FONDOS DE LA INTERFAZ
+======================
+Carpeta reservada para futuras imágenes de fondo (por ejemplo,
+texturas o wallpapers propios). No es necesaria para que el
+programa funcione: por defecto se usan degradados dibujados por
+código.

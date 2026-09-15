@@ -1,0 +1,8 @@
+ICONOS DE LA INTERFAZ
+======================
+Poné acá:
+  - app_icon.ico   -> ícono de la ventana/barra de tareas (Windows).
+  - app_icon.png   -> ícono de la ventana en Mac/Linux.
+  - logo_cabecera.png -> reemplaza el ícono dibujado de la cabecera.
+Ninguno es obligatorio: si faltan, el programa usa sus íconos
+dibujados por defecto y funciona exactamente igual.
