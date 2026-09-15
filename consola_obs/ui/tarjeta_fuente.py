@@ -359,14 +359,20 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         alto_cab = cv.winfo_height()
         if ancho_cab < 2 or alto_cab < 2:
             return
-        color_base = cv.datos_color_actual
-        cv.delete("degradado_cabecera")
-        color_claro = mod_ui_dibujo._aclarar_color(color_base, 40)
-        color_oscuro = mod_ui_dibujo._oscurecer_color(color_base, 15)
-        ids = mod_ui_dibujo._gradiente_vertical(cv, 0, 0, ancho_cab, alto_cab, color_claro, color_oscuro, pasos=min(14, max(2, alto_cab)))
-        for iid in ids:
-            cv.itemconfig(iid, tags=("degradado_cabecera",))
-        cv.tag_lower("degradado_cabecera")
+        # El texto se recentra siempre (barato, y en el divisor no hay
+        # velo que lo tape: tiene que seguir al tamaño en vivo). El
+        # degradado, en cambio, se saltea durante un arrastre (borrar
+        # y recrear franjas a cada evento es parpadeo puro); el rebuild
+        # post-arrastre lo deja bien.
+        if not (E._arrastre_ventana["activo"] or E._arrastre_divisor["activo"]):
+            color_base = cv.datos_color_actual
+            cv.delete("degradado_cabecera")
+            color_claro = mod_ui_dibujo._aclarar_color(color_base, 40)
+            color_oscuro = mod_ui_dibujo._oscurecer_color(color_base, 15)
+            ids = mod_ui_dibujo._gradiente_vertical(cv, 0, 0, ancho_cab, alto_cab, color_claro, color_oscuro, pasos=min(14, max(2, alto_cab)))
+            for iid in ids:
+                cv.itemconfig(iid, tags=("degradado_cabecera",))
+            cv.tag_lower("degradado_cabecera")
         cx, cy = ancho_cab / 2, alto_cab / 2
         cv.coords(id_sombra, cx + 1, cy + 2)
         cv.coords(id_nombre, cx, cy + 1)
