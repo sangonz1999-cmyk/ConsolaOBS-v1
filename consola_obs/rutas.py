@@ -25,8 +25,11 @@ CARPETA_ASSETS = os.path.join(CARPETA_SCRIPT, "assets")
 CARPETA_ICONOS = os.path.join(CARPETA_ASSETS, "iconos")
 CARPETA_FONDOS = os.path.join(CARPETA_ASSETS, "fondos")
 CARPETA_FUENTES_TIPOGRAFIA = os.path.join(CARPETA_ASSETS, "fuentes")
+CARPETA_SONIDOS_PAD = os.path.join(CARPETA_ASSETS, "Sondidos_pad")
+CARPETA_IMAGENES_PAD = os.path.join(CARPETA_ASSETS, "Imagenes_pad")
 
-for _carpeta in (CARPETA_ASSETS, CARPETA_ICONOS, CARPETA_FONDOS, CARPETA_FUENTES_TIPOGRAFIA):
+for _carpeta in (CARPETA_ASSETS, CARPETA_ICONOS, CARPETA_FONDOS, CARPETA_FUENTES_TIPOGRAFIA,
+                 CARPETA_SONIDOS_PAD, CARPETA_IMAGENES_PAD):
     try:
         os.makedirs(_carpeta, exist_ok=True)
     except Exception:

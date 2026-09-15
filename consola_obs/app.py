@@ -18,6 +18,7 @@ from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+from consola_obs.ui import soundboard as mod_ui_soundboard
 from consola_obs.ui import ventana as mod_ui_ventana
 from consola_obs.ui import cabecera as mod_ui_cabecera
 from consola_obs.compat import HAY_PILLOW
@@ -160,6 +161,9 @@ def main():
     E.FUENTE_TITULO = next((f for f in E._PREFERENCIAS_FUENTE_TITULO if f in E._familias_disponibles), E.FUENTE_UI)
     E.FUENTE_ICONOS = next((f for f in ("Segoe UI Symbol", "Noto Sans Symbols 2", "Arial Unicode MS", E.FUENTE_UI) if f in E._familias_disponibles), E.FUENTE_UI)
     E.FUENTE_EMOJI = next((f for f in ("Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", E.FUENTE_UI) if f in E._familias_disponibles), E.FUENTE_UI)
+    # Si el usuario ya había elegido una tipografía en el menú de
+    # ajustes, se aplica por encima de la detección automática.
+    mod_ui_ventana.aplicar_fuente_elegida(E.config_interfaz_previa.get("fuente_ui", ""), guardar=False)
 
     try:
         E._ico = os.path.join(R.CARPETA_ICONOS, "app_icon.ico")
@@ -459,6 +463,21 @@ def main():
         lambda e: mod_ui_ventana.cambiar_diseno(E.variable_diseno.get())
     )
 
+    E.variable_fuente = tk.StringVar(
+        value=E.fuente_elegida or mod_ui_ventana.FUENTE_PREDETERMINADA)
+    E.selector_fuente = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Tipografía"),
+        textvariable=E.variable_fuente,
+        values=mod_ui_ventana._fuentes_tipografia_disponibles(),
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_fuente.pack(side="left", fill="x", expand=True)
+    E.selector_fuente.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_ui_ventana.cambiar_fuente(E.variable_fuente.get())
+    )
+
     tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")
 
 
@@ -472,6 +491,9 @@ def main():
 
 
     mod_ui_ventana.construir_cuerpo()
+    # Los audios nuevos de la carpeta Sondidos_pad se convierten en pads
+    # solos al arrancar (los que ya tienen pad no se tocan).
+    mod_ui_soundboard.detectar_sonidos_carpeta(avisar=False)
     mod_ui_medidores.actualizar_vu_meters_ui()
     mod_obs_eventos._programar_refresco_ganancia()
     mod_audio_reproduccion._programar_refresco_reproduccion()

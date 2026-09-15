@@ -6,6 +6,7 @@ from tkinter import filedialog, messagebox, simpledialog
 from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageOps, ImageTk
 from consola_obs import estado as E
 from consola_obs import constantes as C
+from consola_obs import rutas as R
 from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
@@ -708,6 +709,21 @@ def construir_soundboard():
         boton_reiniciar.pack(side="left", padx=4)
 
     # ------------------------------------------------------------------
+    # BOTÓN "DETECTAR SONIDOS": crea un pad por cada audio nuevo de la
+    # carpeta Sondidos_pad (con su imagen gemela si existe).
+    # ------------------------------------------------------------------
+    marco_detectar = tk.Frame(E.panel_soundboard, bg=C.COLOR_PANEL_SOUNDBOARD)
+    marco_detectar.pack(fill="x")
+    boton_detectar = tk.Button(
+        marco_detectar, text="🔍 DETECTAR SONIDOS DE LA CARPETA",
+        bg="#242d3d", fg="#4fe3ae", activebackground="#2e3a4f",
+        activeforeground="#4fe3ae", relief="flat", bd=0, pady=6,
+        font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
+        command=lambda: detectar_sonidos_carpeta(avisar=True),
+    )
+    boton_detectar.pack(fill="x", padx=6, pady=(4, 2))
+
+    # ------------------------------------------------------------------
     # BOTÓN "AGREGAR PAD": misma placa de vidrio, en formato barra ancha
     # ------------------------------------------------------------------
     alto_barra_agregar = max(62, round(76 * mod_utilidades.factor_escala_ui()))
@@ -775,3 +791,76 @@ def agregar_pad_soundboard():
     E.num_pads_soundboard += 1
     mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
     construir_soundboard()
+
+
+EXTENSIONES_AUDIO = (".mp3", ".wav", ".ogg", ".flac", ".m4a")
+EXTENSIONES_IMAGEN = (".png", ".jpg", ".jpeg", ".gif", ".bmp")
+
+
+def _normalizar_ruta(ruta):
+    try:
+        return os.path.normcase(os.path.normpath(os.path.abspath(ruta)))
+    except Exception:
+        return ruta
+
+
+def _imagen_gemela(nombre_base):
+    """Busca en la carpeta de imágenes un archivo con el mismo nombre
+    base que el sonido (aplausos-1.mp3 -> aplausos-1.jpg). Devuelve la
+    ruta o None si no hay ninguna."""
+    try:
+        for extension in EXTENSIONES_IMAGEN:
+            candidata = os.path.join(R.CARPETA_IMAGENES_PAD, nombre_base + extension)
+            if os.path.isfile(candidata):
+                return candidata
+    except Exception:
+        pass
+    return None
+
+
+def detectar_sonidos_carpeta(avisar=True):
+    """Crea un pad por cada archivo de audio de la carpeta Sondidos_pad
+    que todavía no tenga pad asignado, con el nombre del archivo y, si
+    existe, su imagen gemela de la carpeta Imagenes_pad. Nunca borra ni
+    modifica los pads que ya existen: sólo agrega los nuevos."""
+    nuevos = 0
+    try:
+        archivos = sorted(os.listdir(R.CARPETA_SONIDOS_PAD))
+    except Exception:
+        archivos = []
+    existentes = set()
+    for datos in E.config_soundboard.values():
+        if isinstance(datos, dict) and datos.get("archivo"):
+            existentes.add(_normalizar_ruta(datos["archivo"]))
+    for archivo in archivos:
+        if not archivo.lower().endswith(EXTENSIONES_AUDIO):
+            continue
+        ruta = os.path.join(R.CARPETA_SONIDOS_PAD, archivo)
+        if _normalizar_ruta(ruta) in existentes:
+            continue
+        nombre_base = os.path.splitext(archivo)[0]
+        E.config_soundboard[str(E.num_pads_soundboard)] = {
+            "nombre": nombre_base,
+            "archivo": ruta,
+            "imagen": _imagen_gemela(nombre_base),
+            "color": None,
+        }
+        existentes.add(_normalizar_ruta(ruta))
+        E.num_pads_soundboard += 1
+        nuevos += 1
+    if nuevos:
+        mod_configuracion.guardar_config_soundboard()
+        mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
+        construir_soundboard()
+    if avisar:
+        if nuevos:
+            messagebox.showinfo(
+                "Sonidos detectados",
+                f"Se agregaron {nuevos} pad(s) desde la carpeta Sondidos_pad."
+            )
+        else:
+            messagebox.showinfo(
+                "Sonidos detectados",
+                "No hay sonidos nuevos en la carpeta Sondidos_pad."
+            )
+    return nuevos
