@@ -12,6 +12,7 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
+from consola_obs.ui import ventana as mod_ui_ventana
 
 
 def asignar_sonido(indice):
@@ -553,12 +554,15 @@ def _al_redimensionar_soundboard(event=None):
     ventana. En vez de eso, se deja que el mecanismo de toda la ventana
     (_al_redimensionar_ventana/_aplicar_redimension, más abajo) haga UNA
     sola reconstrucción completa (construir_cuerpo → construir_soundboard)
-    recién cuando el usuario suelta el borde, tapada por el velo. Fuera
-    de un arrastre de ventana (por ejemplo, moviendo el divisor entre
-    paneles) el comportamiento no cambia: se sigue esperando sólo el
-    toque de calma de 16ms de siempre."""
+    recién cuando el usuario suelta el borde, tapada por el velo.     Fuera de un arrastre de ventana, el comportamiento no cambia... salvo
+    que haya una sesión de DIVISOR en curso (ver _presionar_divisor en
+    ventana.py): en ese caso tampoco se reconstruye nada hasta soltar
+    (misma razón: destruir y recrear 17 pads a cada pausa del arrastre
+    del divisor es lo que se veía como borrado/creación parpadeante)."""
     if _arrastre_ventana_en_curso():
         return
+    if E._arrastre_divisor["activo"]:
+        mod_ui_ventana._reprogramar_fin_divisor()
     if E._trabajo_redimension_soundboard["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_soundboard["id"])
     # Ídem comentario en el redimensionado del panel de fuentes: 16ms
@@ -569,7 +573,8 @@ def _al_redimensionar_soundboard(event=None):
 def _aplicar_redimension_soundboard():
     E._trabajo_redimension_soundboard["id"] = None
     if (E._reconstruccion_en_curso["activa"] or E._arrastre_ventana["activo"]
-            or E._trabajo_redimension["id"] is not None):
+            or E._trabajo_redimension["id"] is not None
+            or E._arrastre_divisor["activo"]):
         # Idem grilla de fuentes: a mitad de un arrastre no se
         # reconstruye nada (la reconstrucción de fin de arrastre deja
         # todo en su lugar). El reintento se agota solo.

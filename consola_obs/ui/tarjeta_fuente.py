@@ -167,6 +167,10 @@ def _al_redimensionar_fuentes(event=None):
     # el refresco de pantalla, así que bajar más no cambia nada salvo
     # hacer más trabajo de más.
     E._trabajo_redimension_fuentes["id"] = E.ventana.after(16, _aplicar_redimension_fuentes)
+    # Si hay una sesión de divisor en curso, su calma se extiende con
+    # cada evento (el release la termina antes).
+    if E._arrastre_divisor["activo"]:
+        mod_ui_ventana._reprogramar_fin_divisor()
 
 
 def _aplicar_redimension_fuentes():

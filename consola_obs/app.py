@@ -232,6 +232,8 @@ def main():
     E._ultimo_factor_escala = {"valor": mod_utilidades.factor_escala_ui()}
     E._reconstruccion_en_curso = {"activa": False}
     E._arrastre_ventana = {"activo": False}
+    E._arrastre_divisor = {"activo": False}
+    E._trabajo_divisor = {"id": None}
 
     # ------------------------------------------------------------------
     # VELO DE REDIMENSIONADO
@@ -508,7 +510,7 @@ def main():
 
 
     E.ventana.bind("<Configure>", mod_ui_cabecera._seguir_ventana_con_menu, add="+")
-
+    E.ventana.bind("<ButtonRelease-1>", mod_ui_ventana._soltar_divisor, add="+")
 
 
     mod_ui_ventana.construir_cuerpo()
