@@ -359,7 +359,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
     color_etiqueta = E.colores_fuentes.get(nombre)
     if E.es_moderna():
-        color_cabecera_base = C.MOD_CABECERA
+        color_cabecera_base = color_etiqueta or C.MOD_CABECERA
         color_cuerpo = C.MOD_TARJETA
         color_meta = C.MOD_FONDO
     else:
@@ -716,7 +716,7 @@ def _actualizar_estado_gris(nombre):
         color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.42)
         color_meta = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.30)
     elif E.es_moderna():
-        color_cabecera = C.MOD_CABECERA
+        color_cabecera = color_etiqueta or C.MOD_CABECERA
         color_texto = C.MOD_TEXTO
         color_cuerpo = C.MOD_TARJETA
         color_meta = C.MOD_FONDO
@@ -743,8 +743,20 @@ def _actualizar_estado_gris(nombre):
     widgets["db"].config(bg=color_cuerpo)
     widgets["fila_vertical"].config(bg=color_cuerpo)
     widgets["fila_iconos"].config(bg=color_cuerpo)
+    # El fader acompaña el color del cuerpo (Tk no tiene fondo
+    # transparente): así no queda un recuadro de otro color.
+    try:
+        fader = widgets.get("fader")
+        if isinstance(fader, _FaderOBS):
+            fader.canvas.config(bg=color_cuerpo)
+        elif fader is not None:
+            fader.config(bg=color_cuerpo)
+    except Exception:
+        pass
     for hijo in widgets["fila_iconos"].winfo_children():
         if isinstance(hijo, tk.Canvas):
+            hijo.config(bg=color_cuerpo)
+        elif getattr(hijo, "es_plano", False):
             hijo.config(bg=color_cuerpo)
 
     widgets["fila_meta"].config(bg=color_meta)
