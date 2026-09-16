@@ -120,14 +120,8 @@ _PALETA_BARRA_GRIS_DEFECTO = {
 
 
 def _gris_barra_actual():
-    gris = getattr(C, "BARRA_MODERNA_GRIS", None)
-    if not isinstance(gris, dict):
-        return dict(_PALETA_BARRA_GRIS_DEFECTO)
-    limpio = {}
-    for zona, clave in (("alta", "rojo"), ("media", "amarillo"), ("baja", "verde")):
-        v = gris.get(zona)
-        limpio[clave] = tuple(int(x) for x in v) if _rgb_valido(v) else _PALETA_BARRA_GRIS_DEFECTO[clave]
-    return limpio
+    return _normalizar_paleta(getattr(C, "BARRA_MODERNA_GRIS", None),
+                              _PALETA_BARRA_GRIS_DEFECTO)
 
 
 def _rgb_valido(v):
@@ -135,15 +129,32 @@ def _rgb_valido(v):
             and all(isinstance(x, (int, float)) and 0 <= x <= 255 for x in v))
 
 
+_EQUIV_ZONAS = {"alta": "rojo", "media": "amarillo", "baja": "verde",
+                "rojo": "rojo", "amarillo": "amarillo", "verde": "verde"}
+
+
+def _normalizar_paleta(d, defecto):
+    """Lee una paleta aceptando claves alta/media/baja O
+    rojo/amarillo/verde (para que un desliz editando no la rompa en
+    silencio): devuelve siempre claves rojo/amarillo/verde válidas."""
+    out = {}
+    for clave in ("rojo", "amarillo", "verde"):
+        v = None
+        if isinstance(d, dict):
+            for k, std in _EQUIV_ZONAS.items():
+                if std == clave and k in d:
+                    v = d[k]
+                    break
+        out[clave] = tuple(int(x) for x in v) if _rgb_valido(v) else defecto[clave]
+    return out
+
+
 def _esquema_barra_actual():
-    esquema = getattr(C, "BARRA_MODERNA", None)
-    if not isinstance(esquema, dict):
-        return dict(_BARRA_MODERNA_DEFECTO)
-    limpio = {}
-    for zona in ("alta", "media", "baja"):
-        v = esquema.get(zona)
-        limpio[zona] = tuple(int(x) for x in v) if _rgb_valido(v) else _BARRA_MODERNA_DEFECTO[zona]
-    return limpio
+    normalizado = _normalizar_paleta(getattr(C, "BARRA_MODERNA", None),
+                                     {"rojo": (255, 59, 48), "amarillo": (242, 196, 100),
+                                      "verde": (47, 214, 147)})
+    return {"alta": normalizado["rojo"], "media": normalizado["amarillo"],
+            "baja": normalizado["verde"]}
 
 
 def _mezcla_degradado_actual():
@@ -157,6 +168,7 @@ def _mezcla_degradado_actual():
     return (1.5, 2.0)
 _PALETA_BARRA_COLOR_TENUE = C.GUIA_BARRA_COLOR
 _PALETA_BARRA_GRIS_TENUE = C.GUIA_BARRA_GRIS
+_GUIA_DEFECTO = {"rojo": (9, 7, 6), "amarillo": (9, 8, 6), "verde": (7, 10, 8)}
 
 
 def _color_zona_barra(db, paleta, mezcla=(1.5, 2.0)):
@@ -187,7 +199,8 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
     if clave in _cache_barra_obs:
         return _cache_barra_obs[clave]
     try:
-        paleta = _PALETA_BARRA_GRIS_TENUE if gris else _PALETA_BARRA_COLOR_TENUE
+        paleta = _normalizar_paleta(
+            _PALETA_BARRA_GRIS_TENUE if gris else _PALETA_BARRA_COLOR_TENUE, _GUIA_DEFECTO)
         ancho, alto = max(2, int(ancho)), max(2, int(alto))
         tira = Image.new("RGB", (1, alto))
         px = tira.load()
