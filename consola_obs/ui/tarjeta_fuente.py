@@ -17,6 +17,72 @@ from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import ventana as mod_ui_ventana
 
 
+class _FaderOBS:
+    """Fader vertical estilo OBS (tema Moderna): pista oscura, relleno
+    azul y perilla circular blanca. Misma interfaz mínima que el
+    tk.Scale que reemplaza (get/set/pack/bind), para que el resto del
+    programa no cambie."""
+    ANCHO = 30
+    RADIO_PERILLA = 9
+
+    def __init__(self, parent, alto, bg, al_cambiar):
+        self.alto = max(60, int(alto))
+        self.al_cambiar = al_cambiar
+        self._db = -60.0
+        self.canvas = tk.Canvas(parent, width=self.ANCHO, height=self.alto,
+                                bg=bg, highlightthickness=0, cursor="hand2")
+        cx = self.ANCHO / 2
+        self._cx = cx
+        self.canvas.create_rectangle(cx - 3, 4, cx + 3, self.alto - 4,
+                                     fill="#2a3342", outline="")
+        self.id_fill = self.canvas.create_rectangle(
+            cx - 3, self.alto - 4, cx + 3, self.alto - 4,
+            fill="#2f7cf6", outline="")
+        r = self.RADIO_PERILLA
+        self.id_handle = self.canvas.create_oval(
+            cx - r, self.alto - 4 - r, cx + r, self.alto - 4 + r,
+            fill="#f2f5fa", outline="#9aa4b2")
+        self.canvas.bind("<ButtonPress-1>", self._al_arrastrar)
+        self.canvas.bind("<B1-Motion>", self._al_arrastrar)
+
+    def _y_de_db(self, db):
+        db = max(-60.0, min(0.0, db))
+        return 4 + (-db / 60.0) * (self.alto - 8)
+
+    def _db_de_y(self, y):
+        t = (max(4, min(self.alto - 4, y)) - 4) / max(1, self.alto - 8)
+        return round(max(-60.0, min(0.0, -t * 60.0)) * 2) / 2
+
+    def set(self, db):
+        try:
+            self._db = max(-60.0, min(0.0, float(db)))
+        except Exception:
+            self._db = -60.0
+        self._repintar()
+
+    def get(self):
+        return self._db
+
+    def pack(self, *args, **kwargs):
+        return self.canvas.pack(*args, **kwargs)
+
+    def bind(self, *args, **kwargs):
+        return self.canvas.bind(*args, **kwargs)
+
+    def _repintar(self):
+        y = self._y_de_db(self._db)
+        r = self.RADIO_PERILLA
+        self.canvas.coords(self.id_fill, self._cx - 3, y, self._cx + 3, self.alto - 4)
+        self.canvas.coords(self.id_handle, self._cx - r, y - r, self._cx + r, y + r)
+
+    def _al_arrastrar(self, event):
+        self.set(self._db_de_y(event.y))
+        try:
+            self.al_cambiar(self._db)
+        except Exception:
+            pass
+
+
 def _ancho_preferido_fuente():
     """Ancho 'de catálogo' (mínimo) de una tarjeta de fuente, según el
     tamaño de ícono elegido (Chico/Mediano/Grande) y el factor de escala
@@ -405,11 +471,13 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     contenedor.nombre_fuente = nombre
     contenedor.bind("<Button-3>", lambda e: _abrir_menu_contextual_fuente(nombre, e))
 
+    col_db_activo = C.MOD_TEXTO if E.es_moderna() else "#2fd693"
+    col_db_silencio = C.MOD_APAGADO if E.es_moderna() else "#828da6"
     etiqueta_db = tk.Label(
         contenedor,
         text="SILENCIO" if vol_db <= E.UMBRAL_SILENCIO else f"{vol_db:.1f} dB",
         bg=color_cuerpo,
-        fg="#2fd693",
+        fg=col_db_silencio if vol_db <= E.UMBRAL_SILENCIO else col_db_activo,
         font=(E.FUENTE_UI, 10, "bold")
     )
     etiqueta_db.pack(pady=(5, 2))
@@ -453,25 +521,6 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fill=color_marcas, font=(E.FUENTE_UI, 6), anchor="w"
         )
 
-    escala = tk.Scale(
-        fila_vertical,
-        from_=0,
-        to=-60,
-        resolution=0.5,
-        orient="vertical",
-        length=alto_canal,
-        width=14,
-        sliderlength=20,
-        showvalue=False,
-        bg="#2a3243",
-        fg="white",
-        troughcolor="#141a26",
-        highlightthickness=0,
-        activebackground="#4fe3ae"
-    )
-    escala.set(vol_db)
-    escala.pack(side="left", padx=(4, 0), pady=(margen_marcas_db, 0), anchor="n")
-
     def cambiar_volumen(valor):
         if not E.conectado:
             return
@@ -479,14 +528,35 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             db = float(valor)
             if db <= E.UMBRAL_SILENCIO:
                 E.cliente_obs.set_input_volume(nombre, vol_mul=0)
-                etiqueta_db.config(text="SILENCIO", fg="#828da6")
+                etiqueta_db.config(text="SILENCIO", fg=col_db_silencio)
             else:
                 E.cliente_obs.set_input_volume(nombre, vol_db=db)
-                etiqueta_db.config(text=f"{db:.1f} dB", fg="#2fd693")
+                etiqueta_db.config(text=f"{db:.1f} dB", fg=col_db_activo)
         except Exception as e:
             print(f"Error cambiando volumen de {nombre}: {e}")
 
-    escala.config(command=cambiar_volumen)
+    if E.es_moderna():
+        escala = _FaderOBS(fila_vertical, alto_canal, color_cuerpo, cambiar_volumen)
+    else:
+        escala = tk.Scale(
+            fila_vertical,
+            from_=0,
+            to=-60,
+            resolution=0.5,
+            orient="vertical",
+            length=alto_canal,
+            width=14,
+            sliderlength=20,
+            showvalue=False,
+            bg="#2a3243",
+            fg="white",
+            troughcolor="#141a26",
+            highlightthickness=0,
+            activebackground="#4fe3ae"
+        )
+        escala.config(command=cambiar_volumen)
+    escala.set(vol_db)
+    escala.pack(side="left", padx=(4, 0), pady=(margen_marcas_db, 0), anchor="n")
 
     escala.bind("<ButtonPress-1>", lambda e: E.fuentes[nombre].__setitem__("arrastrando", True))
     escala.bind("<ButtonRelease-1>", lambda e: E.fuentes[nombre].__setitem__("arrastrando", False))
@@ -495,25 +565,44 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     fila_iconos = tk.Frame(contenedor, bg=color_cuerpo)
     fila_iconos.pack(pady=(5, 5))
 
-    boton_mute = mod_ui_dibujo._crear_boton_circular(
-        fila_iconos,
-        "🔇" if muted else "🔊",
-        medida_icono["diametro_boton"],
-        medida_icono["fuente_boton"],
-        "#ff5567" if muted else "#394151",
-        lambda: cambiar_mute(nombre)
-    )
-    boton_mute.pack(side="left", padx=6)
+    if E.es_moderna():
+        boton_mute = mod_ui_dibujo._crear_icono_plano(
+            fila_iconos,
+            "🔇" if muted else "🔊",
+            medida_icono["fuente_boton"] + 4,
+            "#ff5567" if muted else C.MOD_APAGADO,
+            lambda: cambiar_mute(nombre)
+        )
+        boton_mute.pack(side="left", padx=6)
 
-    boton_monitor = mod_ui_dibujo._crear_boton_circular(
-        fila_iconos,
-        "🎧",
-        medida_icono["diametro_boton"],
-        medida_icono["fuente_boton"],
-        C.COLORES_MONITOREO.get(tipo_monitor, "#394151"),
-        lambda: cambiar_monitor(nombre)
-    )
-    boton_monitor.pack(side="left", padx=6)
+        boton_monitor = mod_ui_dibujo._crear_icono_plano(
+            fila_iconos,
+            "🎧",
+            medida_icono["fuente_boton"] + 4,
+            C.COLORES_MONITOREO.get(tipo_monitor, "#394151"),
+            lambda: cambiar_monitor(nombre)
+        )
+        boton_monitor.pack(side="left", padx=6)
+    else:
+        boton_mute = mod_ui_dibujo._crear_boton_circular(
+            fila_iconos,
+            "🔇" if muted else "🔊",
+            medida_icono["diametro_boton"],
+            medida_icono["fuente_boton"],
+            "#ff5567" if muted else "#394151",
+            lambda: cambiar_mute(nombre)
+        )
+        boton_mute.pack(side="left", padx=6)
+
+        boton_monitor = mod_ui_dibujo._crear_boton_circular(
+            fila_iconos,
+            "🎧",
+            medida_icono["diametro_boton"],
+            medida_icono["fuente_boton"],
+            C.COLORES_MONITOREO.get(tipo_monitor, "#394151"),
+            lambda: cambiar_monitor(nombre)
+        )
+        boton_monitor.pack(side="left", padx=6)
 
     def _abrir_menu_monitor(evento, n=nombre):
         _menu_monitor(n, evento)
@@ -799,9 +888,9 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
 
     widgets["fader"].set(vol_db)
     if vol_db <= E.UMBRAL_SILENCIO:
-        widgets["db"].config(text="SILENCIO", fg="#828da6")
+        widgets["db"].config(text="SILENCIO", fg=C.MOD_APAGADO if E.es_moderna() else "#828da6")
     else:
-        widgets["db"].config(text=f"{vol_db:.1f} dB", fg="#2fd693")
+        widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
 
     widgets["muted"] = muted
     mod_ui_dibujo._actualizar_boton_circular(

@@ -560,7 +560,26 @@ def _crear_boton_circular(parent, texto, diametro, fuente_tam, color_fondo, coma
     return canvas
 
 
+def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
+    """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
+    clickeable cuyo color marca el estado. Compatible con
+    _actualizar_boton_circular (texto/color)."""
+    etiqueta = tk.Label(
+        parent, text=texto, bg=parent["bg"], fg=color,
+        font=(E.FUENTE_EMOJI, fuente_tam), cursor="hand2"
+    )
+    etiqueta.es_plano = True
+    etiqueta.bind("<Button-1>", lambda _e: comando())
+    return etiqueta
+
+
 def _actualizar_boton_circular(canvas, texto_nuevo=None, color_nuevo=None):
+    if getattr(canvas, "es_plano", False):
+        if texto_nuevo is not None:
+            canvas.config(text=texto_nuevo)
+        if color_nuevo is not None:
+            canvas.config(fg=color_nuevo)
+        return
     datos = canvas.datos_boton
     if texto_nuevo is not None and datos.get("texto") is not None:
         canvas.itemconfig(datos["texto"], text=texto_nuevo)
