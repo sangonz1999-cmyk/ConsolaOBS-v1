@@ -153,24 +153,9 @@ def _reubicar_fuentes(forzar=False):
 
 
 def _al_redimensionar_fuentes(event=None):
-    """Recalcula cuántas columnas entran en el ancho actual del panel de
-    fuentes y, si cambió, reacomoda las tarjetas (sin recrearlas). Se
-    espera un toque de calma antes de reacomodar (igual que con el
-    redimensionado de toda la ventana): reaccionar en CADA evento de
-    Configure mientras se arrastra el borde es lo que hacía que las
-    tarjetas se vieran saltando/superpuestas a mitad de camino."""
-    if E._trabajo_redimension_fuentes["id"] is not None:
-        E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
-    # Antes 90ms, después 40ms; ahora 16ms (aprox. un cuadro de
-    # pantalla a 60Hz): es el mínimo con sentido, porque durante un
-    # arrastre real los eventos de Configure ya vienen espaciados por
-    # el refresco de pantalla, así que bajar más no cambia nada salvo
-    # hacer más trabajo de más.
-    E._trabajo_redimension_fuentes["id"] = E.ventana.after(16, _aplicar_redimension_fuentes)
-    # Si hay una sesión de divisor en curso, su calma se extiende con
-    # cada evento (el release la termina antes).
-    if E._arrastre_divisor["activo"]:
-        mod_ui_ventana._reprogramar_fin_divisor()
+    """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
+    no se programa nada al cambiar el tamaño."""
+    return
 
 
 def _aplicar_redimension_fuentes():
@@ -359,20 +344,14 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         alto_cab = cv.winfo_height()
         if ancho_cab < 2 or alto_cab < 2:
             return
-        # El texto se recentra siempre (barato, y en el divisor no hay
-        # velo que lo tape: tiene que seguir al tamaño en vivo). El
-        # degradado, en cambio, se saltea durante un arrastre (borrar
-        # y recrear franjas a cada evento es parpadeo puro); el rebuild
-        # post-arrastre lo deja bien.
-        if not (E._arrastre_ventana["activo"] or E._arrastre_divisor["activo"]):
-            color_base = cv.datos_color_actual
-            cv.delete("degradado_cabecera")
-            color_claro = mod_ui_dibujo._aclarar_color(color_base, 40)
-            color_oscuro = mod_ui_dibujo._oscurecer_color(color_base, 15)
-            ids = mod_ui_dibujo._gradiente_vertical(cv, 0, 0, ancho_cab, alto_cab, color_claro, color_oscuro, pasos=min(14, max(2, alto_cab)))
-            for iid in ids:
-                cv.itemconfig(iid, tags=("degradado_cabecera",))
-            cv.tag_lower("degradado_cabecera")
+        color_base = cv.datos_color_actual
+        cv.delete("degradado_cabecera")
+        color_claro = mod_ui_dibujo._aclarar_color(color_base, 40)
+        color_oscuro = mod_ui_dibujo._oscurecer_color(color_base, 15)
+        ids = mod_ui_dibujo._gradiente_vertical(cv, 0, 0, ancho_cab, alto_cab, color_claro, color_oscuro, pasos=min(14, max(2, alto_cab)))
+        for iid in ids:
+            cv.itemconfig(iid, tags=("degradado_cabecera",))
+        cv.tag_lower("degradado_cabecera")
         cx, cy = ancho_cab / 2, alto_cab / 2
         cv.coords(id_sombra, cx + 1, cy + 2)
         cv.coords(id_nombre, cx, cy + 1)

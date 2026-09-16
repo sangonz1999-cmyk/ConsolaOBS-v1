@@ -1,4 +1,5 @@
 import os
+import time
 import tkinter as tk
 
 from tkinter import filedialog, messagebox, simpledialog
@@ -12,7 +13,6 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
-from consola_obs.ui import ventana as mod_ui_ventana
 
 
 def asignar_sonido(indice):
@@ -541,33 +541,9 @@ def _arrastre_ventana_en_curso():
 
 
 def _al_redimensionar_soundboard(event=None):
-    """Recalcula cuántas columnas entran en el ancho actual y sólo
-    reconstruye la grilla si ese número cambió (o si el ancho se movió
-    lo suficiente como para que las celdas ya no encajen bien, ver
-    _ultimo_ancho_soundboard).
-
-    Mientras el usuario está arrastrando el borde de LA VENTANA, este
-    handler no programa nada: esta grilla destruye y vuelve a crear
-    todos los pads, y hacerlo en cada pixel de arrastre (aunque sea con
-    espera de 16ms) es trabajo pesado compitiendo por CPU con el propio
-    arrastre, y ESO es lo que se veía como parpadeo/tironeo de la
-    ventana. En vez de eso, se deja que el mecanismo de toda la ventana
-    (_al_redimensionar_ventana/_aplicar_redimension, más abajo) haga UNA
-    sola reconstrucción completa (construir_cuerpo → construir_soundboard)
-    recién cuando el usuario suelta el borde, tapada por el velo.     Fuera de un arrastre de ventana, el comportamiento no cambia... salvo
-    que haya una sesión de DIVISOR en curso (ver _presionar_divisor en
-    ventana.py): en ese caso tampoco se reconstruye nada hasta soltar
-    (misma razón: destruir y recrear 17 pads a cada pausa del arrastre
-    del divisor es lo que se veía como borrado/creación parpadeante)."""
-    if _arrastre_ventana_en_curso():
-        return
-    if E._arrastre_divisor["activo"]:
-        mod_ui_ventana._reprogramar_fin_divisor()
-    if E._trabajo_redimension_soundboard["id"] is not None:
-        E.ventana.after_cancel(E._trabajo_redimension_soundboard["id"])
-    # Ídem comentario en el redimensionado del panel de fuentes: 16ms
-    # es, en la práctica, "apenas se puede".
-    E._trabajo_redimension_soundboard["id"] = E.ventana.after(16, _aplicar_redimension_soundboard)
+    """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
+    no se programa nada al cambiar el tamaño."""
+    return
 
 
 def _aplicar_redimension_soundboard():
@@ -887,17 +863,39 @@ def construir_soundboard():
         )
 
     def _redibujar_boton_mas(event=None, forzar=False):
-        # Durante un arrastre (ventana o divisor) no se repinta: el
-        # delete("all") + re-render PIL a cada evento es lo que se veía
-        # como parpadeo del botón. Al terminar, el rebuild post-arrastre
-        # lo deja bien; si no hubo rebuild (cambio chico), el próximo
-        # evento lo repinta. El hover va con forzar=True (inmediato).
-        if not forzar and (E._arrastre_ventana["activo"] or E._arrastre_divisor["activo"]):
+        # Throttle temporal: el render PIL es caro y en ráfagas de
+        # Configure saturaba el hilo. Máximo ~10 renders/s; el pendiente
+        # garantiza convergencia al tamaño final. Hover = forzar.
+        if forzar:
+            if _estado_mas.get("pendiente") is not None:
+                try:
+                    E.ventana.after_cancel(_estado_mas["pendiente"])
+                except Exception:
+                    pass
+                _estado_mas["pendiente"] = None
+            try:
+                _pintar_boton_mas(forzar=True)
+            except Exception:
+                pass
             return
-        try:
-            _pintar_boton_mas(forzar=forzar)
-        except Exception:
-            pass
+        if _estado_mas["ancho"] == 0:
+            try:
+                _pintar_boton_mas(forzar=True)
+            except Exception:
+                pass
+            return
+        if _estado_mas.get("pendiente") is not None:
+            try:
+                E.ventana.after_cancel(_estado_mas["pendiente"])
+            except Exception:
+                pass
+        def _pendiente():
+            _estado_mas["pendiente"] = None
+            try:
+                _pintar_boton_mas()
+            except Exception:
+                pass
+        _estado_mas["pendiente"] = E.ventana.after(100, _pendiente)
 
     def _hover_mas(_e, encendido):
         _estado_mas["hover"] = encendido

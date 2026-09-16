@@ -41,65 +41,6 @@ def cambiar_tamano_icono(nuevo_tamano):
     mod_configuracion.guardar_config_interfaz({"tamano_icono": nuevo_tamano})
 
 
-def _presionar_divisor(event):
-    """Arranca la sesión de arrastre del divisor (sash) entre paneles,
-    pero SÓLO si el clic cayó justo sobre la barra del divisor (los
-    clics en el resto del PanedWindow son de los widgets de adentro y
-    no llegan acá igual). Mientras dura, las grillas no se reconstruyen
-    (ver _aplicar_redimension_soundboard): se reacomodan una sola vez
-    al soltar."""
-    try:
-        es_divisor = E.cuerpo.identify(event.x, event.y) == "sash"
-    except Exception:
-        es_divisor = False
-    if not es_divisor:
-        return
-    E._arrastre_divisor["activo"] = True
-    _reprogramar_fin_divisor()
-
-
-def _reprogramar_fin_divisor():
-    if E._trabajo_divisor["id"] is not None:
-        try:
-            E.ventana.after_cancel(E._trabajo_divisor["id"])
-        except Exception:
-            pass
-    E._trabajo_divisor["id"] = E.ventana.after(
-        DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_divisor)
-
-
-def _cancelar_arrastre_divisor():
-    """Termina la sesión del divisor SIN reacomodar (lo usa el arrastre
-    de ventana cuando toma la posta: su reconstrucción ya cubre todo)."""
-    E._arrastre_divisor["activo"] = False
-    if E._trabajo_divisor["id"] is not None:
-        try:
-            E.ventana.after_cancel(E._trabajo_divisor["id"])
-        except Exception:
-            pass
-        E._trabajo_divisor["id"] = None
-
-
-def _fin_arrastre_divisor():
-    """Termina la sesión del divisor y reacomoda las grillas una sola
-    vez. Los _aplicar pendientes (o este llamado directo) reconstruyen
-    sólo si hizo falta (columnas/ancho); si no, no tocan nada."""
-    E._trabajo_divisor["id"] = None
-    if not E._arrastre_divisor["activo"]:
-        return
-    E._arrastre_divisor["activo"] = False
-    mod_ui_tarjeta._aplicar_redimension_fuentes()
-    mod_ui_soundboard._aplicar_redimension_soundboard()
-
-
-def _soltar_divisor(event):
-    """Soltar el botón en cualquier parte de la ventana termina la
-    sesión del divisor (vía rápida; el timer de calma es el respaldo
-    por si el release se pierde, p. ej. soltando fuera de la ventana)."""
-    if E._arrastre_divisor["activo"]:
-        _fin_arrastre_divisor()
-
-
 def _iniciar_arrastre_panel(nombre):
     E._panel_en_arrastre["origen"] = nombre
 
@@ -173,7 +114,6 @@ def construir_cuerpo():
         E.velo_redimension.lift()
     except NameError:
         pass
-    E.cuerpo.bind("<ButtonPress-1>", _presionar_divisor)
 
 
     E.marco_fuentes = tk.Frame(E.cuerpo, bg="#10141b")
@@ -567,42 +507,13 @@ def _reconstruir_interfaz_con_velo():
 
 
 def _al_redimensionar_ventana(event):
-    """Modelo de sesión de arrastre: del primer evento hasta que la
-    ventana se queda quieta del todo se considera UN solo arrastre.
-    Durante la sesión no se reconstruye nada (antes se reconstruía en
-    cada pausa de 180 ms, y con movimientos suaves eso disparaba un
-    rebuild a mitad del arrastre una y otra vez: ese era el parpadeo).
-    Lo único que pasa en cada evento es que la foto del velo sigue al
-    borde; la reconstrucción (una sola) llega con _fin_arrastre_ventana.
-    """
-    if event.widget is not E.ventana:
-        return
-    if E._arrastre_divisor["activo"]:
-        # Se agarró el borde a mitad de un arrastre del divisor: la
-        # reconstrucción de la ventana ya cubre todo, se transfiere la
-        # posta sin reacomodar dos veces.
-        _cancelar_arrastre_divisor()
-    if E._reconstruccion_en_curso["activa"]:
-        # El usuario movió el borde justo mientras se estaba armando:
-        # no se toca nada, sólo se extiende la espera de calma.
-        if E._trabajo_redimension["id"] is not None:
-            E.ventana.after_cancel(E._trabajo_redimension["id"])
-        E._trabajo_redimension["id"] = E.ventana.after(
-            DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_ventana)
-        return
-    if not E._arrastre_ventana["activo"]:
-        E._arrastre_ventana["activo"] = True
-        _mostrar_velo_redimension()
-    else:
-        if E._trabajo_redimension["id"] is not None:
-            E.ventana.after_cancel(E._trabajo_redimension["id"])
-        # El velo (con su foto) es la tapa real, así que hay que ir
-        # reescalando la foto en cada evento para que siga al borde.
-        _actualizar_imagen_velo()
-    # Cada evento nuevo reinicia la espera: mientras el usuario siga
-    # moviendo, _fin_arrastre_ventana nunca llega a dispararse.
-    E._trabajo_redimension["id"] = E.ventana.after(
-        DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_ventana)
+    """Redimensionado automático ELIMINADO: al mover el borde (o el
+    divisor) no se recalcula, reacomoda ni reconstruye nada. La ventana
+    y los paneles se estiran/achican de forma nativa y las grillas
+    quedan con el tamaño que tenían (si algo queda cortado, aparecen
+    las barras de desplazamiento). Sólo se reconstruye con acciones
+    explícitas (tamaño de íconos, diseño, tipografía, agregar pads)."""
+    return
 
 
 def _fin_arrastre_ventana():
