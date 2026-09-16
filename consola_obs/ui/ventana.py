@@ -99,7 +99,69 @@ def _presionar_divisor(event):
     # píxel por píxel por su cuenta y volverían las posiciones
     # intermedias).
     E.cuerpo._arrastrando_sash = True
+    _programar_asentado()
     return "break"
+
+
+def _tapar_grillas():
+    """Cubre las dos grillas (pads y faders) con su fondo. Todo lo demás
+    (divisor, títulos, scrollbars) queda visible."""
+    for tapa, lienzo in ((getattr(E, "tapa_pads", None), getattr(E, "canvas_sb", None)),
+                         (getattr(E, "tapa_fuentes", None), getattr(E, "canvas", None))):
+        try:
+            if tapa is None or lienzo is None:
+                continue
+            tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
+            tapa.lift()
+        except Exception:
+            pass
+
+
+def _destapar_grillas():
+    for tapa in (getattr(E, "tapa_pads", None), getattr(E, "tapa_fuentes", None)):
+        try:
+            if tapa is not None:
+                tapa.place_forget()
+        except Exception:
+            pass
+
+
+def _programar_asentado():
+    """Tapa y programa el asentado a los 150 ms (resetea el timer en cada
+    movimiento: mientras haya movimiento, no se muestra nada a medias)."""
+    try:
+        timer = getattr(E.ventana, "_timer_asentado", None)
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+    except Exception:
+        pass
+    _tapar_grillas()
+    try:
+        E.ventana._timer_asentado = E.ventana.after(150, _asentar_grillas)
+    except Exception:
+        pass
+
+
+def _asentar_grillas():
+    """Reacomoda ambas grillas, fuerza el pintado completo y destapa.
+    Así nunca se ve un estado a medio renderizar."""
+    try:
+        E.ventana._timer_asentado = None
+    except Exception:
+        pass
+    try:
+        mod_ui_tarjeta._reubicar_fuentes()
+    except Exception:
+        pass
+    try:
+        mod_ui_soundboard._reubicar_pads()
+    except Exception:
+        pass
+    try:
+        E.ventana.update_idletasks()
+    except Exception:
+        pass
+    _destapar_grillas()
 
 
 def _mover_divisor(event):
@@ -118,21 +180,14 @@ def _mover_divisor(event):
         ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
         if nx is None or ny is None:
             return
-        # Sólo se actúa si cambió de posición fija: se coloca y se
-        # reacomodan las grillas EN EL ACTO (sin debounce), tan rápido
-        # que no se llega a ver el hueco. Reubicar no destruye nada.
+        # Sólo se actúa si cambió de posición fija: se coloca el sash
+        # y se programa el asentado (las grillas se acomodan y se
+        # muestran sólo cuando todo está quieto y renderizado).
         if getattr(E.cuerpo, "_ultimo_snap", None) == (nx, ny):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
         E.cuerpo.sash_place(0, nx, ny)
-        try:
-            mod_ui_tarjeta._reubicar_fuentes()
-        except Exception:
-            pass
-        try:
-            mod_ui_soundboard._reubicar_pads()
-        except Exception:
-            pass
+        _programar_asentado()
     except Exception:
         pass
     return "break"
@@ -142,6 +197,7 @@ def _soltar_divisor(event):
     if not getattr(E.cuerpo, "_arrastrando_sash", False):
         return
     E.cuerpo._arrastrando_sash = False
+    _asentar_grillas()
 
 
 def construir_cuerpo():
@@ -340,6 +396,14 @@ def construir_cuerpo():
     # van a encontrar ningún cambio y no van a mover nada en pantalla.
     E.ventana.after(30, mod_ui_soundboard._aplicar_redimension_soundboard)
     E.ventana.after(30, mod_ui_tarjeta._aplicar_redimension_fuentes)
+
+    # Tapas anti-corte: cubren sólo las grillas (pads y faders). Todo lo
+    # demás (divisor, títulos, scrollbars) queda visible. Se recrean
+    # ocultas con cada construir_cuerpo.
+    E.tapa_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
+    E.tapa_pads.place_forget()
+    E.tapa_fuentes = tk.Label(E.marco_canvas, bg="#10141b", bd=0, highlightthickness=0)
+    E.tapa_fuentes.place_forget()
 
 
 def actualizar_scroll(event=None):
@@ -568,13 +632,19 @@ def _reconstruir_interfaz_con_velo():
 
 
 def _al_redimensionar_ventana(event):
-    """Redimensionado automático ELIMINADO: al mover el borde (o el
-    divisor) no se recalcula, reacomoda ni reconstruye nada. La ventana
-    y los paneles se estiran/achican de forma nativa y las grillas
-    quedan con el tamaño que tenían (si algo queda cortado, aparecen
-    las barras de desplazamiento). Sólo se reconstruye con acciones
-    explícitas (tamaño de íconos, diseño, tipografía, agregar pads)."""
-    return
+    """Si cambió el TAMAÑO de la ventana, tapa las grillas y programa el
+    asentado (se acomodan y se muestran sólo cuando todo está quieto y
+    renderizado). Mover la ventana de lugar (misma medida) no hace nada."""
+    if event.widget is not E.ventana:
+        return
+    try:
+        tam = (E.ventana.winfo_width(), E.ventana.winfo_height())
+    except Exception:
+        return
+    if getattr(E.ventana, "_ult_geom", None) == tam:
+        return
+    E.ventana._ult_geom = tam
+    _programar_asentado()
 
 
 def al_cerrar():

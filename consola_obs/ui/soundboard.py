@@ -506,21 +506,12 @@ def _apagar_pad_si_token_vigente(indice, token):
 
 def _columnas_disponibles():
     ancho_disponible = E.canvas_sb.winfo_width()
-    ancho_celda_con_padding = mod_utilidades.medida_actual()["pad_ancho"] + 20
-    if ancho_disponible <= 1 or ancho_celda_con_padding <= 0:
+    celda = mod_utilidades.medida_actual()["pad_ancho"] + 20
+    if ancho_disponible <= 1 or celda <= 0:
         return E.columnas_soundboard
-    columnas_actuales = max(1, E.columnas_soundboard)
-    columnas_teoricas = max(1, ancho_disponible // ancho_celda_con_padding)
-    if columnas_teoricas >= columnas_actuales:
-        return columnas_teoricas
-    # Mismo colchón que en la grilla de fuentes (ver
-    # MARGEN_HISTERESIS_COLUMNAS): que el panel se achique "apenas un
-    # poco" no debe tirar de golpe una columna entera de pads a la fila
-    # de abajo.
-    espacio_necesario = columnas_actuales * ancho_celda_con_padding
-    if espacio_necesario - ancho_disponible <= C.MARGEN_HISTERESIS_COLUMNAS:
-        return columnas_actuales
-    return columnas_teoricas
+    # Regla 25%: la última columna puede quedar tapada hasta un cuarto
+    # de pad; si se tapa más, baja a la fila de abajo.
+    return max(1, int((ancho_disponible + 0.25 * celda) // celda))
 
 
 def _al_redimensionar_soundboard(event=None):

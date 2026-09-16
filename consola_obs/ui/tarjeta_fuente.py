@@ -33,18 +33,13 @@ def _ancho_contenedor_fuente():
 
 def _columnas_disponibles_fuentes():
     """Cuántas tarjetas de fuente entran por fila en el ancho actual del
-    panel. A diferencia del soundboard (ver _columnas_disponibles), acá
-    NO se usa ningún margen de tolerancia: las tarjetas de fuente son de
-    tamaño FIJO (ver _ancho_celda_fuentes, ya no se achican para entrar),
-    así que si una columna entera no entra, tiene que bajar de fila sí o
-    sí -sostenerla "por las dudas" sólo hace que quede una tarjeta
-    cortada en el borde del panel en vez de acomodarse en la fila de
-    abajo-."""
+    panel, con la regla 25% (igual que pads): la última columna puede
+    quedar tapada hasta un cuarto; si se tapa más, baja de fila."""
     ancho_disponible = E.canvas.winfo_width()
-    ancho_celda_con_padding = _ancho_contenedor_fuente()
-    if ancho_disponible <= 1 or ancho_celda_con_padding <= 0:
+    celda = _ancho_contenedor_fuente()
+    if ancho_disponible <= 1 or celda <= 0:
         return E.columnas_fuentes
-    return max(1, ancho_disponible // ancho_celda_con_padding)
+    return max(1, int((ancho_disponible + 0.25 * celda) // celda))
 
 
 def _ancho_celda_fuentes():
