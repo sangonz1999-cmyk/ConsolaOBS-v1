@@ -52,6 +52,10 @@ def _presionar_divisor(event):
     if not es_divisor:
         return
     E._arrastre_divisor["activo"] = True
+    # Igual que con el borde de la ventana: se tapa todo con el velo
+    # azul mientras dura el arrastre (la ventana no cambia de tamaño,
+    # así que la foto calza exacto y no hay que reescalar nada).
+    _mostrar_velo_redimension()
     _reprogramar_fin_divisor()
 
 
@@ -72,6 +76,7 @@ def _fin_arrastre_divisor():
     E._arrastre_divisor["activo"] = False
     mod_ui_tarjeta._aplicar_redimension_fuentes()
     mod_ui_soundboard._aplicar_redimension_soundboard()
+    _ocultar_velo_redimension()
 
 
 def _soltar_divisor(event):
