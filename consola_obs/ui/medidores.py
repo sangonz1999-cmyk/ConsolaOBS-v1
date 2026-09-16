@@ -113,13 +113,13 @@ _PALETA_BARRA_COLOR = {
     "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
 }
 _PALETA_BARRA_COLOR_TENUE = {
-    "rojo": (28, 10, 9), "amarillo": (24, 20, 12), "verde": (8, 26, 18),
+    "rojo": (16, 8, 7), "amarillo": (14, 12, 8), "verde": (7, 16, 11),
 }
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
 _PALETA_BARRA_GRIS_TENUE = {
-    "rojo": (30, 34, 42), "amarillo": (26, 30, 38), "verde": (22, 26, 34),
+    "rojo": (20, 22, 28), "amarillo": (18, 20, 26), "verde": (16, 18, 24),
 }
 
 
