@@ -141,7 +141,7 @@ _ultimas_columnas_pads = {"valor": None}
 # ventana, divisor o grillas) se pausa lo secundario (pintado de LEDs y
 # degradados) para darle todo el hilo al layout. Se apaga solo a los
 # 200ms de quietud, con repintado final.
-_modo_super = {"activo": False, "timer": None}
+_modo_super = {"activo": False, "timer": None, "origen": None}
 
 
 _trabajo_redimension_fuentes = {"id": None}

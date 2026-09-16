@@ -98,6 +98,24 @@ def _y_para_db(db, alto=C.ALTO_CANAL):
     return (-db / 60.0) * alto
 
 
+def apagar_medidores():
+    """Apaga todos los medidores (todos los LEDs al color de fondo) de
+    una sola vez. Se usa al entrar en modo super-optimizador; al salir,
+    el próximo cuadro VU los repinta completos (el estado se invalida
+    acá mismo)."""
+    for widgets in list(E.fuentes.values()):
+        try:
+            canvas = widgets.get("vu_canvas")
+            segmentos = widgets.get("vu_segmentos") or []
+            if canvas is None:
+                continue
+            for seg in segmentos:
+                canvas.itemconfig(seg["id"], fill="#10161f")
+            widgets.setdefault("vu_led_estado", {}).pop("ultimo", None)
+        except Exception:
+            pass
+
+
 def _log_debug_vu(nombre, nivel_mul_crudo, datos_vigentes, saturado, ahora):
     if C.DEBUG_VU_FUENTE is None or nombre != C.DEBUG_VU_FUENTE:
         return

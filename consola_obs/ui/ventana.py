@@ -11,6 +11,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
+from consola_obs.ui import medidores as mod_ui_medidores
 
 
 def cambiar_tamano_icono(nuevo_tamano):
@@ -97,7 +98,7 @@ def _presionar_divisor(event):
     if getattr(E.cuerpo, "_arrastrando_sash", False):
         _asentar_grillas()
     E.cuerpo._arrastrando_sash = True
-    entrar_modo_super()
+    entrar_modo_super("divisor")
     # FASE 1: foto fija de pads y título que queda hasta soltar (sin
     # timers en el medio).
     _tapar_pads_con_foto()
@@ -178,11 +179,19 @@ def _destapar_grillas():
             pass
 
 
-def entrar_modo_super():
+def entrar_modo_super(origen=None):
     """Activa el modo super-optimizador (ver _modo_super en estado.py):
     cada evento de movimiento lo renueva y programa la salida a los
-    200ms de quietud. Es barato de llamar en cada evento."""
-    E._modo_super["activo"] = True
+    200ms de quietud. Es barato de llamar en cada evento. Al activarse
+    (flanco), apaga los medidores VU; vuelven solos al salir."""
+    if origen is not None:
+        E._modo_super["origen"] = origen
+    if not E._modo_super.get("activo"):
+        E._modo_super["activo"] = True
+        try:
+            mod_ui_medidores.apagar_medidores()
+        except Exception:
+            pass
     try:
         timer = E._modo_super.get("timer")
         if timer is not None:
@@ -198,9 +207,19 @@ def entrar_modo_super():
 def salir_modo_super():
     """Apaga el modo super-optimizador y deja todo pintado final: los
     LEDs se invalidan para que el próximo cuadro los repinte completos,
-    los degradados se refrescan y ambas grillas se asientan."""
+    los degradados se refrescan y ambas grillas se asientan. Idempotente:
+    si no está activo, no hace nada."""
+    try:
+        timer = E._modo_super.get("timer")
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+    except Exception:
+        pass
     E._modo_super["timer"] = None
+    if not E._modo_super.get("activo"):
+        return
     E._modo_super["activo"] = False
+    E._modo_super["origen"] = None
     for widgets in list(E.fuentes.values()):
         try:
             widgets.get("vu_led_estado", {}).pop("ultimo", None)
@@ -260,7 +279,7 @@ def _asentar_grillas():
 def _mover_divisor(event):
     if not getattr(E.cuerpo, "_arrastrando_sash", False):
         return
-    entrar_modo_super()
+    entrar_modo_super("divisor")
     try:
         # El evento puede venir de cualquier widget (burbujea hasta la
         # ventana): se pasa a coordenadas del PanedWindow.
@@ -316,6 +335,20 @@ def _soltar_divisor(event):
     except Exception:
         pass
     _asentar_grillas()
+    # Al soltar el divisor termina el resize: los medidores vuelven ya.
+    salir_modo_super()
+
+
+def _soltar_boton_termina_resize(event=None):
+    """Cualquier soltada del botón izquierdo termina el resize de borde
+    de ventana: los medidores vuelven en el acto (sin esperar los 200ms
+    de quietud). Sólo actúa si el modo se originó en un resize real
+    (borde o divisor); los clics comunes no hacen nada."""
+    try:
+        if E._modo_super.get("activo") and E._modo_super.get("origen") in ("ventana", "divisor"):
+            salir_modo_super()
+    except Exception:
+        pass
 
 
 def construir_cuerpo():
@@ -789,7 +822,7 @@ def _al_redimensionar_ventana(event):
     if getattr(E.ventana, "_ult_geom", None) == tam:
         return
     E.ventana._ult_geom = tam
-    entrar_modo_super()
+    entrar_modo_super("ventana")
     try:
         timer = getattr(E.ventana, "_timer_resize_vivo", None)
         if timer is not None:
