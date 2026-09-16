@@ -113,27 +113,27 @@ _PALETA_BARRA_COLOR = {
     "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
 }
 _PALETA_BARRA_COLOR_TENUE = {
-    "rojo": (96, 26, 22), "amarillo": (80, 64, 34), "verde": (18, 72, 48),
+    "rojo": (78, 21, 17), "amarillo": (64, 52, 28), "verde": (14, 58, 40),
 }
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
 _PALETA_BARRA_GRIS_TENUE = {
-    "rojo": (80, 87, 102), "amarillo": (66, 73, 88), "verde": (52, 58, 72),
+    "rojo": (72, 79, 94), "amarillo": (58, 64, 78), "verde": (46, 52, 66),
 }
 
 
 def _color_zona_barra(db, paleta):
-    """Color para un dB dado, con degradado muy sutil entre zonas
-    (mezclas largas para que no se note el corte)."""
-    if db >= -6:
+    """Color para un dB dado, con degradado mínimo (transiciones de
+    1-2 dB, casi cortes duros entre zonas)."""
+    if db >= -9:
         return paleta["rojo"]
-    if db >= -12:
-        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 12) / 6)
-    if db >= -16:
+    if db >= -10.5:
+        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 10.5) / 1.5)
+    if db >= -18.5:
         return paleta["amarillo"]
-    if db >= -26:
-        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 26) / 10)
+    if db >= -20.5:
+        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 20.5) / 2)
     return paleta["verde"]
 
 
