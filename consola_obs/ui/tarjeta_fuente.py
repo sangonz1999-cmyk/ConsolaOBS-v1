@@ -154,7 +154,10 @@ def _reubicar_fuentes(forzar=False):
 
 def _al_redimensionar_fuentes(event=None):
     """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
-    no se programa nada al cambiar el tamaño."""
+    no se programa nada al cambiar el tamaño. Lo único que se hace
+    acá es extender la calma de una eventual sesión de divisor."""
+    if E._arrastre_divisor["activo"]:
+        mod_ui_ventana._reprogramar_fin_divisor()
     return
 
 

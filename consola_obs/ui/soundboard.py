@@ -13,6 +13,7 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
+from consola_obs.ui import ventana as mod_ui_ventana
 
 
 def asignar_sonido(indice):
@@ -542,7 +543,10 @@ def _arrastre_ventana_en_curso():
 
 def _al_redimensionar_soundboard(event=None):
     """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
-    no se programa nada al cambiar el tamaño."""
+    no se programa nada al cambiar el tamaño. Lo único que se hace
+    acá es extender la calma de una eventual sesión de divisor."""
+    if E._arrastre_divisor["activo"]:
+        mod_ui_ventana._reprogramar_fin_divisor()
     return
 
 
