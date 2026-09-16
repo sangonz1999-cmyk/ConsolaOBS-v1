@@ -191,7 +191,7 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     id_barra = None
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
-    id_borde = canvas.create_rectangle(x0 - 1, y0 - 1, x1 + 1, y1 + 1, fill="", outline="#000000", width=1)
+    id_borde = canvas.create_rectangle(x0, y0, x1, y1, fill="", outline="#0a1830", width=1)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
             "bg": bg, "id_img": id_img, "id_img_tenue": id_img_tenue,
             "id_barra": id_barra, "id_filas": id_filas,
