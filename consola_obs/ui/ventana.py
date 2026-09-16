@@ -103,8 +103,10 @@ def _presionar_divisor(event):
     if getattr(E.cuerpo, "_arrastrando_sash", False):
         _asentar_grillas()
     E.cuerpo._arrastrando_sash = True
-    # FASE 1: foto fija que queda hasta soltar (sin timers en el medio).
+    # FASE 1: foto fija de pads y título que queda hasta soltar (sin
+    # timers en el medio).
     _tapar_pads_con_foto()
+    _tapar_titulo_con_foto()
     return "break"
 
 
@@ -147,13 +149,38 @@ def _tapar_grillas():
         pass
 
 
-def _destapar_grillas():
+def _tapar_titulo_con_foto():
+    """Igual que pads pero para la barra del título: foto fija de
+    "Efectos De Sonido" que queda hasta soltar."""
     try:
-        tapa = getattr(E, "tapa_pads", None)
-        if tapa is not None:
-            tapa.place_forget()
+        tapa = getattr(E, "tapa_titulo", None)
+        barra = getattr(E, "barra_soundboard", None)
+        if tapa is None or barra is None:
+            return
+        if HAY_PILLOW and ImageGrab is not None:
+            try:
+                E.ventana.update_idletasks()
+                x, y = barra.winfo_rootx(), barra.winfo_rooty()
+                ancho, alto = barra.winfo_width(), barra.winfo_height()
+                if ancho > 1 and alto > 1:
+                    foto = ImageGrab.grab(bbox=(x, y, x + ancho, y + alto))
+                    tapa.imagen_foto = ImageTk.PhotoImage(foto)
+                    tapa.config(image=tapa.imagen_foto)
+            except Exception:
+                tapa.config(image="")
+        tapa.place(in_=barra, x=0, y=0, relwidth=1, relheight=1)
+        tapa.lift()
     except Exception:
         pass
+
+
+def _destapar_grillas():
+    for tapa in (getattr(E, "tapa_pads", None), getattr(E, "tapa_titulo", None)):
+        try:
+            if tapa is not None:
+                tapa.place_forget()
+        except Exception:
+            pass
 
 
 def _programar_asentado():
@@ -360,6 +387,11 @@ def construir_cuerpo():
     titulo_soundboard.pack(side="left", padx=12)
     titulo_soundboard.bind("<ButtonPress-1>", lambda e: _iniciar_arrastre_panel("soundboard"))
     titulo_soundboard.bind("<ButtonRelease-1>", lambda e: _soltar_panel("soundboard", e))
+
+    # Tapa del título: mismas 4 fases que los pads (foto fija hasta soltar).
+    E.tapa_titulo = tk.Label(E.barra_soundboard, bg="#151a24", bd=0, highlightthickness=0)
+    E.tapa_titulo.place_forget()
+    E.tapa_titulo.bind("<ButtonPress-1>", lambda e: _asentar_grillas())
 
     E.marco_soundboard_scroll = tk.Frame(E.marco_derecho, bg="#10141b")
     E.marco_soundboard_scroll.pack(fill="both", expand=True)
