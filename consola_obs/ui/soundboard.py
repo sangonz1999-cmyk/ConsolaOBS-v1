@@ -518,6 +518,7 @@ def _al_redimensionar_soundboard(event=None):
     """Reacomoda la grilla en vivo durante el arrastre (throttle corto
     de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
     nada (ver _reubicar_pads)."""
+    mod_ui_ventana.entrar_modo_super()
     if E._trabajo_redimension_soundboard["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_soundboard["id"])
     E._trabajo_redimension_soundboard["id"] = E.ventana.after(15, _aplicar_redimension_soundboard)

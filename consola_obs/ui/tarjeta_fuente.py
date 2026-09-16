@@ -163,6 +163,7 @@ def _al_redimensionar_fuentes(event=None):
     """Reacomoda la grilla en vivo durante el arrastre (throttle corto
     de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
     nada (ver _reubicar)."""
+    mod_ui_ventana.entrar_modo_super()
     if E._trabajo_redimension_fuentes["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
     E._trabajo_redimension_fuentes["id"] = E.ventana.after(15, _aplicar_redimension_fuentes)
@@ -351,6 +352,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         cx, cy = ancho_cab / 2, alto_cab / 2
         cv.coords(id_sombra, cx + 1, cy + 2)
         cv.coords(id_nombre, cx, cy + 1)
+        if E._modo_super.get("activo"):
+            # En modo super el texto se recentra pero las bandas no se
+            # tocan: se repintan todas juntas al salir del modo.
+            return
         # Las bandas del degradado sólo se redibujan si el tamaño cambió
         # de verdad (tolerancia 6px): durante un redimensionado llegan
         # decenas de <Configure> por segundo y recrear las 14 bandas en

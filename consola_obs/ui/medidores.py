@@ -252,6 +252,13 @@ def actualizar_vu_meters_ui():
 
         _log_debug_vu(nombre, nivel_mul_crudo, datos_vigentes, saturado, ahora)
 
+        if E._modo_super.get("activo"):
+            # En modo super sólo se sigue el nivel (matemática barata);
+            # el pintado se pausa y se invalida para repintar completo
+            # al salir, sin saltos.
+            widgets.setdefault("vu_led_estado", {}).pop("ultimo", None)
+            continue
+
         _actualizar_medidor_led(
             widgets["vu_canvas"], widgets["vu_segmentos"], db_visual,
             atenuado=atenuado, saturado=saturado,

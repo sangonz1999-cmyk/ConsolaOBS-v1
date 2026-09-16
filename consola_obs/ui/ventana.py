@@ -97,6 +97,7 @@ def _presionar_divisor(event):
     if getattr(E.cuerpo, "_arrastrando_sash", False):
         _asentar_grillas()
     E.cuerpo._arrastrando_sash = True
+    entrar_modo_super()
     # FASE 1: foto fija de pads y título que queda hasta soltar (sin
     # timers en el medio).
     _tapar_pads_con_foto()
@@ -177,6 +178,47 @@ def _destapar_grillas():
             pass
 
 
+def entrar_modo_super():
+    """Activa el modo super-optimizador (ver _modo_super en estado.py):
+    cada evento de movimiento lo renueva y programa la salida a los
+    200ms de quietud. Es barato de llamar en cada evento."""
+    E._modo_super["activo"] = True
+    try:
+        timer = E._modo_super.get("timer")
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+    except Exception:
+        pass
+    try:
+        E._modo_super["timer"] = E.ventana.after(200, salir_modo_super)
+    except Exception:
+        pass
+
+
+def salir_modo_super():
+    """Apaga el modo super-optimizador y deja todo pintado final: los
+    LEDs se invalidan para que el próximo cuadro los repinte completos,
+    los degradados se refrescan y ambas grillas se asientan."""
+    E._modo_super["timer"] = None
+    E._modo_super["activo"] = False
+    for widgets in list(E.fuentes.values()):
+        try:
+            widgets.get("vu_led_estado", {}).pop("ultimo", None)
+            redibujar = widgets.get("redibujar_cabecera")
+            if redibujar is not None:
+                redibujar()
+        except Exception:
+            pass
+    try:
+        mod_ui_tarjeta._reubicar_fuentes()
+    except Exception:
+        pass
+    try:
+        mod_ui_soundboard._reubicar_pads()
+    except Exception:
+        pass
+
+
 def _programar_asentado():
     """Tapa y programa el asentado a los 150 ms (resetea el timer en cada
     movimiento: mientras haya movimiento, no se muestra nada a medias)."""
@@ -218,6 +260,7 @@ def _asentar_grillas():
 def _mover_divisor(event):
     if not getattr(E.cuerpo, "_arrastrando_sash", False):
         return
+    entrar_modo_super()
     try:
         # El evento puede venir de cualquier widget (burbujea hasta la
         # ventana): se pasa a coordenadas del PanedWindow.
@@ -746,6 +789,7 @@ def _al_redimensionar_ventana(event):
     if getattr(E.ventana, "_ult_geom", None) == tam:
         return
     E.ventana._ult_geom = tam
+    entrar_modo_super()
     try:
         timer = getattr(E.ventana, "_timer_resize_vivo", None)
         if timer is not None:
