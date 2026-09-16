@@ -843,39 +843,27 @@ def construir_soundboard():
         )
 
     def _redibujar_boton_mas(event=None, forzar=False):
-        # Throttle temporal: el render PIL es caro y en ráfagas de
-        # Configure saturaba el hilo. Máximo ~10 renders/s; el pendiente
-        # garantiza convergencia al tamaño final. Hover = forzar.
+        # Gate ESPACIAL: en vez de repintar en cada posición intermedia
+        # del arrastre (infinitas), se repinta cada ~32px (~30 pasos por
+        # arrastre típico). Si no se movió lo suficiente, se saltea: no
+        # hay nada nuevo que mostrar. Hover = forzar (inmediato).
         if forzar:
-            if _estado_mas.get("pendiente") is not None:
-                try:
-                    E.ventana.after_cancel(_estado_mas["pendiente"])
-                except Exception:
-                    pass
-                _estado_mas["pendiente"] = None
             try:
                 _pintar_boton_mas(forzar=True)
             except Exception:
                 pass
             return
-        if _estado_mas["ancho"] == 0:
-            try:
-                _pintar_boton_mas(forzar=True)
-            except Exception:
-                pass
-            return
-        if _estado_mas.get("pendiente") is not None:
-            try:
-                E.ventana.after_cancel(_estado_mas["pendiente"])
-            except Exception:
-                pass
-        def _pendiente():
-            _estado_mas["pendiente"] = None
-            try:
-                _pintar_boton_mas()
-            except Exception:
-                pass
-        _estado_mas["pendiente"] = E.ventana.after(100, _pendiente)
+        try:
+            ancho_ahora = canvas_mas.winfo_width()
+            alto_ahora = canvas_mas.winfo_height()
+            ultimo = _estado_mas.get("ultimo", (0, 0))
+            if (abs(ancho_ahora - ultimo[0]) < C.SALTO_MINIMO_REDIBUJO_PX
+                    and abs(alto_ahora - ultimo[1]) < C.SALTO_MINIMO_REDIBUJO_PX):
+                return
+            _estado_mas["ultimo"] = (ancho_ahora, alto_ahora)
+            _pintar_boton_mas()
+        except Exception:
+            pass
 
     def _hover_mas(_e, encendido):
         _estado_mas["hover"] = encendido

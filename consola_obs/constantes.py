@@ -271,3 +271,8 @@ ESTADOS_MEDIA_DETENIDO = {"OBS_MEDIA_STATE_STOPPED", "OBS_MEDIA_STATE_ENDED", "O
 
 
 COLOR_PANEL_SOUNDBOARD = "#10141b"
+
+# Salto mínimo en píxeles para repintar en un evento de redimensionado:
+# en vez de reaccionar a cada posición intermedia (infinitas), se responde
+# cada ~32px (unas 30 posiciones en un arrastre típico) para no saturar.
+SALTO_MINIMO_REDIBUJO_PX = 32

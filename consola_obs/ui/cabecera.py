@@ -14,6 +14,12 @@ def _redibujar_cabecera(event=None):
     ancho = E.cabecera_fondo.winfo_width() or E.ventana.winfo_width() or C.ANCHO_VENTANA_REFERENCIA
     E.cabecera_fondo.coords(E._ventana_cabecera_id, 0, 0)
     E.cabecera_fondo.itemconfig(E._ventana_cabecera_id, width=ancho, height=C.ALTO_CABECERA)
+    # Gate ESPACIAL para el degradado: si no se movió lo suficiente, ni
+    # se reprograma (ver SALTO_MINIMO_REDIBUJO_PX en constantes).
+    ultimo = getattr(E.cabecera_fondo, "_ult_repintado", (0, 0))
+    if abs(ancho - ultimo[0]) < C.SALTO_MINIMO_REDIBUJO_PX:
+        return
+    E.cabecera_fondo._ult_repintado = (ancho, E.cabecera_fondo.winfo_height())
 
     # Lo caro es el degradado de fondo: borra y vuelve a crear ~108
     # rectángulos (franja del degradado vertical + franja de acento).
@@ -145,6 +151,15 @@ def _imagen_boton_engranaje(lado, color_icono, hover=False, abierto=False):
 
 
 def _redibujar_icono_engranaje(event=None):
+    # El canvas es de tamaño fijo: si viene de un Configure y no cambió
+    # nada relevante, se saltea (los hover llaman sin evento y siempre
+    # repintan).
+    if event is not None:
+        lado_ahora = E.marco_engranaje.winfo_width()
+        ultimo = getattr(E.marco_engranaje, "_ult_repintado", (0, 0))
+        if abs(lado_ahora - ultimo[0]) < C.SALTO_MINIMO_REDIBUJO_PX:
+            return
+        E.marco_engranaje._ult_repintado = (lado_ahora, E.marco_engranaje.winfo_height())
     E.marco_engranaje.delete("all")
     lado = E.marco_engranaje.winfo_width() or 46
     E.marco_engranaje.config(bg=C.COLOR_CABECERA_ARRIBA)
