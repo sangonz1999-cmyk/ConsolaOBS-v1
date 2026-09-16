@@ -535,6 +535,12 @@ def _reubicar_pads():
     no parpadea, así que se puede llamar en vivo durante un arrastre."""
     columnas = max(1, _columnas_disponibles())
     E.columnas_soundboard = columnas
+    # Si la cantidad de columnas no cambió, las posiciones son las
+    # mismas: no hay nada que mover.
+    if E._ultimas_columnas_pads.get("valor") == columnas:
+        mod_ui_ventana.actualizar_scroll_soundboard()
+        return
+    E._ultimas_columnas_pads["valor"] = columnas
     for i in range(E.num_pads_soundboard):
         celda = E._celdas_pads.get(i)
         if celda is None:

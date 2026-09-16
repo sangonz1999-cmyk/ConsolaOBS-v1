@@ -298,6 +298,8 @@ def construir_cuerpo():
     # después de esto podría creer (por error) que el ancho no cambió y
     # saltarse el reacomodo que hace falta.
     E._ultimo_ancho_celda_fuentes["valor"] = None
+    E._ultima_grilla_fuentes["clave"] = None
+    E._ultimas_columnas_pads["valor"] = None
 
     E.cuerpo = tk.PanedWindow(E.ventana, orient=E.orientacion_paneles, bg="#0b0e13", sashwidth=8, sashrelief="flat")
     E.cuerpo.pack(fill="both", expand=True)

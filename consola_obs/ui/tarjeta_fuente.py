@@ -128,6 +128,12 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
+    # Si no cambió ni la cantidad de columnas ni el ancho, las posiciones
+    # son idénticas: no hay nada que mover.
+    if (not forzar) and E._ultima_grilla_fuentes.get("clave") == (columnas, ancho_celda):
+        mod_ui_ventana.actualizar_scroll()
+        return
+    E._ultima_grilla_fuentes["clave"] = (columnas, ancho_celda)
     for idx, nombre in enumerate(E.orden_fuentes):
         if nombre not in E.fuentes:
             continue
@@ -342,6 +348,18 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         if ancho_cab < 2 or alto_cab < 2:
             return
         color_base = cv.datos_color_actual
+        cx, cy = ancho_cab / 2, alto_cab / 2
+        cv.coords(id_sombra, cx + 1, cy + 2)
+        cv.coords(id_nombre, cx, cy + 1)
+        # Las bandas del degradado sólo se redibujan si el tamaño cambió
+        # de verdad (tolerancia 6px): durante un redimensionado llegan
+        # decenas de <Configure> por segundo y recrear las 14 bandas en
+        # cada uno es lo que producía los cortes.
+        ultimo = getattr(cv, "datos_ultimo_gradiente", None)
+        if (ultimo is not None and ultimo[0] == color_base
+                and abs(ancho_cab - ultimo[1]) < 6 and abs(alto_cab - ultimo[2]) < 6):
+            return
+        cv.datos_ultimo_gradiente = (color_base, ancho_cab, alto_cab)
         cv.delete("degradado_cabecera")
         color_claro = mod_ui_dibujo._aclarar_color(color_base, 40)
         color_oscuro = mod_ui_dibujo._oscurecer_color(color_base, 15)
@@ -349,9 +367,6 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         for iid in ids:
             cv.itemconfig(iid, tags=("degradado_cabecera",))
         cv.tag_lower("degradado_cabecera")
-        cx, cy = ancho_cab / 2, alto_cab / 2
-        cv.coords(id_sombra, cx + 1, cy + 2)
-        cv.coords(id_nombre, cx, cy + 1)
 
     cabecera_canal.bind("<Configure>", _redibujar_gradiente_cabecera_fuente)
     # Doble clic sobre el título = renombrar. Clic derecho en cualquier

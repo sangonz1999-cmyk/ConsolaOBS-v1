@@ -135,6 +135,8 @@ MARCAS_DB = [0, -10, -20, -30, -40, -50, -60]
 
 
 _ultimo_ancho_celda_fuentes = {"valor": None}
+_ultima_grilla_fuentes = {"clave": None}
+_ultimas_columnas_pads = {"valor": None}
 
 
 _trabajo_redimension_fuentes = {"id": None}
