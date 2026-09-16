@@ -52,11 +52,25 @@ def _presionar_divisor(event):
     if not es_divisor:
         return
     E._arrastre_divisor["activo"] = True
-    # Igual que con el borde de la ventana: se tapa todo con el velo
-    # azul mientras dura el arrastre (la ventana no cambia de tamaño,
-    # así que la foto calza exacto y no hay que reescalar nada).
-    _mostrar_velo_redimension()
+    _tapar_pads()
     _reprogramar_fin_divisor()
+
+
+def _tapar_pads():
+    """Tapa sólo la zona de pads con el fondo del panel (el divisor,
+    el título, el scrollbar y el resto quedan visibles y movibles)."""
+    try:
+        E.velo_pads.place(in_=E.canvas_sb, x=0, y=0, relwidth=1, relheight=1)
+        E.velo_pads.lift()
+    except Exception:
+        pass
+
+
+def _destapar_pads():
+    try:
+        E.velo_pads.place_forget()
+    except Exception:
+        pass
 
 
 def _reprogramar_fin_divisor():
@@ -76,7 +90,7 @@ def _fin_arrastre_divisor():
     E._arrastre_divisor["activo"] = False
     mod_ui_tarjeta._aplicar_redimension_fuentes()
     mod_ui_soundboard._aplicar_redimension_soundboard()
-    _ocultar_velo_redimension()
+    _destapar_pads()
 
 
 def _soltar_divisor(event):
@@ -234,6 +248,14 @@ def construir_cuerpo():
     E.canvas_sb.configure(yscrollcommand=E.scrollbar_sb.set)
 
     E.canvas_sb.pack(side="left", fill="both", expand=True)
+
+    # Tapa para el arrastre del divisor: cubre SÓLO la zona de pads
+    # (el scrollbar, el divisor, el título y el resto quedan visibles).
+    # Vive acá (hermana del canvas, no adentro del panel) para sobrevivir
+    # a las reconstrucciones de la grilla; se recrea oculta con cada
+    # construir_cuerpo.
+    E.velo_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
+    E.velo_pads.place_forget()
 
     E.panel_soundboard = tk.Frame(E.canvas_sb, bg="#10141b")
     E.canvas_sb.create_window((0, 0), window=E.panel_soundboard, anchor="nw")
