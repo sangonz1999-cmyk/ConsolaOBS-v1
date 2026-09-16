@@ -297,10 +297,18 @@ MOD_ACENTO_CLARO = "#7aa8ff"
 # ------------------------------------------------------------
 # BARRA MODERNA: EDITABLE
 # ------------------------------------------------------------
-# Esquema de color: "Verde" (el de siempre), "Azul", "Naranja" o "Violeta".
-# Degradado: "Nulo" (cortes duros), "Sutil" o "Suave" (mezclas largas).
-BARRA_MODERNA_COLOR = "Verde"
-BARRA_MODERNA_DEGRADADO = "Sutil"
+# Color de cada zona con RGB directo (0-255 cada uno), igual que la guía:
+# "alta" (arriba), "media" (medio), "baja" (abajo). El clip de saturación
+# siempre es rojo y el gris de mute no cambia.
+# Ejemplos para copiar y pegar:
+#   Verde   = {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)}
+#   Azul    = {"alta": (156, 192, 255), "media": (47, 124, 246), "baja": (23, 74, 148)}
+#   Naranja = {"alta": (255, 82, 48), "media": (246, 164, 47), "baja": (180, 110, 20)}
+#   Violeta = {"alta": (255, 120, 200), "media": (170, 120, 250), "baja": (100, 70, 180)}
+BARRA_MODERNA = {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)}
+# Degradado en dB (ancho de mezcla del borde alto y del borde medio):
+# (0.0, 0.0) = cortes duros; (1.5, 2.0) = sutil; (6.0, 10.0) = suave.
+BARRA_MODERNA_MEZCLA = (1.5, 2.0)
 
 # ------------------------------------------------------------
 # GUÍA DEL MEDIDOR (tema Moderna): EDITABLE

@@ -108,30 +108,41 @@ def _mezclar_rgb(c1, c2, t):
     return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
 
 
-# Esquemas de color de la barra (zona alta/media/baja). El clip de
-# saturación siempre es rojo (gris claro en variante gris). Cuál se usa
-# y con cuánto degradado se elige en constantes.py
-# (BARRA_MODERNA_COLOR / BARRA_MODERNA_DEGRADADO).
-ESQUEMAS_BARRA = {
-    "Verde": {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)},
-    "Azul": {"alta": (156, 192, 255), "media": (47, 124, 246), "baja": (23, 74, 148)},
-    "Naranja": {"alta": (255, 82, 48), "media": (246, 164, 47), "baja": (180, 110, 20)},
-    "Violeta": {"alta": (255, 120, 200), "media": (170, 120, 250), "baja": (100, 70, 180)},
-}
-# Ancho de mezcla (dB) por ajuste de degradado: (borde alto, borde medio).
-MEZCLAS_DEGRADADO = {"Nulo": (0.0, 0.0), "Sutil": (1.5, 2.0), "Suave": (6.0, 10.0)}
+# Color y degradado de la barra se editan en constantes.py
+# (BARRA_MODERNA / BARRA_MODERNA_MEZCLA). El clip de saturación siempre
+# es rojo (gris claro en variante gris).
+_BARRA_MODERNA_DEFECTO = {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)}
 # Gris funcional (mute/otra escena): fijo, no depende del esquema.
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
 
 
+def _rgb_valido(v):
+    return (isinstance(v, (tuple, list)) and len(v) == 3
+            and all(isinstance(x, (int, float)) and 0 <= x <= 255 for x in v))
+
+
 def _esquema_barra_actual():
-    return ESQUEMAS_BARRA.get(C.BARRA_MODERNA_COLOR, ESQUEMAS_BARRA["Verde"])
+    esquema = getattr(C, "BARRA_MODERNA", None)
+    if not isinstance(esquema, dict):
+        return dict(_BARRA_MODERNA_DEFECTO)
+    limpio = {}
+    for zona in ("alta", "media", "baja"):
+        v = esquema.get(zona)
+        limpio[zona] = tuple(int(x) for x in v) if _rgb_valido(v) else _BARRA_MODERNA_DEFECTO[zona]
+    return limpio
 
 
 def _mezcla_degradado_actual():
-    return MEZCLAS_DEGRADADO.get(C.BARRA_MODERNA_DEGRADADO, MEZCLAS_DEGRADADO["Sutil"])
+    try:
+        m = getattr(C, "BARRA_MODERNA_MEZCLA", None)
+        m1, m2 = float(m[0]), float(m[1])
+        if m1 >= 0 and m2 >= 0:
+            return (m1, m2)
+    except Exception:
+        pass
+    return (1.5, 2.0)
 _PALETA_BARRA_COLOR_TENUE = C.GUIA_BARRA_COLOR
 _PALETA_BARRA_GRIS_TENUE = C.GUIA_BARRA_GRIS
 
