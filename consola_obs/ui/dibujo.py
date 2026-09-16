@@ -435,6 +435,56 @@ def _placa_tk(ancho, alto, acento=None, encendido=False, hover=False, presionado
         E._cache_placas.clear()
     E._cache_placas[clave] = foto
     return foto
+
+
+_cache_placas_modernas = {}
+
+
+def _placa_moderna_tk(ancho, alto, acento=None, encendido=False, hover=False, presionado=False,
+                      color_marco=None, reproduciendo=False):
+    """Pad plano estilo OBS (tema Moderna): cuadrado con esquinas apenas
+    redondeadas, relleno liso sin degradado y borde fino de acento. Misma
+    firma que _placa_tk para intercambiarlas sin tocar quien llama."""
+    if not HAY_PILLOW:
+        return None
+    ancho, alto = max(24, int(ancho)), max(24, int(alto))
+    clave = (ancho, alto, acento, bool(encendido), bool(hover), bool(presionado), color_marco,
+             bool(reproduciendo))
+    foto = _cache_placas_modernas.get(clave)
+    if foto is not None:
+        return foto
+    try:
+        S = 4
+        W, H = ancho * S, alto * S
+        lado = min(W, H)
+        radio = max(3 * S, round(lado * 0.07))
+        grosor = max(2 * S, round(lado * 0.016))
+        if reproduciendo:
+            borde = _mezclar_hex(acento or color_marco or "#2fd693", "#ffffff", 0.3)
+            cuerpo = _mezclar_hex("#232b3a", acento or color_marco or "#2fd693", 0.30)
+        elif encendido:
+            borde = color_marco or acento or "#2fd693"
+            base = "#232b3a"
+            cuerpo = _mezclar_hex(base, acento, 0.22) if acento else base
+        else:
+            borde = color_marco or "#3a4356"
+            cuerpo = "#1a2130"
+        if hover:
+            cuerpo = _mezclar_hex(cuerpo, "#ffffff", 0.08)
+        if presionado:
+            cuerpo = _mezclar_hex(cuerpo, "#000000", 0.25)
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([S, S, W - S - 1, H - S - 1], radius=radio,
+                            fill=_hex_a_rgb(cuerpo) + (255,),
+                            outline=_hex_a_rgb(borde) + (255,), width=grosor)
+        foto = ImageTk.PhotoImage(img.resize((ancho, alto), Image.LANCZOS))
+    except Exception:
+        return None
+    if len(_cache_placas_modernas) > C.LIMITE_CACHE_PLACAS:
+        _cache_placas_modernas.clear()
+    _cache_placas_modernas[clave] = foto
+    return foto
 # Mismo truco que el '_S' de tu otro programa: Tk dibuja un
 # create_oval tal cual, sin suavizar el borde (se nota como
 # "escalones" sobre todo en botones chicos). Acá en cambio el círculo
