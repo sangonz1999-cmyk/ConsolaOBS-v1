@@ -291,3 +291,17 @@ MOD_PICO_GRIS = "#9aa4b2"
 MOD_CLIP = "#ff2441"
 MOD_BARRA_FONDO = "#080b10"
 MOD_ICONO_APAGADO = "#a8b2c4"
+
+# ------------------------------------------------------------
+# GUÍA DEL MEDIDOR (tema Moderna): EDITABLE
+# ------------------------------------------------------------
+# Son los colores apagados que se ven ARRIBA del nivel como guía.
+# Poné acá los RGB que quieras (0-255 cada uno): cuanto más cerca del
+# fondo (8, 11, 16), menos se nota. La guía en gris (mute/otra escena)
+# usa la segunda paleta.
+GUIA_BARRA_COLOR = {
+    "rojo": (9, 7, 6), "amarillo": (9, 8, 6), "verde": (7, 10, 8),
+}
+GUIA_BARRA_GRIS = {
+    "rojo": (12, 13, 15), "amarillo": (11, 12, 14), "verde": (10, 11, 13),
+}

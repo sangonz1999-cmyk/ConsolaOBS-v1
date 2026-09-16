@@ -108,19 +108,16 @@ def _mezclar_rgb(c1, c2, t):
     return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
 
 
-# Paletas de la barra OBS: brillante (nivel) y tenue (guía de fondo).
+# Paletas de la barra OBS: brillante (nivel). La GUÍA (tenue) vive en
+# constantes.py (GUIA_BARRA_COLOR / GUIA_BARRA_GRIS) para editarla fácil.
 _PALETA_BARRA_COLOR = {
     "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
-}
-_PALETA_BARRA_COLOR_TENUE = {
-    "rojo": (9, 7, 6), "amarillo": (9, 8, 6), "verde": (7, 10, 8),
 }
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
-_PALETA_BARRA_GRIS_TENUE = {
-    "rojo": (12, 13, 15), "amarillo": (11, 12, 14), "verde": (10, 11, 13),
-}
+_PALETA_BARRA_COLOR_TENUE = C.GUIA_BARRA_COLOR
+_PALETA_BARRA_GRIS_TENUE = C.GUIA_BARRA_GRIS
 
 
 def _color_zona_barra(db, paleta):
@@ -175,7 +172,7 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     de pico. Devuelve el dict de ids."""
     x0, x1 = 1, max(2, ancho_barra - 1)
     y0, y1 = offset_y, offset_y + alto
-    canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    id_fondo = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
     id_img_tenue = id_img = None
     foto_tenue = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=True)
     if foto_tenue is not None:
@@ -197,7 +194,7 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
             "bg": bg, "id_img": id_img, "id_img_tenue": id_img_tenue,
-            "id_barra": id_barra, "id_rojo": id_rojo,
+            "id_barra": id_barra, "id_rojo": id_rojo, "id_fondo": id_fondo,
             "id_mascara": id_mascara, "id_clip": id_clip, "id_pico": id_pico,
             "gris": False}
 

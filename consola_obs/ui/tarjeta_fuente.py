@@ -531,19 +531,23 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     _fuente_marcas_db = tkfont.Font(family=E.FUENTE_UI, size=6)
     margen_marcas_db = math.ceil(_fuente_marcas_db.metrics("linespace") / 2) + 1
 
-    vu_canvas = tk.Canvas(
-        fila_vertical, width=ancho_barra_vu + 16, height=alto_canal + margen_marcas_db * 2,
-        bg=(C.MOD_BARRA_FONDO if E.es_moderna() else "#0e1219"), highlightthickness=0
-    )
-    vu_canvas.pack(side="left", anchor="n")
-
     if E.es_moderna():
+        vu_canvas = tk.Canvas(
+            fila_vertical, width=ancho_barra_vu + 16, height=alto_canal + margen_marcas_db * 2,
+            bg=color_cuerpo, highlightthickness=0
+        )
+        vu_canvas.pack(side="left", anchor="n")
         vu_obs = mod_ui_medidores._dibujar_barra_obs(
-            vu_canvas, ancho_barra_vu, alto_canal, bg=C.MOD_BARRA_FONDO, offset_y=margen_marcas_db)
+            vu_canvas, ancho_barra_vu, alto_canal, bg=color_cuerpo, offset_y=margen_marcas_db)
         vu_segmentos = []
         marcas_db = mod_ui_medidores.MARCAS_DB_OBS
         color_marcas = C.MOD_MARCA_DB
     else:
+        vu_canvas = tk.Canvas(
+            fila_vertical, width=ancho_barra_vu + 16, height=alto_canal + margen_marcas_db * 2,
+            bg="#0e1219", highlightthickness=0
+        )
+        vu_canvas.pack(side="left", anchor="n")
         vu_obs = None
         vu_segmentos = mod_ui_medidores._dibujar_segmentos_led(vu_canvas, ancho_barra_vu, alto_canal, offset_y=margen_marcas_db)
         marcas_db = E.MARCAS_DB
@@ -761,6 +765,17 @@ def _actualizar_estado_gris(nombre):
             fader.canvas.config(bg=color_cuerpo)
         elif fader is not None:
             fader.config(bg=color_cuerpo)
+    except Exception:
+        pass
+    # El medidor también sigue al fondo actual (misma propiedad que el
+    # fader): fondo y máscara se tiñen con el color del cuerpo.
+    try:
+        dib = widgets.get("vu_obs")
+        if dib:
+            widgets["vu_canvas"].config(bg=color_cuerpo)
+            widgets["vu_canvas"].itemconfig(dib["id_fondo"], fill=color_cuerpo)
+            widgets["vu_canvas"].itemconfig(dib["id_mascara"], fill=color_cuerpo)
+            dib["bg"] = color_cuerpo
     except Exception:
         pass
     for hijo in widgets["fila_iconos"].winfo_children():
