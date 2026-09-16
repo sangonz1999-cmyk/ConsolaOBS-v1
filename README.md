@@ -382,6 +382,13 @@ un toque de calma de 30 ms): los pads y faders se mueven de fila/
 columna en vivo y nunca parpadean. Si falta espacio, aparece scroll.
 Sólo se reconstruye con acciones explícitas (tamaño de íconos, diseño,
 tipografía, agregar/quitar pads).
+Regla de columnas: pads con tolerancia 25% (la última columna puede
+quedar tapada hasta un cuarto); faders a piso estricto (apenas algo
+queda tapado, baja de fila).
+Render gate: al moverse algo, sólo los pads se tapan hasta asentarse
+(reacomodo + pintado forzado + destape a los 150 ms de quietud); los
+faders nunca se ocultan, y cada tarjeta tapada por el borde no se
+muestra hasta volver a verse.
 
 ### Anti-parpadeo al redimensionar (win32):
 - _fijar_color_fondo_nativo: cambia el pincel de fondo de la clase de ventana (SetClassLongPtrW + CreateSolidBrush) para que el fondo sea del color oscuro correcto (evita el flash blanco).

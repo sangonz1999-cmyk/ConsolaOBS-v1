@@ -104,26 +104,26 @@ def _presionar_divisor(event):
 
 
 def _tapar_grillas():
-    """Cubre las dos grillas (pads y faders) con su fondo. Todo lo demás
-    (divisor, títulos, scrollbars) queda visible."""
-    for tapa, lienzo in ((getattr(E, "tapa_pads", None), getattr(E, "canvas_sb", None)),
-                         (getattr(E, "tapa_fuentes", None), getattr(E, "canvas", None))):
-        try:
-            if tapa is None or lienzo is None:
-                continue
-            tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
-            tapa.lift()
-        except Exception:
-            pass
+    """Cubre SÓLO la grilla de pads con su fondo (los faders nunca se
+    tapan). Todo lo demás (divisor, títulos, scrollbars) queda visible."""
+    try:
+        tapa = getattr(E, "tapa_pads", None)
+        lienzo = getattr(E, "canvas_sb", None)
+        if tapa is None or lienzo is None:
+            return
+        tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
+        tapa.lift()
+    except Exception:
+        pass
 
 
 def _destapar_grillas():
-    for tapa in (getattr(E, "tapa_pads", None), getattr(E, "tapa_fuentes", None)):
-        try:
-            if tapa is not None:
-                tapa.place_forget()
-        except Exception:
-            pass
+    try:
+        tapa = getattr(E, "tapa_pads", None)
+        if tapa is not None:
+            tapa.place_forget()
+    except Exception:
+        pass
 
 
 def _programar_asentado():
@@ -402,8 +402,6 @@ def construir_cuerpo():
     # ocultas con cada construir_cuerpo.
     E.tapa_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
     E.tapa_pads.place_forget()
-    E.tapa_fuentes = tk.Label(E.marco_canvas, bg="#10141b", bd=0, highlightthickness=0)
-    E.tapa_fuentes.place_forget()
 
 
 def actualizar_scroll(event=None):

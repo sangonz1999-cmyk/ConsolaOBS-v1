@@ -32,14 +32,15 @@ def _ancho_contenedor_fuente():
 
 
 def _columnas_disponibles_fuentes():
-    """Cuántas tarjetas de fuente entran por fila en el ancho actual del
-    panel, con la regla 25% (igual que pads): la última columna puede
-    quedar tapada hasta un cuarto; si se tapa más, baja de fila."""
+    """Cuántas tarjetas de fuente entran por fila: piso estricto, sin
+    tolerancia. Apenas una tarjeta quedaría tapada (aunque sea un
+    píxel), baja a la fila de abajo. Así ninguna fuente queda nunca a
+    medio ver tapada por el panel de sonidos."""
     ancho_disponible = E.canvas.winfo_width()
     celda = _ancho_contenedor_fuente()
     if ancho_disponible <= 1 or celda <= 0:
         return E.columnas_fuentes
-    return max(1, int((ancho_disponible + 0.25 * celda) // celda))
+    return max(1, int(ancho_disponible // celda))
 
 
 def _ancho_celda_fuentes():
@@ -124,6 +125,11 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
+    try:
+        ancho_visible = E.canvas.winfo_width()
+    except Exception:
+        ancho_visible = 0
+    paso_celda = ancho_celda + 18 + 12
     for idx, nombre in enumerate(E.orden_fuentes):
         if nombre not in E.fuentes:
             continue
@@ -144,6 +150,15 @@ def _reubicar_fuentes(forzar=False):
         # que se hace siempre, haya cambiado el ancho o no: es lo que
         # de verdad mueve una tarjeta a otra fila/columna.
         tarjeta_sombra.grid(row=fila, column=col, padx=6, pady=6, sticky="n")
+        # Visibilidad: si alguna parte de la tarjeta quedó fuera del
+        # ancho visible (tapada por el borde), no se muestra hasta
+        # volver a verse. Como se evalúa en cada reacomodo, el cambio
+        # es imperceptible.
+        try:
+            if ancho_visible > 1 and col * paso_celda + ancho_celda + 18 > ancho_visible + 2:
+                tarjeta_sombra.grid_remove()
+        except Exception:
+            pass
     mod_ui_ventana.actualizar_scroll()
 
 
