@@ -100,7 +100,34 @@ def _presionar_divisor(event):
     # intermedias). No se tapa nada acá: cada salto se resuelve
     # completo y sincrónico en _mover_divisor.
     E.cuerpo._arrastrando_sash = True
+    _tapar_pads_con_foto()
+    _programar_asentado()
     return "break"
+
+
+def _tapar_pads_con_foto():
+    """FASE 1: congela la vista actual de los pads en una foto que queda
+    en pantalla hasta la FASE 3. Así nunca se ven pads cortados."""
+    try:
+        tapa = getattr(E, "tapa_pads", None)
+        lienzo = getattr(E, "canvas_sb", None)
+        if tapa is None or lienzo is None:
+            return
+        if HAY_PILLOW and ImageGrab is not None:
+            try:
+                E.ventana.update_idletasks()
+                x, y = lienzo.winfo_rootx(), lienzo.winfo_rooty()
+                ancho, alto = lienzo.winfo_width(), lienzo.winfo_height()
+                if ancho > 1 and alto > 1:
+                    foto = ImageGrab.grab(bbox=(x, y, x + ancho, y + alto))
+                    tapa.imagen_foto = ImageTk.PhotoImage(foto)
+                    tapa.config(image=tapa.imagen_foto)
+            except Exception:
+                tapa.config(image="")
+        tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
+        tapa.lift()
+    except Exception:
+        pass
 
 
 def _tapar_grillas():
@@ -180,11 +207,9 @@ def _mover_divisor(event):
         ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
         if nx is None or ny is None:
             return
-        # Sólo se actúa si cambió de posición fija. El orden importa:
-        # 1) se coloca el sash, 2) se deja asentar la geometría, 3) se
-        # reacomodan las grillas, 4) se fuerza el pintado completo.
-        # Todo sincrónico: cuando vuelve el control ya está todo
-        # cargado, nunca se ve un estado a medio generar.
+        # Sólo se actúa si cambió de posición fija. FASE 2: se coloca
+        # el sash y se renderiza todo en segundo plano (tapado por la
+        # foto de la FASE 1), sin mostrar nada hasta la FASE 3.
         if getattr(E.cuerpo, "_ultimo_snap", None) == (nx, ny):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
@@ -205,6 +230,7 @@ def _mover_divisor(event):
             E.ventana.update_idletasks()
         except Exception:
             pass
+        _programar_asentado()
     except Exception:
         pass
     return "break"
@@ -214,6 +240,13 @@ def _soltar_divisor(event):
     if not getattr(E.cuerpo, "_arrastrando_sash", False):
         return
     E.cuerpo._arrastrando_sash = False
+    try:
+        timer = getattr(E.ventana, "_timer_asentado", None)
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+            E.ventana._timer_asentado = None
+    except Exception:
+        pass
     _asentar_grillas()
 
 
