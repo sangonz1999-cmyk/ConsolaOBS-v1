@@ -346,9 +346,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     color_etiqueta = E.colores_fuentes.get(nombre)
     if E.es_moderna():
         if color_etiqueta:
-            color_cabecera_base = color_etiqueta
-            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.50)
-            color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.35)
+            _base_suave = mod_ui_dibujo._desaturar_color(color_etiqueta)
+            color_cabecera_base = _base_suave
+            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(_base_suave, 0.50)
+            color_meta = mod_ui_dibujo._oscurecer_color_pct(_base_suave, 0.35)
         else:
             color_cabecera_base = C.MOD_CABECERA
             color_cuerpo = C.MOD_TARJETA
@@ -518,9 +519,22 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     _fuente_marcas_db = tkfont.Font(family=E.FUENTE_UI, size=6)
     margen_marcas_db = math.ceil(_fuente_marcas_db.metrics("linespace") / 2) + 1
 
+    tam_marcas_db = 6
     if E.es_moderna():
+        # Números dB más grandes: se mide el ancho real que necesitan y
+        # se agranda el canvas para que no se corten; si no entran en
+        # la tarjeta se vuelve al tamaño chico.
+        tam_marcas_db = 7
+        _f_marcas = tkfont.Font(family=E.FUENTE_UI, size=tam_marcas_db)
+        ancho_marcas = max(_f_marcas.measure(str(m)) for m in mod_ui_medidores.MARCAS_DB_OBS) + 5
+        if ancho_barra_vu + ancho_marcas + 4 + _FaderOBS.ANCHO > ancho_contenedor - 6:
+            tam_marcas_db = 6
+            _f_marcas = tkfont.Font(family=E.FUENTE_UI, size=tam_marcas_db)
+            ancho_marcas = max(_f_marcas.measure(str(m)) for m in mod_ui_medidores.MARCAS_DB_OBS) + 5
+        margen_marcas_db = math.ceil(_f_marcas.metrics("linespace") / 2) + 1
         vu_canvas = tk.Canvas(
-            fila_vertical, width=ancho_barra_vu + 16, height=alto_canal + margen_marcas_db * 2,
+            fila_vertical, width=ancho_barra_vu + ancho_marcas,
+            height=alto_canal + margen_marcas_db * 2,
             bg=color_cuerpo, highlightthickness=0
         )
         vu_canvas.pack(side="left", anchor="n")
@@ -544,7 +558,8 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         y = mod_ui_medidores._y_para_db(marca, alto_canal) + margen_marcas_db
         vu_canvas.create_text(
             ancho_barra_vu + 3, y, text=str(marca),
-            fill=color_marcas, font=(E.FUENTE_UI, 6), anchor="w"
+            fill=color_marcas, font=(E.FUENTE_UI, tam_marcas_db if E.es_moderna() else 6),
+            anchor="w"
         )
 
     def cambiar_volumen(valor):
@@ -713,9 +728,10 @@ def _actualizar_estado_gris(nombre):
         color_meta = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.30)
     elif E.es_moderna():
         if color_etiqueta:
-            color_cabecera = color_etiqueta
-            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.50)
-            color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.35)
+            _base_suave = mod_ui_dibujo._desaturar_color(color_etiqueta)
+            color_cabecera = _base_suave
+            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(_base_suave, 0.50)
+            color_meta = mod_ui_dibujo._oscurecer_color_pct(_base_suave, 0.35)
         else:
             color_cabecera = C.MOD_CABECERA
             color_cuerpo = C.MOD_TARJETA

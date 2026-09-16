@@ -244,6 +244,14 @@ def _mezclar_hex(color_a, color_b, t):
     return "#%02x%02x%02x" % _mezclar_rgb(color_a, color_b, t)
 
 
+def _desaturar_color(color_hex, cantidad=0.45):
+    """Baja la saturación mezclando con gris (para etiquetas en Moderna)."""
+    try:
+        return _mezclar_hex(color_hex, "#808080", cantidad)
+    except Exception:
+        return color_hex
+
+
 def _gradiente_imagen(tam, color_arriba, color_abajo):
     """Franja vertical de color continuo (sin escalones), hecha con una
     tira de 1 pixel de ancho que después se estira: es la forma barata
