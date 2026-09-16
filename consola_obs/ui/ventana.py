@@ -493,6 +493,16 @@ def construir_cuerpo():
     E.canvas.bind("<Enter>", _activar_rueda_fuentes)
     E.canvas.bind("<Leave>", _desactivar_rueda_fuentes)
 
+    # Clic derecho sobre el fondo del panel de fuentes (no sobre una
+    # tarjeta) -> menú "Agregar fuente", igual que el clic derecho en la
+    # lista de fuentes de OBS. Se ata tanto al canvas como al marco de
+    # adentro porque, según cuántas tarjetas haya, el pixel vacío puede
+    # pertenecer a cualquiera de los dos. Las tarjetas ya tienen su
+    # propio <Button-3> y Tk le da prioridad al widget de más adentro,
+    # así que no se pisan.
+    E.canvas.bind("<Button-3>", mod_ui_tarjeta._abrir_menu_contextual_panel_fuentes)
+    E.panel_fuentes.bind("<Button-3>", mod_ui_tarjeta._abrir_menu_contextual_panel_fuentes)
+
 
     E.marco_derecho = tk.Frame(E.cuerpo, bg=E.color_fondo_panel())
 

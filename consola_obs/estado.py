@@ -167,6 +167,12 @@ escena_actual_obtenida = False
 
 _dialogo_filtros_abierto = {"nombre": None, "refrescar": None, "ventana": None}
 
+# Igual que _dialogo_filtros_abierto, pero para la ventana de
+# "Propiedades" de una fuente (Fase 2 del plan de mejoras): sólo puede
+# haber una abierta a la vez, y se cierra sola si se desconecta OBS o
+# si se abren unas Propiedades nuevas mientras ésta seguía abierta.
+_dialogo_propiedades_abierto = {"nombre": None, "ventana": None}
+
 _panel_en_arrastre = {"origen": None}
 
 # Caché de placas ya renderizadas. La clave incluye tamaño, color y
@@ -224,6 +230,40 @@ FILTROS_DE_SONIDO_PERMITIDOS = [
     ("Puerta anti-ruidos",           "🚪", ["noise_gate_filter"]),
     ("Retardo de Video (asíncrono)", "⏱", ["async_delay_filter"]),
 ]
+
+
+# ------------------------------------------------------------------
+# CATÁLOGO DE TIPOS DE ENTRADA para "Agregar fuente" (Fase 3 del plan)
+# ------------------------------------------------------------------
+# Mismo formato y misma idea que FILTROS_DE_SONIDO_PERMITIDOS: nombre
+# entendible, ícono, y la lista de "kinds" posibles que puede informar
+# OBS para ese mismo tipo de fuente. Se prueba en orden y se usa el
+# primero que esta instancia de OBS realmente tenga registrado (lo que
+# devuelve GetInputKindList), así el mismo catálogo sirve en Windows
+# (WASAPI), macOS (CoreAudio) y Linux (PulseAudio) sin tocar nada.
+#
+# Sólo están los tipos que le sirven a un sonidista. Los nombres y el
+# orden son los mismos que muestra el menú "Agregar fuente" de OBS en
+# español (alfabético), para que quien ya conoce OBS encuentre lo mismo
+# acá. Los demás tipos que informe OBS (captura de ventana, navegador,
+# texto, imagen, etc.) igual se pueden crear desde el selector completo,
+# tildando "Mostrar todos los tipos que informa OBS".
+ENTRADAS_DE_AUDIO_PERMITIDAS = [
+    ("Captura de audio de aplicación (BETA)", "🪟",
+     ["wasapi_process_output_capture"]),
+    ("Captura de entrada audio", "🎤",
+     ["wasapi_input_capture", "coreaudio_input_capture", "pulse_input_capture"]),
+    ("Captura de salida de audio", "🔊",
+     ["wasapi_output_capture", "coreaudio_output_capture", "pulse_output_capture"]),
+    ("Multimedia", "▶",
+     ["ffmpeg_source"]),
+]
+
+# Nombre por defecto que se sugiere al crear una fuente de cada tipo:
+# es el mismo texto amigable del catálogo, así que no hace falta una
+# tabla aparte. Para un kind que NO esté en el catálogo (modo "mostrar
+# todos"), se sugiere el propio kind.
+ICONO_ENTRADA_DESCONOCIDA = "📦"
 
 
 # ESQUEMA de los filtros de sonido "importantes" (los mismos que
@@ -286,6 +326,87 @@ ESQUEMA_FILTROS_CONOCIDOS = {
         dict(clave="low", etiqueta="Bajos", tipo="float",
              minimo=-20.0, maximo=20.0, paso=0.1, sufijo=" dB", defecto=0.0),
     ],
+    # Puerta anti-ruidos (noise_gate_filter): claves, rangos y valores
+    # por defecto calcados de noise-gate-filter.c (VOL_MIN/VOL_MAX
+    # -96..0 dB para los dos umbrales; los tres tiempos van de 0 a
+    # 10000 ms en el propio OBS).
+    "noise_gate_filter": [
+        dict(clave="close_threshold", etiqueta="Umbral de clausura", tipo="float",
+             minimo=-96.0, maximo=0.0, paso=1.0, sufijo=" dB", defecto=-32.0),
+        dict(clave="open_threshold", etiqueta="Umbral de apertura", tipo="float",
+             minimo=-96.0, maximo=0.0, paso=1.0, sufijo=" dB", defecto=-26.0),
+        dict(clave="attack_time", etiqueta="Tiempo de Ataque", tipo="int",
+             minimo=0, maximo=10000, paso=1, sufijo=" ms", defecto=25),
+        dict(clave="hold_time", etiqueta="Tiempo de espera", tipo="int",
+             minimo=0, maximo=10000, paso=1, sufijo=" ms", defecto=200),
+        dict(clave="release_time", etiqueta="Tiempo de liberación", tipo="int",
+             minimo=0, maximo=10000, paso=1, sufijo=" ms", defecto=150),
+    ],
+    # Compresor ascendente (upward_compressor_filter): mismo archivo
+    # fuente que el Expansor (expander-filter.c), pero con su propio
+    # rango de Relación (0.0 a 1.0, es la fracción de "levante" hacia
+    # arriba) y su propio campo extra "Amplitud de curva" (knee_width)
+    # que el Expansor no tiene.
+    "upward_compressor_filter": [
+        dict(clave="ratio", etiqueta="Relación", tipo="float",
+             minimo=0.0, maximo=1.0, paso=0.05, sufijo=":1", defecto=0.5),
+        dict(clave="threshold", etiqueta="Umbral", tipo="float",
+             minimo=-60.0, maximo=0.0, paso=0.1, sufijo=" dB", defecto=-20.0),
+        dict(clave="attack_time", etiqueta="Ataque", tipo="int",
+             minimo=1, maximo=100, paso=1, sufijo=" ms", defecto=10),
+        dict(clave="release_time", etiqueta="Liberar", tipo="int",
+             minimo=1, maximo=1000, paso=1, sufijo=" ms", defecto=50),
+        dict(clave="output_gain", etiqueta="Ganancia de salida", tipo="float",
+             minimo=-32.0, maximo=32.0, paso=0.1, sufijo=" dB", defecto=0.0),
+        dict(clave="knee_width", etiqueta="Amplitud de curva", tipo="int",
+             minimo=0, maximo=20, paso=1, sufijo=" dB", defecto=10),
+    ],
+    # Expansor (expander_filter): a diferencia de lo que se había
+    # supuesto en el plan original, este filtro NO tiene fuente de
+    # sidechain en OBS (eso es exclusivo del Compresor); en cambio
+    # trae un selector de Preajuste (Expansor/Puerta -que reinicia el
+    # resto de los valores a los que trae cada preajuste, igual que en
+    # OBS-) y un Detector (RMS/Pico).
+    "expander_filter": [
+        dict(clave="presets", etiqueta="Preajuste", tipo="lista", defecto="expander",
+             opciones=[("Expansor", "expander"), ("Puerta (gate)", "gate")]),
+        dict(clave="ratio", etiqueta="Relación", tipo="float",
+             minimo=1.0, maximo=20.0, paso=0.1, sufijo=":1", defecto=2.0),
+        dict(clave="threshold", etiqueta="Umbral", tipo="float",
+             minimo=-60.0, maximo=0.0, paso=0.1, sufijo=" dB", defecto=-40.0),
+        dict(clave="attack_time", etiqueta="Ataque", tipo="int",
+             minimo=1, maximo=100, paso=1, sufijo=" ms", defecto=10),
+        dict(clave="release_time", etiqueta="Liberar", tipo="int",
+             minimo=1, maximo=1000, paso=1, sufijo=" ms", defecto=50),
+        dict(clave="output_gain", etiqueta="Ganancia de salida", tipo="float",
+             minimo=-32.0, maximo=32.0, paso=0.1, sufijo=" dB", defecto=0.0),
+        dict(clave="detector", etiqueta="Detector", tipo="lista", defecto="RMS",
+             opciones=[("RMS", "RMS"), ("Pico (Peak)", "peak")]),
+    ],
+    # Eliminación de ruido (noise_suppress_filter_v2): el control de
+    # "Nivel de supresión" sólo se usa con el método Speex -con
+    # RNNoise, OBS directamente lo oculta, porque RNNoise no tiene ese
+    # ajuste-, así que acá también se esconde salvo que el método
+    # elegido sea "speex" (ver 'visible_si').
+    "noise_suppress_filter_v2": [
+        dict(clave="method", etiqueta="Método", tipo="lista", defecto="rnnoise",
+             opciones=[("Speex", "speex"), ("RNNoise", "rnnoise")]),
+        dict(clave="suppress_level", etiqueta="Nivel de supresión", tipo="int",
+             minimo=-60, maximo=0, paso=1, sufijo=" dB", defecto=-30,
+             visible_si=("method", "speex")),
+    ],
+    # Retardo de Video/asíncrono (async_delay_filter): un único campo,
+    # el tiempo de retardo en ms (0 a 20000, igual que en OBS).
+    "async_delay_filter": [
+        dict(clave="delay_ms", etiqueta="Tiempo de retardo", tipo="int",
+             minimo=0, maximo=20000, paso=1, sufijo=" ms", defecto=0),
+    ],
+    # Extensión VST 2.x: sólo se replica el selector de plugin
+    # (ruta al archivo del VST), tal como se acordó en el plan -los
+    # controles internos del plugin en sí no los expone OBS-WebSocket-.
+    "vst_filter": [
+        dict(clave="plugin_path", etiqueta="Plugin VST", tipo="archivo", defecto=""),
+    ],
 }
 ESQUEMA_FILTROS_CONOCIDOS["eq_filter"] = ESQUEMA_FILTROS_CONOCIDOS["basic_eq_filter"]
 
@@ -317,6 +438,156 @@ RANGOS_CAMPOS_FILTRO = [
     ("smoothness", (0, 1000)),
     ("spill", (0, 1000)),
 ]
+
+
+# ------------------------------------------------------------------
+# ESQUEMA de "Propiedades" por tipo de fuente (Fase 2 del plan de
+# mejoras): igual idea que ESQUEMA_FILTROS_CONOCIDOS de más arriba,
+# pero para los AJUSTES DE LA FUENTE en sí (los que en OBS aparecen al
+# hacer clic derecho > Propiedades), no los de un filtro.
+#
+# A diferencia de los filtros -donde OBS-WebSocket sólo devuelve un
+# diccionario plano de valores, sin ningún dato de tipo/rango/opciones-,
+# acá pasa exactamente lo mismo: GetInputSettings también devuelve sólo
+# valores planos. Por eso el mismo criterio de "calcar a mano, campo por
+# campo, lo que trae el código fuente de OBS" que ya se usó para los
+# filtros se repite acá para los tipos de entrada de AUDIO que le
+# importan a un sonidista: micrófono/línea (WASAPI de entrada), audio de
+# escritorio (WASAPI de salida), audio de una aplicación puntual
+# (WASAPI de captura de proceso, Windows 10 1809+) y Fuente de medios
+# (para reproducir un archivo o una URL). Cualquier otro tipo de fuente
+# (Captura de ventana, Navegador, Fuente de color, un dshow/decklink de
+# video, etc.) no tiene entrada acá y cae en el editor genérico -mismo
+# criterio que un filtro sin esquema: una fila por cada ajuste que haya
+# devuelto OBS, adivinando un control razonable según el tipo de dato-.
+#
+# Los campos tipo "lista_dinamica" son la diferencia importante con el
+# esquema de filtros: el dispositivo de audio o la ventana a capturar
+# son distintos en cada PC, así que sus opciones NO se pueden fijar acá
+# a mano -se piden en vivo a OBS con GetInputPropertiesListPropertyItems
+# apenas se abre la ventana, tal como pide el punto 2.2 del plan-.
+#
+# IMPORTANTE (ver punto 2.4 del plan): estos son los campos y rangos que
+# trae el código fuente de OBS (win-wasapi, media-source), pero todavía
+# no se compararon contra capturas de pantalla reales de "Propiedades"
+# tomadas en el setup real -como sí se hizo, filtro por filtro, en la
+# Fase 1-. Antes de dar esto por "calcado exacto", conviene revisar cada
+# tipo de entrada que se use de verdad contra su ventana real de OBS,
+# igual que se hizo con los filtros.
+_ESQUEMA_DISPOSITIVO_WASAPI = [
+    dict(clave="device_id", etiqueta="Dispositivo", tipo="lista_dinamica", defecto="default"),
+    dict(clave="use_device_timing", etiqueta="Usar temporización de dispositivo",
+         tipo="bool", defecto=False),
+]
+
+ESQUEMA_PROPIEDADES_ENTRADA = {
+    # Mic/Aux (captura de entrada de audio) y Audio de escritorio
+    # (captura de salida de audio): mismos dos campos en OBS, sólo
+    # cambia si se listan dispositivos de grabación o de reproducción
+    # -esa parte la resuelve OBS solo al pedirle la lista de items a
+    # ESTA fuente puntual-.
+    "wasapi_input_capture": _ESQUEMA_DISPOSITIVO_WASAPI,
+    "wasapi_output_capture": _ESQUEMA_DISPOSITIVO_WASAPI,
+    # Equivalentes de macOS y Linux: mismo campo de dispositivo, sin
+    # "Usar temporización de dispositivo" (eso es una particularidad
+    # de WASAPI/Windows, no existe en CoreAudio ni en PulseAudio).
+    "coreaudio_input_capture": [
+        dict(clave="device_id", etiqueta="Dispositivo", tipo="lista_dinamica", defecto="default"),
+    ],
+    "coreaudio_output_capture": [
+        dict(clave="device_id", etiqueta="Dispositivo", tipo="lista_dinamica", defecto="default"),
+    ],
+    "pulse_input_capture": [
+        dict(clave="device_id", etiqueta="Dispositivo", tipo="lista_dinamica", defecto="default"),
+    ],
+    "pulse_output_capture": [
+        dict(clave="device_id", etiqueta="Dispositivo", tipo="lista_dinamica", defecto="default"),
+    ],
+    # Captura de audio de aplicación (WASAPI, Windows 10 1809+): elegís
+    # una ventana de la aplicación (no un dispositivo) y OBS captura el
+    # audio de ESE proceso. "Coincidir ventana usando" es el mismo
+    # criterio de Título/Clase/Ejecutable que usa la Captura de ventana
+    # -el valor por defecto puesto acá (Ejecutable) es una suposición
+    # razonable, a confirmar contra la ventana real de OBS (ver punto
+    # 2.4 del plan): si esta fuente ya tiene un valor guardado, o si
+    # GetInputDefaultSettings informa uno, ese pisa a este de todas
+    # formas.
+    "wasapi_process_output_capture": [
+        dict(clave="window", etiqueta="Ventana", tipo="lista_dinamica", defecto=""),
+        dict(clave="priority", etiqueta="Coincidir ventana usando", tipo="lista",
+             opciones=[("Título", 0), ("Clase", 1), ("Ejecutable", 2)], defecto=2),
+    ],
+    # Fuente de medios (ffmpeg_source): se cubren los campos que le
+    # sirven a un sonidista para reproducir un archivo o una URL de
+    # audio/video -"is_local_file" decide si se muestra el selector de
+    # archivo local o los campos de URL/formato de entrada, igual que
+    # hace la ventana real de OBS-.
+    "ffmpeg_source": [
+        dict(clave="is_local_file", etiqueta="Archivo local", tipo="bool", defecto=True),
+        dict(clave="local_file", etiqueta="Ruta del archivo", tipo="archivo", defecto="",
+             visible_si=("is_local_file", True)),
+        dict(clave="input", etiqueta="Entrada (URL)", tipo="texto", defecto="",
+             visible_si=("is_local_file", False)),
+        dict(clave="input_format", etiqueta="Formato de entrada", tipo="texto", defecto="",
+             visible_si=("is_local_file", False)),
+        dict(clave="reconnect_delay_sec", etiqueta="Retraso de reconexión", tipo="int",
+             minimo=1, maximo=60, paso=1, sufijo=" s", defecto=10,
+             visible_si=("is_local_file", False)),
+        dict(clave="buffering_mb", etiqueta="Buffer", tipo="int",
+             minimo=0, maximo=16, paso=1, sufijo=" MB", defecto=2),
+        dict(clave="looping", etiqueta="Bucle", tipo="bool", defecto=False),
+        dict(clave="restart_on_activate", etiqueta="Reiniciar reproducción al activarse",
+             tipo="bool", defecto=True),
+        dict(clave="close_when_inactive", etiqueta="Cerrar archivo cuando esté inactiva",
+             tipo="bool", defecto=False),
+        dict(clave="clear_on_media_end", etiqueta="No mostrar nada al terminar",
+             tipo="bool", defecto=True),
+        dict(clave="speed_percent", etiqueta="Velocidad de reproducción", tipo="int",
+             minimo=1, maximo=200, paso=1, sufijo="%", defecto=100),
+    ],
+    # Captura de ventana (win-capture/window-capture.c). Calcado contra
+    # la ventana real de OBS en el setup del sonidista: mismo orden de
+    # campos, mismas etiquetas y mismas opciones de cada desplegable.
+    #
+    # Los valores numéricos de "method" y "priority" NO son un rango a
+    # deslizar -por eso antes salían como barras en el editor genérico-,
+    # son enumeraciones del código de OBS:
+    #   method   -> 0 Automático | 1 BitBlt | 2 Windows Graphics Capture
+    #   priority -> 0 Título | 1 Clase | 2 Ejecutable
+    # (las etiquetas largas de "priority" son las mismas que muestra OBS
+    # en español: describen a qué se cae si el título ya no coincide).
+    #
+    # La visibilidad también se copia de OBS: con BitBlt sólo tiene
+    # sentido "Compatibilidad multiadaptador", y "Captura de audio",
+    # "Área del cliente" y "Forzar SDR" son exclusivos de Windows
+    # Graphics Capture. Con "Automático" OBS resuelve a WGC en Windows
+    # 10/11, así que se muestran los campos de WGC -que es justo lo que
+    # se ve en la captura de referencia-.
+    "window_capture": [
+        dict(clave="window", etiqueta="Ventana", tipo="lista_dinamica", defecto=""),
+        dict(clave="method", etiqueta="Método de captura", tipo="lista", defecto=0,
+             opciones=[
+                 ("Automático", 0),
+                 ("BitBlt (Windows 7 y posterior)", 1),
+                 ("Captura de gráficos de Windows (Windows 10 1903 y posterior)", 2),
+             ]),
+        dict(clave="priority", etiqueta="Prioridad de captura de ventana", tipo="lista", defecto=2,
+             opciones=[
+                 ("El título de la ventana debe coincidir", 0),
+                 ("Coincidir con el título, de lo contrario buscar ventana del mismo tipo", 1),
+                 ("Coincidir con el título, de lo contrario buscar ventana del mismo ejecutable", 2),
+             ]),
+        dict(clave="capture_audio", etiqueta="Captura de audio (BETA)", tipo="bool", defecto=False,
+             visible_si=("method", (0, 2))),
+        dict(clave="cursor", etiqueta="Captura de Cursor", tipo="bool", defecto=True),
+        dict(clave="compatibility", etiqueta="Compatibilidad multiadaptador",
+             tipo="bool", defecto=False, visible_si=("method", (1,))),
+        dict(clave="client_area", etiqueta="Área del cliente", tipo="bool", defecto=True,
+             visible_si=("method", (0, 2))),
+        dict(clave="force_sdr", etiqueta="Forzar SDR", tipo="bool", defecto=False,
+             visible_si=("method", (0, 2))),
+    ],
+}
 
 
 _celdas_pads = {}

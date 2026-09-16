@@ -123,6 +123,8 @@ def conectar_obs():
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_enable_state_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_created)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_removed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_created)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_removed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_mute_state_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_audio_monitor_type_changed)

@@ -158,6 +158,70 @@ def on_scene_item_removed(_datos):
     threading.Thread(target=mod_obs_cliente._refrescar_membresia_escena, daemon=True).start()
 
 
+# ------------------------------------------------------------------
+# Fuentes creadas o borradas DESDE DENTRO de OBS (punto 3.3 del plan)
+# ------------------------------------------------------------------
+# Antes la consola sólo escuchaba eventos de ítems de escena, así que
+# una fuente nueva aparecía sola únicamente si se agregaba a la escena
+# al aire; una fuente de audio global (Mic/Aux, Audio de escritorio,
+# los que se eligen en Configuración > Audio de OBS) no es ítem de
+# ninguna escena y por eso no se enteraba hasta apretar "Actualizar
+# fuentes" a mano. Con InputCreated/InputRemoved el refresco es solo.
+#
+# El refresco se agrupa con un pequeño retardo porque OBS puede mandar
+# varios de estos eventos casi juntos (por ejemplo al cargar una
+# colección de escenas entera): sin esto se dispararía una actualización
+# completa por cada fuente, y son pedidos pesados.
+_refresco_por_fuentes = {"id": None}
+RETARDO_REFRESCO_FUENTES_MS = 400
+
+
+def _programar_refresco_lista_fuentes():
+    if not E.conectado:
+        return
+    if _refresco_por_fuentes["id"] is not None:
+        try:
+            E.ventana.after_cancel(_refresco_por_fuentes["id"])
+        except Exception:
+            pass
+    _refresco_por_fuentes["id"] = E.ventana.after(
+        RETARDO_REFRESCO_FUENTES_MS, _refrescar_lista_fuentes_ahora
+    )
+
+
+def _refrescar_lista_fuentes_ahora():
+    _refresco_por_fuentes["id"] = None
+    if not E.conectado:
+        return
+    # Si ya hay un "Actualizar fuentes" en curso (el botón queda
+    # deshabilitado mientras corre el hilo), se espera un poco y se
+    # reintenta, en vez de lanzar dos actualizaciones pisándose.
+    try:
+        if str(E.boton_actualizar["state"]) == "disabled":
+            _refresco_por_fuentes["id"] = E.ventana.after(
+                RETARDO_REFRESCO_FUENTES_MS, _refrescar_lista_fuentes_ahora
+            )
+            return
+    except Exception:
+        pass
+    try:
+        mod_ui_tarjeta.actualizar()
+    except Exception as e:
+        print(f"No se pudo refrescar la lista de fuentes: {e}")
+
+
+def on_input_created(_datos):
+    """Alguien creó una fuente desde OBS (o desde este mismo programa):
+    la consola la levanta sola, sin tener que apretar 'Actualizar
+    fuentes'."""
+    E.ventana.after(0, _programar_refresco_lista_fuentes)
+
+
+def on_input_removed(_datos):
+    """Se borró una fuente desde OBS: se saca la tarjeta de la consola."""
+    E.ventana.after(0, _programar_refresco_lista_fuentes)
+
+
 def on_input_mute_state_changed(datos):
     """Alguien mutea/desmutea una fuente directamente desde OBS (u otro
     controlador): reflejarlo acá en tiempo real, sin esperar al próximo

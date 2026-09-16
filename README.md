@@ -10,6 +10,8 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Audio local**: cada efecto suena en OBS y a la vez en los parlantes de la PC (miniaudio), con on/off en Ajustes → Audio.
 - **Tipografías**: selector en Ajustes → Apariencia (Predeterminada + las de `assets/fuentes/`), se aplica a toda la interfaz.
 - **Editor de filtros** de audio de OBS en vivo (compresor, EQ, etc.).
+- **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.
+- **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS y sincronización con fuentes creadas/borradas desde OBS.
 
 ## Requisitos
 
@@ -41,7 +43,7 @@ consola_obs/
 ├── configuracion.py  # JSONs de configuración
 ├── utilidades.py
 ├── obs/              # cliente + eventos de OBS
-├── audio/            # filtros + reproducción (OBS y local)
+├── audio/            # filtros + propiedades de fuente + agregar fuente + reproducción (OBS y local)
 └── ui/               # dibujo, medidores, tarjeta, soundboard, ventana, cabecera
 ```
 
@@ -61,7 +63,9 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)
 9. Fuentes "principales" (favoritos que se generan siempre)
 ## 10. Filtros de audio (crear, editar, ajustes en tiempo real)
+## 10b. Propiedades de fuente (clic derecho > Propiedades)
 ## 11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)
+## 11b. Agregar fuente (clic derecho en el panel > Agregar fuente)
 ## 12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable
 ## 13. Redimensionado responsive (factor de escala, velo, supersampling)
 ## 14. Persistencia (config JSON)
@@ -314,6 +318,16 @@ Ventana "Filtros" por fuente (desde el menú contextual):
 - Ganancia se refleja en el VU: _refrescar_ganancia_fuente, en un hilo, suma la ganancia de todos los filtros habilitados que aportan dB (gain_filter.db, compressor output_gain, etc.) y el medidor la muestra (sin reconstruir el nivel a mano: usa el nivel crudo).
 
 
+## 10b. PROPIEDADES DE FUENTE (clic derecho > Propiedades)
+Ventana "Propiedades" por fuente (`consola_obs/audio/propiedades.py`), agregada al menú contextual junto a Filtros:
+- Arma los controles según el `inputKind` real de la fuente (get_input_settings), con el mismo criterio de esquema fijo que los filtros: ESQUEMA_PROPIEDADES_ENTRADA en estado.py cubre Mic/Aux y Audio de escritorio (WASAPI/CoreAudio/Pulse), Captura de audio de aplicación, Fuente de medios y Captura de ventana — calcados campo por campo, mismo orden y mismas opciones que la ventana real de OBS.
+- Campos "lista_dinamica" (dispositivo de audio, ventana a capturar) se piden en vivo con get_input_properties_list_property_items, porque dependen de la PC de cada uno.
+- Campos condicionales (`visible_si`) muestran/ocultan filas según el valor de otro campo — por ejemplo "Compatibilidad multiadaptador" sólo con método BitBlt en Captura de ventana — y se re-empaquetan en su ORDEN original al reaparecer, no al final de la lista.
+- Cualquier tipo de fuente sin esquema fijo cae en un editor genérico (una fila por ajuste, adivinando el control por tipo de dato), igual criterio que un filtro sin esquema.
+- Botonera igual a la de OBS: "Por defecto" (get_input_default_settings), "Cancelar" (restaura los ajustes que tenía la fuente al abrir la ventana, incluida la "X") y "Aceptar".
+- SINCRONIZACIÓN BIDIRECCIONAL EN VIVO: los cambios se mandan con set_input_settings al instante, y se sondea cada ~500 ms para traer cambios hechos desde OBS, salteando el control que el usuario tiene agarrado — mismo mecanismo que el editor de filtros, porque OBS-WebSocket tampoco emite un evento de "ajustes de fuente cambiados".
+
+
 ## 11. SOUNDBOARD (pads con efectos)
 El soundboard es una grilla de "pads" (botones) que reproducen sonidos
 via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
@@ -356,6 +370,15 @@ pad de borde y del LED).
 
 ### Config de medidas (TAMANOS_ICONO):
 - "Chico", "Mediano" (default), "Grande": cambian diámetro del botón, fuente de botón, ancho/alto del pad, íconos, fuente del nombre, etc.
+
+
+## 11b. AGREGAR FUENTE (clic derecho en el panel > Agregar fuente)
+Módulo nuevo `consola_obs/audio/fuentes.py`. Clic derecho sobre una zona VACÍA del panel de fuentes (no sobre una tarjeta: esa tiene su propio menú) abre `_abrir_menu_contextual_panel_fuentes` (en `ui/tarjeta_fuente.py`), atado tanto al canvas como al frame interno para cubrir cualquier hueco vacío.
+- El menú tiene un submenú "➕ Agregar fuente" con los tipos de entrada de AUDIO (ENTRADAS_DE_AUDIO_PERMITIDAS en estado.py: Captura de audio de aplicación, Captura de entrada audio, Captura de salida de audio, Multimedia), cruzados en el momento contra get_input_kind_list para no ofrecer un tipo que esa instancia/plataforma de OBS no tenga — mismo criterio que FILTROS_DE_SONIDO_PERMITIDOS. Nombres y orden calcados del menú "Agregar fuente" real de OBS.
+- "⋯ Otros tipos de fuente…" abre el selector completo (`abrir_selector_nueva_fuente`), con checkbox "Mostrar todos los tipos que informa OBS" para los tipos que no son de audio (captura de ventana, navegador, etc., listados con su kind crudo porque dependen de los plugins de cada usuario).
+- Al elegir un tipo desde el submenú (`agregar_fuente_de_tipo`): pide el nombre (sugerido = nombre del tipo), lo numera si ya existe (los nombres de fuente son únicos en todo OBS, no por escena), crea la fuente en la escena AL AIRE con create_input(..., None, True) (nace con los ajustes de fábrica del tipo) y abre automáticamente su ventana de Propiedades (sección 10b) a los 400 ms.
+- SINCRONIZACIÓN: on_input_created/on_input_removed (obs/eventos.py) refrescan la lista sola cuando una fuente se crea o se borra desde DENTRO de OBS (antes sólo se enteraba si el cambio tocaba la escena activa, así que una fuente global de audio —Mic/Aux, Audio de escritorio— no se detectaba hasta apretar "Actualizar fuentes"). Los refrescos se agrupan con ~400 ms de espera para no relanzar una actualización completa por cada evento si OBS manda varios juntos, y esperan a que termine un refresco en curso en vez de superponerse.
+- El botón "AGREGAR FUENTE" del menú de Ajustes (barra lateral) sigue existiendo como atajo al selector completo.
 
 
 ## 12. CABECERA Y PANELES

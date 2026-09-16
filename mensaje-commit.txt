@@ -1,0 +1,25 @@
+Fase 1 filtros, Fase 2 Propiedades y Fase 3 Agregar fuente
+
+Tres cambios sobre el plan de mejoras (Plan-de-mejoras.docx):
+
+- Fase 1: completa el esquema fijo de filtros de audio (Puerta anti-
+  ruidos, Compresor ascendente, Eliminacion de ruido, Expansor, Retardo
+  de Video), en vez de caer en el editor generico, para que coincidan
+  exacto con el menu real de OBS.
+
+- Fase 2: ventana de "Propiedades" por fuente (clic derecho >
+  Propiedades), con esquema calcado de OBS por tipo de entrada
+  (Mic/Aux, Audio de escritorio, Captura de audio de aplicacion,
+  Fuente de medios, Captura de ventana), sincronizacion bidireccional
+  en vivo y botones Por defecto / Cancelar / Aceptar como en OBS.
+
+- Fase 3: "Agregar fuente" desde la consola. Clic derecho sobre una
+  zona vacia del panel de fuentes muestra un submenu con los tipos de
+  entrada de audio que esa instancia de OBS tiene registrados (mismos
+  nombres/orden que el menu de OBS), crea la fuente en la escena al
+  aire y abre su ventana de Propiedades. Se agrego sincronizacion
+  (on_input_created/on_input_removed) para que una fuente creada o
+  borrada desde OBS aparezca sola en la consola.
+
+README actualizado con las secciones 10b (Propiedades de fuente) y
+11b (Agregar fuente), indice y lista de caracteristicas.

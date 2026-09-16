@@ -1,10 +1,43 @@
 import tkinter as tk
 
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs.obs import eventos as mod_obs_eventos
+
+
+def _habilitar_scroll_con_rueda(canvas):
+    """Deja que la rueda del mouse desplace un Canvas con scroll
+    vertical -Windows/macOS mandan el evento "<MouseWheel>" (con
+    'delta'); Linux/X11 manda "<Button-4>"/"<Button-5>" en su lugar-,
+    sólo mientras el cursor esté arriba de ESE canvas puntual, para no
+    pisarle el scroll a otra ventana que esté abierta al mismo tiempo.
+    Sin esto, la única forma de bajar en una lista larga (como el
+    selector de "Agregar filtro", que ya tiene 11 opciones) era
+    arrastrar a mano la scrollbar fina de al lado, algo fácil de no
+    notar -y entonces parecer que a la lista "le faltan" filtros que
+    en realidad sólo están más abajo-."""
+    def _con_rueda(evento):
+        if getattr(evento, "num", None) == 4:
+            canvas.yview_scroll(-1, "units")
+        elif getattr(evento, "num", None) == 5:
+            canvas.yview_scroll(1, "units")
+        else:
+            canvas.yview_scroll(-1 if evento.delta > 0 else 1, "units")
+
+    def _al_entrar(_evento):
+        canvas.bind_all("<MouseWheel>", _con_rueda)
+        canvas.bind_all("<Button-4>", _con_rueda)
+        canvas.bind_all("<Button-5>", _con_rueda)
+
+    def _al_salir(_evento):
+        canvas.unbind_all("<MouseWheel>")
+        canvas.unbind_all("<Button-4>")
+        canvas.unbind_all("<Button-5>")
+
+    canvas.bind("<Enter>", _al_entrar)
+    canvas.bind("<Leave>", _al_salir)
 
 
 def _filtros_de_sonido_disponibles(tipos_que_ofrece_obs):
@@ -58,7 +91,7 @@ def _abrir_selector_nuevo_filtro(nombre_fuente, al_crear=None):
     selector = tk.Toplevel(E.ventana)
     selector.title("Agregar filtro")
     selector.configure(bg="#10141b")
-    selector.geometry("360x460")
+    selector.geometry("360x540")
     selector.transient(E.ventana)
     selector.grab_set()
 
@@ -88,6 +121,7 @@ def _abrir_selector_nuevo_filtro(nombre_fuente, al_crear=None):
     canvas_tipos.configure(yscrollcommand=scrollbar_tipos.set)
     canvas_tipos.pack(side="left", fill="both", expand=True)
     scrollbar_tipos.pack(side="right", fill="y")
+    _habilitar_scroll_con_rueda(canvas_tipos)
 
     primer_kind = opciones[0][2]
     var_tipo_elegido = tk.StringVar(value=primer_kind)
@@ -399,7 +433,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
     editor = tk.Toplevel(E.ventana)
     editor.title(f"Ajustes — {nombre_filtro}")
     editor.configure(bg="#10141b")
-    editor.geometry("400x480")
+    editor.geometry("400x560")
 
     tk.Label(
         editor, text=f"{nombre_fuente} · {nombre_filtro}",
@@ -422,6 +456,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
     canvas_ajustes.configure(yscrollcommand=scrollbar_ajustes.set)
     canvas_ajustes.pack(side="left", fill="both", expand=True)
     scrollbar_ajustes.pack(side="right", fill="y")
+    _habilitar_scroll_con_rueda(canvas_ajustes)
 
     # Nombre de campo -> función que devuelve su valor actual leído del
     # control correspondiente; se arma en el mismo orden en que se van
@@ -442,6 +477,15 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
     # Campo -> función(valor) que actualiza el control en pantalla SIN
     # volver a aplicar nada (para cuando el cambio vino de OBS).
     actualizadores = {}
+    # Campo -> Frame (fila) que lo contiene: sirve para poder mostrar
+    # u ocultar campos que sólo tienen sentido según el valor de OTRO
+    # campo (ver 'visible_si' en el esquema, por ejemplo el Nivel de
+    # supresión de Eliminación de ruido, que sólo se usa con Speex).
+    filas_por_clave = {}
+    # Se reemplaza más abajo por la función real si el filtro tiene
+    # esquema fijo con algún campo 'visible_si'; para el resto de los
+    # filtros (editor genérico) no hay nada que mostrar/ocultar.
+    _actualizar_visibilidad_condicional = lambda: None
 
     trabajo_sondeo = {"id": None}
 
@@ -458,6 +502,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
         except Exception as e:
             print(f"No se pudieron aplicar los ajustes del filtro '{nombre_filtro}': {e}")
             return
+        _actualizar_visibilidad_condicional()
         if tipo_filtro in C.CAMPOS_GANANCIA_FILTRO:
             # Este filtro puede estar cambiando la ganancia extra de la
             # fuente (ver CAMPOS_GANANCIA_FILTRO): recalcularla al
@@ -468,6 +513,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
     def _crear_barra(clave, etiqueta_texto, minimo, maximo, paso, sufijo, valor_inicial, es_entero):
         fila = tk.Frame(marco_campos, bg="#10141b")
         fila.pack(fill="x", pady=6)
+        filas_por_clave[clave] = fila
 
         cabecera_campo = tk.Frame(fila, bg="#10141b")
         cabecera_campo.pack(fill="x")
@@ -513,17 +559,23 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
             etq.config(text=f"{valor_mostrado:g}{sfj}")
         actualizadores[clave] = _actualizar_desde_afuera
 
-    def _crear_lista(clave, etiqueta_texto, valor_inicial):
+    def _crear_lista(clave, etiqueta_texto, valor_inicial, opciones_fijas=None):
         fila = tk.Frame(marco_campos, bg="#10141b")
         fila.pack(fill="x", pady=6)
+        filas_por_clave[clave] = fila
         tk.Label(
             fila, text=etiqueta_texto, bg="#10141b", fg="#8e9ab3", font=(E.FUENTE_UI, 9)
         ).pack(anchor="w")
 
-        opciones = _construir_opciones_sidechain()
+        # Con 'opciones_fijas' (por ejemplo Preajuste, Detector o
+        # Método) se usa esa lista tal cual; sin eso, se trata de la
+        # fuente de sidechain, cuyas opciones son dinámicas (las
+        # fuentes de audio que haya en la consola en este momento).
+        opciones = opciones_fijas if opciones_fijas is not None else _construir_opciones_sidechain()
         etiquetas_opciones = [o[0] for o in opciones]
         etiqueta_por_valor = {v: e for e, v in opciones}
         valor_por_etiqueta = {e: v for e, v in opciones}
+        valor_por_defecto_desconocido = opciones[0][1] if opciones else "none"
 
         var_combo = tk.StringVar(value=etiqueta_por_valor.get(valor_inicial, etiquetas_opciones[0]))
         combo = ttk.Combobox(
@@ -533,11 +585,57 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
         combo.pack(fill="x", pady=(2, 0))
         combo.bind("<<ComboboxSelected>>", lambda _e: aplicar())
 
-        controles[clave] = (lambda var=var_combo, m=valor_por_etiqueta: m.get(var.get(), "none"))
+        controles[clave] = (lambda var=var_combo, m=valor_por_etiqueta, d=valor_por_defecto_desconocido: m.get(var.get(), d))
         valores_conocidos[clave] = valor_inicial
 
         def _actualizar_desde_afuera(v, var=var_combo, m=etiqueta_por_valor, etqs=etiquetas_opciones):
             var.set(m.get(v, etqs[0]))
+        actualizadores[clave] = _actualizar_desde_afuera
+
+    def _crear_archivo(clave, etiqueta_texto, valor_inicial):
+        """Campo de ruta de archivo (por ahora, sólo lo usa el
+        'plugin_path' de la Extensión VST 2.x): un cuadro de texto de
+        sólo lectura con el path elegido más un botón "Examinar..."
+        que abre el selector de archivos del sistema operativo -no
+        hay forma de saber de antemano qué extensión de archivo de
+        plugin usa cada sistema (.dll en Windows, .vst/.vst3 en
+        macOS, etc.), así que el selector no filtra por tipo-."""
+        fila = tk.Frame(marco_campos, bg="#10141b")
+        fila.pack(fill="x", pady=6)
+        filas_por_clave[clave] = fila
+        tk.Label(
+            fila, text=etiqueta_texto, bg="#10141b", fg="#8e9ab3", font=(E.FUENTE_UI, 9)
+        ).pack(anchor="w")
+
+        marco_campo = tk.Frame(fila, bg="#10141b")
+        marco_campo.pack(fill="x", pady=(2, 0))
+
+        var_txt = tk.StringVar(value=valor_inicial or "")
+        entrada = tk.Entry(
+            marco_campo, textvariable=var_txt, bg="#1a202b", fg="white",
+            insertbackground="white", relief="flat", font=(E.FUENTE_UI, 9), state="readonly",
+            readonlybackground="#1a202b"
+        )
+        entrada.pack(side="left", fill="x", expand=True, ipady=3)
+
+        def _examinar():
+            elegido = filedialog.askopenfilename(
+                parent=editor, title=f"Elegir {etiqueta_texto}"
+            )
+            if elegido:
+                var_txt.set(elegido)
+                aplicar()
+
+        tk.Button(
+            marco_campo, text="Examinar…", command=_examinar,
+            bg="#3d4d66", fg="white", relief="flat", font=(E.FUENTE_UI, 8)
+        ).pack(side="right", padx=(6, 0))
+
+        controles[clave] = var_txt.get
+        valores_conocidos[clave] = valor_inicial
+
+        def _actualizar_desde_afuera(v, var=var_txt):
+            var.set(v or "")
         actualizadores[clave] = _actualizar_desde_afuera
 
     esquema = E.ESQUEMA_FILTROS_CONOCIDOS.get(tipo_filtro)
@@ -547,12 +645,42 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
             clave = campo["clave"]
             valor_inicial = _valor_obs_o_defecto(ajustes, clave, campo["defecto"])
             if campo["tipo"] == "lista":
-                _crear_lista(clave, campo["etiqueta"], valor_inicial)
+                _crear_lista(clave, campo["etiqueta"], valor_inicial, campo.get("opciones"))
+            elif campo["tipo"] == "archivo":
+                _crear_archivo(clave, campo["etiqueta"], valor_inicial)
             else:
                 _crear_barra(
                     clave, campo["etiqueta"], campo["minimo"], campo["maximo"],
                     campo["paso"], campo["sufijo"], valor_inicial, campo["tipo"] == "int"
                 )
+
+        # Campos que sólo se muestran según el valor de otro campo del
+        # mismo filtro (ver 'visible_si' en el esquema): se ocultan o
+        # muestran ahora con el valor inicial, y de nuevo cada vez que
+        # se aplica un cambio (ver el final de 'aplicar' más abajo),
+        # para que reaccionen al toque si el usuario cambia, por
+        # ejemplo, el Método de Eliminación de ruido.
+        def _actualizar_visibilidad_condicional():
+            for campo_dep in esquema:
+                condicion = campo_dep.get("visible_si")
+                if not condicion:
+                    continue
+                clave_ctrl, valor_esperado = condicion
+                fila_dep = filas_por_clave.get(campo_dep["clave"])
+                obtener_ctrl = controles.get(clave_ctrl)
+                if fila_dep is None or obtener_ctrl is None:
+                    continue
+                try:
+                    visible = obtener_ctrl() == valor_esperado
+                except Exception:
+                    visible = True
+                si_mapeada = bool(fila_dep.winfo_ismapped())
+                if visible and not si_mapeada:
+                    fila_dep.pack(fill="x", pady=6)
+                elif not visible and si_mapeada:
+                    fila_dep.pack_forget()
+
+        _actualizar_visibilidad_condicional()
 
         # Ajustes que trajo OBS pero que no forman parte del esquema
         # fijo (por ejemplo, versiones de OBS que le agreguen algún
@@ -659,6 +787,14 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
             if not _valores_equivalentes(valores_conocidos.get(clave), valor_actual):
                 valores_conocidos[clave] = valor_actual
                 actualizador(valor_actual)
+
+        # También se recalcula la visibilidad acá, no sólo al aplicar:
+        # si el Método de Eliminación de ruido (u otro campo con
+        # 'visible_si') se cambió desde DENTRO de OBS mientras este
+        # editor estaba abierto, el campo dependiente tiene que
+        # mostrarse/ocultarse igual, sin esperar a que el usuario
+        # toque algo acá.
+        _actualizar_visibilidad_condicional()
 
         trabajo_sondeo["id"] = editor.after(500, _sondear_cambios_externos)
 
