@@ -38,29 +38,6 @@ def cambiar_tema_interfaz(nuevo_tema):
     mod_configuracion.guardar_config_interfaz({"tema_interfaz": nuevo_tema})
 
 
-def _reconstruir_por_ajuste_barra():
-    E.miniaturas_cargadas.clear()
-    _reconstruir_interfaz_con_velo()
-
-
-def cambiar_degradado_barra(nuevo):
-    """Cantidad de degradado de la barra Moderna (Nulo/Sutil/Suave)."""
-    if nuevo not in E.DEGRADADOS_BARRA:
-        return
-    E.mod_degradado = nuevo
-    _reconstruir_por_ajuste_barra()
-    mod_configuracion.guardar_config_interfaz({"mod_degradado": nuevo})
-
-
-def cambiar_color_barra(nuevo):
-    """Esquema de color de la barra Moderna."""
-    if nuevo not in E.COLORES_BARRA:
-        return
-    E.mod_color_barra = nuevo
-    _reconstruir_por_ajuste_barra()
-    mod_configuracion.guardar_config_interfaz({"mod_color_barra": nuevo})
-
-
 def cambiar_tamano_icono(nuevo_tamano):
     """Se llama desde el combobox de la barra superior. Como los botones
     circulares y los pads del soundboard se dibujan en un Canvas de un

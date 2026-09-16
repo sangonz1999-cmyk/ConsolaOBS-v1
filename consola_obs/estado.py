@@ -117,13 +117,6 @@ def es_moderna():
     return tema_interfaz == "Moderna"
 
 
-# Ajustes de la barra Moderna (Ajustes → Apariencia).
-DEGRADADOS_BARRA = ("Nulo", "Sutil", "Suave")
-COLORES_BARRA = ("Verde", "Azul", "Naranja", "Violeta")
-mod_degradado = "Sutil"
-mod_color_barra = "Verde"
-
-
 def color_fondo_panel():
     """Fondo de paneles según el tema (más oscuro en Moderna)."""
     return C.MOD_FONDO if es_moderna() else "#10141b"

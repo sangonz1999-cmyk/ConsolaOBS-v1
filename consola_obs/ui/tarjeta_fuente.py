@@ -219,6 +219,11 @@ def _reubicar_fuentes(forzar=False):
     for idx, nombre in enumerate(E.orden_fuentes):
         if nombre not in E.fuentes:
             continue
+        try:
+            if not E.fuentes[nombre]["tarjeta_sombra"].winfo_exists():
+                continue
+        except Exception:
+            continue
         fila = idx // columnas
         col = idx % columnas
         tarjeta_sombra = E.fuentes[nombre]["tarjeta_sombra"]

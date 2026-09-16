@@ -295,6 +295,14 @@ MOD_ACENTO_OSCURO = "#1f5fd0"
 MOD_ACENTO_CLARO = "#7aa8ff"
 
 # ------------------------------------------------------------
+# BARRA MODERNA: EDITABLE
+# ------------------------------------------------------------
+# Esquema de color: "Verde" (el de siempre), "Azul", "Naranja" o "Violeta".
+# Degradado: "Nulo" (cortes duros), "Sutil" o "Suave" (mezclas largas).
+BARRA_MODERNA_COLOR = "Verde"
+BARRA_MODERNA_DEGRADADO = "Sutil"
+
+# ------------------------------------------------------------
 # GUÍA DEL MEDIDOR (tema Moderna): EDITABLE
 # ------------------------------------------------------------
 # Son los colores apagados que se ven ARRIBA del nivel como guía.
@@ -302,8 +310,8 @@ MOD_ACENTO_CLARO = "#7aa8ff"
 # fondo (8, 11, 16), menos se nota. La guía en gris (mute/otra escena)
 # usa la segunda paleta.
 GUIA_BARRA_COLOR = {
-    "rojo": (82, 1, 0), "amarillo": (80, 82, 0), "verde": (0, 82, 3),
+    "rojo": (125, 18, 26), "amarillo": (110, 82, 13), "verde": (23, 100, 30),
 }
 GUIA_BARRA_GRIS = {
-    "rojo": (12, 13, 15), "amarillo": (11, 12, 14), "verde": (10, 11, 13),
+    "rojo": (65, 65, 65), "amarillo": (130, 130, 130), "verde": (100, 100, 100),
 }

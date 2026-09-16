@@ -547,6 +547,11 @@ def _reubicar_pads():
         celda = E._celdas_pads.get(i)
         if celda is None:
             continue
+        try:
+            if not celda.winfo_exists():
+                continue
+        except Exception:
+            continue
         celda.grid_forget()
         celda.grid(row=i // columnas, column=i % columnas, padx=6, pady=6)
     mod_ui_ventana.actualizar_scroll_soundboard()

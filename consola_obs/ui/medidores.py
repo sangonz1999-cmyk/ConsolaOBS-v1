@@ -109,7 +109,9 @@ def _mezclar_rgb(c1, c2, t):
 
 
 # Esquemas de color de la barra (zona alta/media/baja). El clip de
-# saturación siempre es rojo (gris claro en variante gris).
+# saturación siempre es rojo (gris claro en variante gris). Cuál se usa
+# y con cuánto degradado se elige en constantes.py
+# (BARRA_MODERNA_COLOR / BARRA_MODERNA_DEGRADADO).
 ESQUEMAS_BARRA = {
     "Verde": {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)},
     "Azul": {"alta": (156, 192, 255), "media": (47, 124, 246), "baja": (23, 74, 148)},
@@ -118,14 +120,18 @@ ESQUEMAS_BARRA = {
 }
 # Ancho de mezcla (dB) por ajuste de degradado: (borde alto, borde medio).
 MEZCLAS_DEGRADADO = {"Nulo": (0.0, 0.0), "Sutil": (1.5, 2.0), "Suave": (6.0, 10.0)}
+# Gris funcional (mute/otra escena): fijo, no depende del esquema.
+_PALETA_BARRA_GRIS = {
+    "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
+}
 
 
 def _esquema_barra_actual():
-    return ESQUEMAS_BARRA.get(E.mod_color_barra, ESQUEMAS_BARRA["Verde"])
+    return ESQUEMAS_BARRA.get(C.BARRA_MODERNA_COLOR, ESQUEMAS_BARRA["Verde"])
 
 
 def _mezcla_degradado_actual():
-    return MEZCLAS_DEGRADADO.get(E.mod_degradado, MEZCLAS_DEGRADADO["Sutil"])
+    return MEZCLAS_DEGRADADO.get(C.BARRA_MODERNA_DEGRADADO, MEZCLAS_DEGRADADO["Sutil"])
 _PALETA_BARRA_COLOR_TENUE = C.GUIA_BARRA_COLOR
 _PALETA_BARRA_GRIS_TENUE = C.GUIA_BARRA_GRIS
 
