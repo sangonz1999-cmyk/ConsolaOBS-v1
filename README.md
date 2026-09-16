@@ -404,12 +404,11 @@ destruye ni se recrea, así no hay nada que parpadee.
 
 
 ## 14. PERSISTENCIA (JSON)
-Archivos (se guardan en CARPETA_SCRIPT = carpeta del .py/.exe):
+Archivos (se guardan en `config/` junto al .py/.exe):
 
-- config_conexion.json   {host, puerto, password}
-- config_soundboard.json {num_pads_soundboard, pads: {indice: {nombre, archivo, imagen, color}}}
-- config_interfaz.json   {orientacion_paneles, orden_paneles, tamano_icono, colores_fuentes, fuentes_principales, posicion_divisor_*, geometria_ventana, columnas_soundboard?}
-- config_(conX|ajustes) etc. opcionales.
+- config/config_conexion.json   {host, puerto, password}
+- config/config_soundboard.json {num_pads_soundboard, pads: {indice: {nombre, archivo, imagen, color}}}
+- config/config_interfaz.json   {orientacion_paneles, orden_paneles, tamano_icono, colores_fuentes, fuentes_principales, posicion_divisor_*, geometria_ventana, columnas_soundboard?}
 
 Se cargan al arrancar (si existen) con try/except, y se guardan al
 cerrar (al_cerrar) junto con la posición/geometría de la ventana y la
@@ -511,5 +510,5 @@ para que los JSON de configuración y los assets persistan junto al
 ## Estado actual del proyecto
 - Entrada: `main.py` → paquete `consola_obs/` (ver Estructura arriba).
 - El .exe se genera con `compilar.bat` en esta misma carpeta (`ConsolaOBS.exe`, no se versiona).
-- La contraseña de OBS vive en `config_conexion.json` (local, ignorado por git); el resto de la config en `config_soundboard.json` y `config_interfaz.json`.
+- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git); el resto de la config en `config/config_soundboard.json` y `config/config_interfaz.json`.
 

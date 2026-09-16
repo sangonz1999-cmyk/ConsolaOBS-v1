@@ -17,9 +17,11 @@ if getattr(sys, "frozen", False):
     CARPETA_SCRIPT = os.path.dirname(os.path.abspath(sys.executable))
 else:
     CARPETA_SCRIPT = _RAIZ_PROYECTO
-ARCHIVO_CONEXION = os.path.join(CARPETA_SCRIPT, "config_conexion.json")
-ARCHIVO_SOUNDBOARD = os.path.join(CARPETA_SCRIPT, "config_soundboard.json")
-ARCHIVO_INTERFAZ = os.path.join(CARPETA_SCRIPT, "config_interfaz.json")
+ARCHIVO_CONEXION = os.path.join(CARPETA_SCRIPT, "config", "config_conexion.json")
+ARCHIVO_SOUNDBOARD = os.path.join(CARPETA_SCRIPT, "config", "config_soundboard.json")
+ARCHIVO_INTERFAZ = os.path.join(CARPETA_SCRIPT, "config", "config_interfaz.json")
+
+CARPETA_CONFIG = os.path.join(CARPETA_SCRIPT, "config")
 
 CARPETA_ASSETS = os.path.join(CARPETA_SCRIPT, "assets")
 CARPETA_ICONOS = os.path.join(CARPETA_ASSETS, "iconos")
@@ -28,9 +30,20 @@ CARPETA_FUENTES_TIPOGRAFIA = os.path.join(CARPETA_ASSETS, "fuentes")
 CARPETA_SONIDOS_PAD = os.path.join(CARPETA_ASSETS, "Sondidos_pad")
 CARPETA_IMAGENES_PAD = os.path.join(CARPETA_ASSETS, "Imagenes_pad")
 
-for _carpeta in (CARPETA_ASSETS, CARPETA_ICONOS, CARPETA_FONDOS, CARPETA_FUENTES_TIPOGRAFIA,
+for _carpeta in (CARPETA_CONFIG, CARPETA_ASSETS, CARPETA_ICONOS, CARPETA_FONDOS, CARPETA_FUENTES_TIPOGRAFIA,
                  CARPETA_SONIDOS_PAD, CARPETA_IMAGENES_PAD):
     try:
         os.makedirs(_carpeta, exist_ok=True)
+    except Exception:
+        pass
+
+# Migración: antes los JSON vivían sueltos junto al .py/.exe.
+# Si existen ahí y todavía no están en config/, se mudan solos.
+for _nuevo, _viejo in ((ARCHIVO_CONEXION, os.path.join(CARPETA_SCRIPT, "config_conexion.json")),
+                       (ARCHIVO_SOUNDBOARD, os.path.join(CARPETA_SCRIPT, "config_soundboard.json")),
+                       (ARCHIVO_INTERFAZ, os.path.join(CARPETA_SCRIPT, "config_interfaz.json"))):
+    try:
+        if os.path.exists(_viejo) and not os.path.exists(_nuevo):
+            os.rename(_viejo, _nuevo)
     except Exception:
         pass

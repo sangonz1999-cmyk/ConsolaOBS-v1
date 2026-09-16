@@ -10,5 +10,6 @@ build/
 *.exe
 # Configuracion local (config_conexion.json contiene la contrasena de OBS)
 config_*.json
+config/*.json
 .DS_Store
 Thumbs.db

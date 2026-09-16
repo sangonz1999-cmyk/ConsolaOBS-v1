@@ -64,26 +64,20 @@ def _soltar_panel(nombre_actual, event):
         })
 
 
-# El divisor se mueve SÓLO entre posiciones fijas (snap): la ventana se
-# divide en POSICIONES_DIVISOR partes iguales y el sash salta a la más
-# cercana al mouse. Sin posiciones intermedias no hay estados a medio
-# pintar.
-POSICIONES_DIVISOR = 30
+# El divisor se mueve LIBRE (infinitas posiciones): sigue al mouse
+# píxel por píxel dentro del rango útil. Sin snap a posiciones fijas.
 MIN_PANEL_FUENTES = 140
 MIN_PANEL_SOUNDBOARD = 220
 
 
-def _snap_divisor(valor, total, minimo_antes, minimo_despues):
-    """Posición entera más cercana a `valor` dentro del rango útil,
-    considerando sólo las POSICIONES_DIVISOR fijas. None si no hay
-    recorrido válido."""
+def _limitar_divisor(valor, total, minimo_antes, minimo_despues):
+    """Posición entera de `valor` limitada al rango útil.
+    None si no hay recorrido válido."""
     lo = max(0, minimo_antes)
     hi = min(total, total - minimo_despues)
     if hi <= lo or total <= 1:
         return None
-    puntos = [lo + i * (hi - lo) / (POSICIONES_DIVISOR - 1)
-              for i in range(POSICIONES_DIVISOR)]
-    return int(round(min(puntos, key=lambda p: abs(p - valor))))
+    return int(round(max(lo, min(hi, valor))))
 
 
 def _presionar_divisor(event):
@@ -233,11 +227,11 @@ def _mover_divisor(event):
         orden = list(E.orden_paneles or ["fuentes", "soundboard"])
         min_antes = mins.get(orden[0], 140)
         min_despues = mins.get(orden[-1], 140)
-        nx = _snap_divisor(px, E.cuerpo.winfo_width(), min_antes, min_despues)
-        ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
+        nx = _limitar_divisor(px, E.cuerpo.winfo_width(), min_antes, min_despues)
+        ny = _limitar_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
         if nx is None or ny is None:
             return
-        # Sólo se actúa si cambió de posición fija. FASE 2: se coloca
+        # Sólo se actúa si cambió de píxel. FASE 2: se coloca
         # el sash y se renderiza todo en segundo plano (tapado por la
         # foto de la FASE 1), sin mostrar nada hasta la FASE 3. Sin
         # timers en el medio: la copia queda hasta soltar.
