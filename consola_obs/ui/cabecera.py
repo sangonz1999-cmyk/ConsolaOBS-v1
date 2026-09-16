@@ -1,8 +1,10 @@
+import os
 import tkinter as tk
 
-from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageTk
+from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageOps, ImageTk
 from consola_obs import estado as E
 from consola_obs import constantes as C
+from consola_obs import rutas as R
 from consola_obs.ui import dibujo as mod_ui_dibujo
 
 
@@ -47,10 +49,10 @@ def _redibujar_degradado_cabecera():
     # pasos=14 en vez de 48/60: a este tamaño de franja (unos 74px de
     # alto) el ojo no distingue 14 escalones de color de 48, pero son
     # una fracción de los rectángulos a crear cada vez que se redibuja.
-    ids = mod_ui_dibujo._gradiente_vertical(E.cabecera_fondo, 0, 0, ancho, C.ALTO_CABECERA, C.COLOR_CABECERA_ARRIBA, C.COLOR_CABECERA_ABAJO, pasos=14)
+    ids = mod_ui_dibujo._gradiente_vertical(E.cabecera_fondo, 0, 0, ancho, C.ALTO_CABECERA, E.color_cabecera_arriba(), E.color_cabecera_abajo(), pasos=14)
     for iid in ids:
         E.cabecera_fondo.addtag_withtag("fondo_cabecera", iid)
-    ids_acento = mod_ui_dibujo._gradiente_horizontal(E.cabecera_fondo, 0, C.ALTO_CABECERA - 3, ancho, C.ALTO_CABECERA, C.MOD_ACENTO if E.es_moderna() else "#2fd693", C.MOD_ACENTO_OSCURO if E.es_moderna() else "#17b8b0", pasos=14)
+    ids_acento = mod_ui_dibujo._gradiente_horizontal(E.cabecera_fondo, 0, C.ALTO_CABECERA - 3, ancho, C.ALTO_CABECERA, E.color_acento(), E.color_acento_oscuro(), pasos=14)
     for iid in ids_acento:
         E.cabecera_fondo.addtag_withtag("fondo_cabecera", iid)
     E.cabecera_fondo.tag_lower("fondo_cabecera")
@@ -101,7 +103,7 @@ def _dibujar_engranaje(canvas, cx, cy, radio, color="#9fb0d8"):
         )
         canvas.create_oval(
             x - radio_hueco, y - radio_hueco, x + radio_hueco, y + radio_hueco,
-            fill=C.COLOR_CABECERA_ABAJO, outline=""
+            fill=E.color_cabecera_abajo(), outline=""
         )
 
 
@@ -162,7 +164,7 @@ def _redibujar_icono_engranaje(event=None):
         E.marco_engranaje._ult_repintado = (lado_ahora, E.marco_engranaje.winfo_height())
     E.marco_engranaje.delete("all")
     lado = E.marco_engranaje.winfo_width() or 46
-    E.marco_engranaje.config(bg=C.COLOR_CABECERA_ARRIBA)
+    E.marco_engranaje.config(bg=E.color_cabecera_arriba())
     if HAY_PILLOW:
         color = "#0c111b" if E._estado_engranaje["abierto"] else (
             "#d7e6ff" if E._estado_engranaje["hover"] else "#aebbd8"
@@ -176,7 +178,7 @@ def _redibujar_icono_engranaje(event=None):
             return
         except Exception:
             pass
-    color = "#2fd693" if (E._estado_engranaje["hover"] or E._estado_engranaje["abierto"]) else "#9fb0d8"
+    color = E.color_acento() if (E._estado_engranaje["hover"] or E._estado_engranaje["abierto"]) else "#9fb0d8"
     margen = max(2, round(lado * 0.14))
     _dibujar_engranaje(E.marco_engranaje, lado / 2, lado / 2, lado / 2 - margen, color=color)
 
@@ -219,7 +221,7 @@ def _fila_menu(texto, widget_ancho=None):
 def _entrada_menu(padre, **extras):
     entrada = tk.Entry(
         padre, bg=C.COLOR_MENU_CAMPO, fg="white", insertbackground="white", relief="flat",
-        highlightthickness=1, highlightbackground="#2b3548", highlightcolor="#2fd693",
+        highlightthickness=1, highlightbackground="#2b3548", highlightcolor=E.color_acento(),
         font=(E.FUENTE_UI, 10), **extras
     )
     entrada.pack(side="left", fill="x", expand=True, ipady=4)
@@ -286,3 +288,68 @@ def _seguir_ventana_con_menu(event=None):
         return
     if _menu_ajustes_visible():
         _posicionar_menu_ajustes()
+
+
+def repintar_logo_cabecera():
+    """Dibuja el logo: el PNG si existe, o el ecualizador con el color
+    de acento del tema actual."""
+    try:
+        E.marco_icono_cabecera.delete("all")
+    except Exception:
+        return
+    E._ruta_logo_cabecera = os.path.join(R.CARPETA_ICONOS, "logo_cabecera.png")
+    if HAY_PILLOW and os.path.exists(E._ruta_logo_cabecera):
+        try:
+            _img_logo = Image.open(E._ruta_logo_cabecera).convert("RGBA")
+            _img_logo = ImageOps.contain(_img_logo, (44, 44))
+            E._imagen_logo_cabecera["foto"] = ImageTk.PhotoImage(_img_logo)
+            E.marco_icono_cabecera.create_image(24, 24, image=E._imagen_logo_cabecera["foto"])
+            return
+        except Exception:
+            pass
+    else:
+        try:
+            mod_ui_dibujo._dibujar_rect_redondeado(
+                E.marco_icono_cabecera, 2, 2, 46, 46, radio=12,
+                fill="#283040", outline="#394151", width=1)
+        except Exception:
+            pass
+    try:
+        mod_ui_dibujo._dibujar_icono_ecualizador(
+            E.marco_icono_cabecera, 24, 24, 26, color=E.color_acento())
+    except Exception:
+        pass
+
+
+def aplicar_tema_cabecera():
+    """Aplica el tema actual a la barra superior (se llama al arrancar y
+    al cambiar de interfaz): fondos grises/azulados, degradado, logo,
+    engranaje y chip de estado."""
+    C.COLOR_CABECERA_ARRIBA = E.color_cabecera_arriba()
+    C.COLOR_CABECERA_ABAJO = E.color_cabecera_abajo()
+    try:
+        E.cabecera_fondo.config(bg=C.COLOR_CABECERA_ARRIBA)
+        E.cabecera.config(bg=C.COLOR_CABECERA_ARRIBA)
+        E.marco_icono_cabecera.config(bg=C.COLOR_CABECERA_ARRIBA)
+        E.marco_titulos_cabecera.config(bg=C.COLOR_CABECERA_ARRIBA)
+        E.titulo.config(bg=C.COLOR_CABECERA_ARRIBA)
+        E.subtitulo.config(bg=C.COLOR_CABECERA_ARRIBA)
+    except Exception:
+        pass
+    repintar_logo_cabecera()
+    try:
+        _redibujar_degradado_cabecera()
+    except Exception:
+        pass
+    try:
+        _redibujar_icono_engranaje()
+    except Exception:
+        pass
+    try:
+        if E.conectado:
+            E.estado.config(fg=E.color_acento())
+            E.estado_chip.config(highlightbackground=E.color_acento())
+        else:
+            E.boton_conectar.config(bg=E.color_acento(), activebackground=E.color_acento_claro())
+    except Exception:
+        pass

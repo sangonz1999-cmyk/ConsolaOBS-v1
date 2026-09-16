@@ -126,6 +126,29 @@ def color_barra_titulo():
     """Barra de títulos de panel según el tema."""
     return C.MOD_CABECERA if es_moderna() else "#151a24"
 
+
+def color_cabecera_arriba():
+    """Fondo superior de la barra principal (gris oscuro en Moderna)."""
+    return "#2b2b2b" if es_moderna() else "#1c2637"
+
+
+def color_cabecera_abajo():
+    """Fondo inferior de la barra principal (gris oscuro en Moderna)."""
+    return "#1c1c1c" if es_moderna() else "#0c111b"
+
+
+def color_acento():
+    """Acento principal: verde de siempre, azul en Moderna."""
+    return C.MOD_ACENTO if es_moderna() else "#2fd693"
+
+
+def color_acento_oscuro():
+    return C.MOD_ACENTO_OSCURO if es_moderna() else "#17b8b0"
+
+
+def color_acento_claro():
+    return C.MOD_ACENTO_CLARO if es_moderna() else "#4fe3ae"
+
 orientacion_paneles = "vertical"                                             
 orden_paneles = ["fuentes", "soundboard"]                          
 

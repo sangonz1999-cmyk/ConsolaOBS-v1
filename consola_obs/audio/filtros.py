@@ -170,7 +170,7 @@ def _abrir_selector_nuevo_filtro(nombre_fuente, al_crear=None):
 
     tk.Button(
         marco_botones, text="Agregar", command=_confirmar,
-        bg="#2fd693", fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
+        bg=E.color_acento(), fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
     ).pack(side="right", ipadx=8)
 
     entrada_nombre_filtro.focus_set()
@@ -307,7 +307,7 @@ def abrir_filtros(nombre):
 
     tk.Button(
         marco_botones_inferior, text="➕ Agregar filtro", command=lambda: _abrir_selector_nuevo_filtro(nombre, _al_crear_filtro_nuevo),
-        bg="#2fd693", fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
+        bg=E.color_acento(), fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
     ).pack(side="left", padx=(0, 6))
 
     tk.Button(
@@ -476,7 +476,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
         ).pack(side="left")
         valor_mostrado_inicial = round(float(valor_inicial)) if es_entero else float(valor_inicial)
         etiqueta_valor = tk.Label(
-            cabecera_campo, text=f"{valor_mostrado_inicial:g}{sufijo}", bg="#10141b", fg="#2fd693",
+            cabecera_campo, text=f"{valor_mostrado_inicial:g}{sufijo}", bg="#10141b", fg=E.color_acento_claro() if E.es_moderna() else "#2fd693",
             font=(E.FUENTE_UI, 9, "bold")
         )
         etiqueta_valor.pack(side="right")
@@ -495,8 +495,8 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
         control_slider = tk.Scale(
             fila, from_=minimo, to=maximo, resolution=paso,
             orient="horizontal", showvalue=False, variable=var_num, command=_al_mover,
-            bg="#2fd693", fg="white", troughcolor="#293244",
-            highlightthickness=0, activebackground="#4fe3ae", sliderrelief="flat",
+            bg=E.color_acento(), fg="white", troughcolor="#293244",
+            highlightthickness=0, activebackground=E.color_acento_claro(), sliderrelief="flat",
             sliderlength=18, width=12
         )
         control_slider.pack(fill="x")
@@ -625,7 +625,7 @@ def _abrir_editor_ajustes_filtro(nombre_fuente, nombre_filtro):
 
     tk.Button(
         editor, text="Aplicar", command=_aplicar_y_cerrar,
-        bg="#2fd693", fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
+        bg=E.color_acento(), fg="#131825", relief="flat", font=(E.FUENTE_UI, 9, "bold")
     ).pack(pady=10, ipadx=16, ipady=3)
 
     # ------------------------------------------------------------------

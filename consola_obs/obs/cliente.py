@@ -178,13 +178,13 @@ def desconectar_obs():
 
 def actualizar_estado_conexion():
     if E.conectado:
-        E.estado.config(text="● CONECTADO", fg="#2fd693")
-        E.estado_chip.config(highlightbackground="#2fd693")
+        E.estado.config(text="● CONECTADO", fg=E.color_acento())
+        E.estado_chip.config(highlightbackground=E.color_acento())
         E.boton_conectar.config(text="DESCONECTAR", bg="#ff5567", activebackground="#cb3542")
     else:
         E.estado.config(text="● DESCONECTADO", fg="#ff5d6c")
         E.estado_chip.config(highlightbackground="#3f4a5e")
-        E.boton_conectar.config(text="CONECTAR", bg="#2fd693", activebackground="#4fe3ae")
+        E.boton_conectar.config(text="CONECTAR", bg=E.color_acento(), activebackground=E.color_acento_claro())
 
 
 def _asegurar_fuente_en_todas_las_escenas(nombre_fuente):

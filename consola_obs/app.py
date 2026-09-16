@@ -280,8 +280,8 @@ def main():
 
 
     C.ALTO_CABECERA = 80
-    C.COLOR_CABECERA_ARRIBA = "#1c2637"
-    C.COLOR_CABECERA_ABAJO = "#0c111b"
+    C.COLOR_CABECERA_ARRIBA = E.color_cabecera_arriba()
+    C.COLOR_CABECERA_ABAJO = E.color_cabecera_abajo()
 
     E.cabecera_fondo = tk.Canvas(E.ventana, height=C.ALTO_CABECERA, bg=C.COLOR_CABECERA_ARRIBA, highlightthickness=0)
     E.cabecera_fondo.pack(fill="x")
@@ -301,17 +301,7 @@ def main():
     E.marco_icono_cabecera.pack(side="left", padx=(20, 12), pady=16)
 
     E._ruta_logo_cabecera = os.path.join(R.CARPETA_ICONOS, "logo_cabecera.png")
-    if HAY_PILLOW and os.path.exists(E._ruta_logo_cabecera):
-        try:
-            _img_logo = Image.open(E._ruta_logo_cabecera).convert("RGBA")
-            _img_logo = ImageOps.contain(_img_logo, (44, 44))
-            E._imagen_logo_cabecera["foto"] = ImageTk.PhotoImage(_img_logo)
-            E.marco_icono_cabecera.create_image(24, 24, image=E._imagen_logo_cabecera["foto"])
-        except Exception:
-            mod_ui_dibujo._dibujar_icono_ecualizador(E.marco_icono_cabecera, 24, 24, 34, color="#2fd693")
-    else:
-        mod_ui_dibujo._dibujar_rect_redondeado(E.marco_icono_cabecera, 2, 2, 46, 46, radio=12, fill="#283040", outline="#394151", width=1)
-        mod_ui_dibujo._dibujar_icono_ecualizador(E.marco_icono_cabecera, 24, 24, 26, color="#2fd693")
+    mod_ui_cabecera.repintar_logo_cabecera()
 
     E.marco_titulos_cabecera = tk.Frame(E.cabecera, bg=C.COLOR_CABECERA_ARRIBA)
     E.marco_titulos_cabecera.pack(side="left", pady=10)
@@ -422,8 +412,8 @@ def main():
     E._fila_acciones.pack(fill="x", padx=16, pady=(12, 4))
 
     E.boton_conectar = tk.Button(
-        E._fila_acciones, text="CONECTAR", bg="#2fd693", fg="#0c111b",
-        activebackground="#4fe3ae", activeforeground="#0c111b",
+        E._fila_acciones, text="CONECTAR", bg=E.color_acento(), fg="#0c111b",
+        activebackground=E.color_acento_claro(), activeforeground="#0c111b",
         relief="flat", bd=0, pady=7, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=mod_obs_cliente.conectar_obs
     )

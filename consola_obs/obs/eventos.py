@@ -199,7 +199,7 @@ def _sincronizar_volumen_remoto(nombre, vol_db):
     if vol_db <= E.UMBRAL_SILENCIO:
         widgets["db"].config(text="SILENCIO", fg="#828da6")
     else:
-        widgets["db"].config(text=f"{vol_db:.1f} dB", fg="#2fd693")
+        widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
 
 
 def on_input_audio_monitor_type_changed(datos):

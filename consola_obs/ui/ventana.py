@@ -12,6 +12,7 @@ from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
 from consola_obs.ui import medidores as mod_ui_medidores
+from consola_obs.ui import cabecera as mod_ui_cabecera
 
 
 def cambiar_tema_interfaz(nuevo_tema):
@@ -23,6 +24,17 @@ def cambiar_tema_interfaz(nuevo_tema):
     E.tema_interfaz = nuevo_tema
     E.miniaturas_cargadas.clear()
     _reconstruir_interfaz_con_velo()
+    try:
+        mod_ui_cabecera.aplicar_tema_cabecera()
+    except Exception:
+        pass
+    try:
+        for entrada in (getattr(E, "entrada_host", None), getattr(E, "entrada_puerto", None),
+                        getattr(E, "entrada_password", None)):
+            if entrada is not None:
+                entrada.config(highlightcolor=E.color_acento())
+    except Exception:
+        pass
     mod_configuracion.guardar_config_interfaz({"tema_interfaz": nuevo_tema})
 
 
