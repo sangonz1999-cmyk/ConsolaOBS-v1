@@ -560,6 +560,31 @@ def _crear_boton_circular(parent, texto, diametro, fuente_tam, color_fondo, coma
     return canvas
 
 
+_cache_circulo_blanco = {}
+
+
+def _imagen_circulo_blanco(radio):
+    """Perilla blanca con bordes suaves (supersampling + LANCZOS),
+    cacheada por radio. None sin Pillow (se usa óvalo de respaldo)."""
+    if not HAY_PILLOW:
+        return None
+    radio = max(4, int(radio))
+    if radio in _cache_circulo_blanco:
+        return _cache_circulo_blanco[radio]
+    try:
+        S = 4
+        lado = radio * 2 * S
+        img = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.ellipse([S, S, lado - S - 1, lado - S - 1],
+                  fill=(242, 245, 250, 255), outline=(154, 164, 178, 255), width=S)
+        foto = ImageTk.PhotoImage(img.resize((radio * 2, radio * 2), Image.LANCZOS))
+        _cache_circulo_blanco[radio] = foto
+        return foto
+    except Exception:
+        return None
+
+
 def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
     """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
     clickeable cuyo color marca el estado. Compatible con

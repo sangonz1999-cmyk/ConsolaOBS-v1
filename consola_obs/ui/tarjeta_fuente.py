@@ -29,28 +29,41 @@ class _FaderOBS:
         self.alto = max(60, int(alto))
         self.al_cambiar = al_cambiar
         self._db = -60.0
+        # Margen para que la perilla nunca se corte en los extremos.
+        self._margen = self.RADIO_PERILLA + 3
         self.canvas = tk.Canvas(parent, width=self.ANCHO, height=self.alto,
                                 bg=bg, highlightthickness=0, cursor="hand2")
         cx = self.ANCHO / 2
         self._cx = cx
-        self.canvas.create_rectangle(cx - 3, 4, cx + 3, self.alto - 4,
+        m = self._margen
+        self.canvas.create_rectangle(cx - 3, m, cx + 3, self.alto - m,
                                      fill="#2a3342", outline="")
         self.id_fill = self.canvas.create_rectangle(
-            cx - 3, self.alto - 4, cx + 3, self.alto - 4,
+            cx - 3, self.alto - m, cx + 3, self.alto - m,
             fill="#2f7cf6", outline="")
         r = self.RADIO_PERILLA
-        self.id_handle = self.canvas.create_oval(
-            cx - r, self.alto - 4 - r, cx + r, self.alto - 4 + r,
-            fill="#f2f5fa", outline="#9aa4b2")
+        foto = mod_ui_dibujo._imagen_circulo_blanco(r)
+        if foto is not None:
+            self.canvas.imagen_perilla = foto
+            self.id_handle = self.canvas.create_image(cx, self.alto - m, image=foto)
+            self._handle_es_foto = True
+        else:
+            self.id_handle = self.canvas.create_oval(
+                cx - r, self.alto - m - r, cx + r, self.alto - m + r,
+                fill="#f2f5fa", outline="#9aa4b2")
+            self._handle_es_foto = False
         self.canvas.bind("<ButtonPress-1>", self._al_arrastrar)
         self.canvas.bind("<B1-Motion>", self._al_arrastrar)
 
+    def _recorrido(self):
+        return max(1, self.alto - 2 * self._margen)
+
     def _y_de_db(self, db):
         db = max(-60.0, min(0.0, db))
-        return 4 + (-db / 60.0) * (self.alto - 8)
+        return self._margen + (-db / 60.0) * self._recorrido()
 
     def _db_de_y(self, y):
-        t = (max(4, min(self.alto - 4, y)) - 4) / max(1, self.alto - 8)
+        t = (max(self._margen, min(self.alto - self._margen, y)) - self._margen) / self._recorrido()
         return round(max(-60.0, min(0.0, -t * 60.0)) * 2) / 2
 
     def set(self, db):
@@ -72,8 +85,11 @@ class _FaderOBS:
     def _repintar(self):
         y = self._y_de_db(self._db)
         r = self.RADIO_PERILLA
-        self.canvas.coords(self.id_fill, self._cx - 3, y, self._cx + 3, self.alto - 4)
-        self.canvas.coords(self.id_handle, self._cx - r, y - r, self._cx + r, y + r)
+        self.canvas.coords(self.id_fill, self._cx - 3, y, self._cx + 3, self.alto - self._margen)
+        if self._handle_es_foto:
+            self.canvas.coords(self.id_handle, self._cx, y)
+        else:
+            self.canvas.coords(self.id_handle, self._cx - r, y - r, self._cx + r, y + r)
 
     def _al_arrastrar(self, event):
         self.set(self._db_de_y(event.y))
@@ -81,6 +97,20 @@ class _FaderOBS:
             self.al_cambiar(self._db)
         except Exception:
             pass
+
+
+def _color_mute(muted):
+    """Color del altavoz: rojo si muteado, o gris (más claro en Moderna)."""
+    if muted:
+        return "#ff5567"
+    return C.MOD_ICONO_APAGADO if E.es_moderna() else "#394151"
+
+
+def _color_monitor(tipo):
+    """Color del auricular según monitoreo (más claro el apagado en Moderna)."""
+    if tipo == "OBS_MONITORING_TYPE_NONE" and E.es_moderna():
+        return C.MOD_ICONO_APAGADO
+    return C.COLORES_MONITOREO.get(tipo, "#394151")
 
 
 def _ancho_preferido_fuente():
@@ -570,7 +600,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fila_iconos,
             "🔇" if muted else "🔊",
             medida_icono["fuente_boton"] + 4,
-            "#ff5567" if muted else C.MOD_APAGADO,
+            _color_mute(muted),
             lambda: cambiar_mute(nombre)
         )
         boton_mute.pack(side="left", padx=6)
@@ -579,7 +609,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fila_iconos,
             "🎧",
             medida_icono["fuente_boton"] + 4,
-            C.COLORES_MONITOREO.get(tipo_monitor, "#394151"),
+            _color_monitor(tipo_monitor),
             lambda: cambiar_monitor(nombre)
         )
         boton_monitor.pack(side="left", padx=6)
@@ -896,13 +926,13 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["mute"],
         texto_nuevo=("🔇" if muted else "🔊"),
-        color_nuevo=("#ff5567" if muted else "#394151")
+        color_nuevo=_color_mute(muted)
     )
 
     widgets["tipo_monitor"] = tipo_monitor
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["monitor"],
-        color_nuevo=C.COLORES_MONITOREO.get(tipo_monitor, "#394151")
+        color_nuevo=_color_monitor(tipo_monitor)
     )
 
     _actualizar_estado_gris(nombre)
@@ -920,7 +950,7 @@ def cambiar_mute(nombre):
         mod_ui_dibujo._actualizar_boton_circular(
             widgets["mute"],
             texto_nuevo=("🔇" if nuevo_estado else "🔊"),
-            color_nuevo=("#ff5567" if nuevo_estado else "#394151")
+            color_nuevo=_color_mute(nuevo_estado)
         )
         _actualizar_estado_gris(nombre)
     except Exception as e:
@@ -939,7 +969,7 @@ def _fijar_monitor(nombre, tipo):
         widgets = E.fuentes[nombre]
         widgets["tipo_monitor"] = tipo
         mod_ui_dibujo._actualizar_boton_circular(
-            widgets["monitor"], color_nuevo=C.COLORES_MONITOREO[tipo])
+            widgets["monitor"], color_nuevo=_color_monitor(tipo))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
 
