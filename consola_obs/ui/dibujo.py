@@ -586,15 +586,22 @@ def _crear_boton_circular(parent, texto, diametro, fuente_tam, color_fondo, coma
         ids_bisel_extra = [id_gloss, id_sombra_int]
         bisel_claro, bisel_oscuro = [id_gloss], [id_sombra_int]
 
-    # Íconos de mute (altavoz) y monitoreo (auriculares) como emoji de
-    # texto, igual que en la versión original de la consola: más simple
-    # y liviano que dibujarlos a mano vector por vector.
-    tipo_icono = "texto"
-    texto_id = canvas.create_text(
-        cx, cy, text=texto,
-        font=(E.FUENTE_ICONOS, max(9, min(fuente_tam, int(r * 0.80))), "bold"),
-        fill="white"
-    )
+    # Íconos de mute (altavoz) y monitoreo (auriculares) en vectorial
+    # (suave, sin pixelado); sin Pillow se cae al emoji de texto.
+    kind_inicial = {"🔇": "parlante_off", "🔊": "parlante_on", "🎧": "auricular"}.get(texto)
+    tam_icono = max(14, int(lado * 0.52))
+    foto_icono = _imagen_icono_audio(kind_inicial, tam_icono, "white") if kind_inicial else None
+    if foto_icono is not None:
+        canvas.imagen_icono_actual = foto_icono
+        texto_id = canvas.create_image(cx, cy, image=foto_icono)
+        tipo_icono = "vector"
+    else:
+        tipo_icono = "texto"
+        texto_id = canvas.create_text(
+            cx, cy, text=texto,
+            font=(E.FUENTE_ICONOS, max(9, min(fuente_tam, int(r * 0.80))), "bold"),
+            fill="white"
+        )
     ids_icono = [texto_id]
 
     def _click(_event):
@@ -608,6 +615,8 @@ def _crear_boton_circular(parent, texto, diametro, fuente_tam, color_fondo, coma
         "texto": texto_id,
         "iconos": ids_icono,
         "tipo_icono": tipo_icono,
+        "icon_kind": kind_inicial,
+        "icon_tam": tam_icono,
         "comando": comando,
         "usa_pillow": HAY_PILLOW,
         "lado": lado,
@@ -657,27 +666,99 @@ def _color_monitor(tipo):
     return C.COLORES_MONITOREO.get(tipo, "#394151")
 
 
+_cache_iconos_audio = {}
+
+
+def _imagen_icono_audio(kind, tam_px, color):
+    """Ícono plano (parlante/auricular) dibujado en vectorial a 4x y
+    reducido con LANCZOS: bordes suaves sin pixelado. kind =
+    parlante_on | parlante_off | auricular. Cacheado por
+    (kind, tamaño, color). None sin Pillow (texto de respaldo)."""
+    if not HAY_PILLOW:
+        return None
+    tam_px = max(12, int(tam_px))
+    color = {"white": "#ffffff", "black": "#000000"}.get(color, color)
+    clave = (kind, tam_px, color)
+    if clave in _cache_iconos_audio:
+        return _cache_iconos_audio[clave]
+    try:
+        rgb = _hex_a_rgb(color) + (255,)
+        S = 4
+        W = H = tam_px * S
+        u = W / 100.0
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        if kind in ("parlante_on", "parlante_off"):
+            d.rectangle([8 * u, 36 * u, 30 * u, 64 * u], fill=rgb)
+            d.polygon([(30 * u, 36 * u), (58 * u, 12 * u),
+                       (58 * u, 88 * u), (30 * u, 64 * u)], fill=rgb)
+            if kind == "parlante_on":
+                for x0, y0, x1, y1 in ((60 * u, 26 * u, 88 * u, 74 * u),
+                                       (68 * u, 36 * u, 96 * u, 64 * u)):
+                    d.arc([x0, y0, x1, y1], start=-55, end=55,
+                          fill=rgb, width=max(2, int(6 * u)))
+        else:
+            d.ellipse([14 * u, 6 * u, 86 * u, 94 * u], fill=rgb)
+            d.ellipse([25 * u, 17 * u, 75 * u, 83 * u], fill=(0, 0, 0, 0))
+            d.rectangle([0, 56 * u, W, H], fill=(0, 0, 0, 0))
+            for x0, x1 in ((8 * u, 25 * u), (75 * u, 92 * u)):
+                d.rounded_rectangle([x0, 54 * u, x1, 86 * u],
+                                    radius=int(6 * u), fill=rgb)
+        foto = ImageTk.PhotoImage(img.resize((tam_px, tam_px), Image.LANCZOS))
+    except Exception:
+        return None
+    if len(_cache_iconos_audio) > 200:
+        _cache_iconos_audio.clear()
+    _cache_iconos_audio[clave] = foto
+    return foto
+
+
+def _repintar_icono_plano(etiqueta):
+    foto = _imagen_icono_audio(etiqueta.kind_icono, etiqueta.tam_icono, etiqueta.color_icono)
+    if foto is not None:
+        etiqueta.imagen_icono = foto
+        etiqueta.config(image=foto)
+    else:
+        etiqueta.config(image="", text=etiqueta.texto_respaldo)
+
+
 def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
     """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
-    clickeable cuyo color marca el estado. Compatible con
+    clickeable cuyo color marca el estado. Dibuja el ícono en vectorial
+    (sin pixelado) o cae al emoji de texto sin Pillow. Compatible con
     _actualizar_boton_circular (texto/color)."""
-    etiqueta = tk.Label(
-        parent, text=texto, bg=parent["bg"], fg=color,
-        font=(E.FUENTE_EMOJI, fuente_tam), cursor="hand2"
-    )
+    etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
+    etiqueta.kind_icono = {"🔇": "parlante_off", "🔊": "parlante_on"}.get(texto, "auricular")
+    etiqueta.tam_icono = max(14, int(fuente_tam * 1.6))
+    etiqueta.color_icono = color
+    etiqueta.texto_respaldo = texto
     etiqueta.bind("<Button-1>", lambda _e: comando())
+    _repintar_icono_plano(etiqueta)
+    if not HAY_PILLOW:
+        etiqueta.config(font=(E.FUENTE_EMOJI, fuente_tam))
     return etiqueta
 
 
 def _actualizar_boton_circular(canvas, texto_nuevo=None, color_nuevo=None):
     if getattr(canvas, "es_plano", False):
-        if texto_nuevo is not None:
-            canvas.config(text=texto_nuevo)
+        if texto_nuevo in ("🔇", "🔊", "🎧"):
+            canvas.kind_icono = {"🔇": "parlante_off", "🔊": "parlante_on",
+                                 "🎧": "auricular"}[texto_nuevo]
+            canvas.texto_respaldo = texto_nuevo
         if color_nuevo is not None:
-            canvas.config(fg=color_nuevo)
+            canvas.color_icono = color_nuevo
+        _repintar_icono_plano(canvas)
         return
     datos = canvas.datos_boton
+    if datos.get("tipo_icono") == "vector" and HAY_PILLOW and texto_nuevo in ("🔇", "🔊", "🎧"):
+        datos["icon_kind"] = {"🔇": "parlante_off", "🔊": "parlante_on",
+                              "🎧": "auricular"}[texto_nuevo]
+        texto_nuevo = None
+        foto = _imagen_icono_audio(datos.get("icon_kind"), datos.get("icon_tam", 20), "white")
+        if foto is not None:
+            canvas.itemconfig(datos["texto"], image=foto)
+            canvas.imagen_icono_actual = foto
     if texto_nuevo is not None and datos.get("texto") is not None:
         canvas.itemconfig(datos["texto"], text=texto_nuevo)
     if color_nuevo is not None:

@@ -311,7 +311,7 @@ BARRA_MODERNA = {"alta": (227, 59, 87), "media": (229, 175, 36), "baja": (55, 21
 BARRA_MODERNA_MEZCLA = (1.5, 2.0)
 # Gris de la barra (mute/otra escena), también con RGB directo.
 # OJO: las claves acá son alta/media/baja (igual que BARRA_MODERNA).
-BARRA_MODERNA_GRIS = {"alta": (65, 65, 65), "media": (210, 210, 210), "baja": (210, 210, 210)}
+BARRA_MODERNA_GRIS = {"alta": (180, 180, 180), "media": (210, 210, 210), "baja": (210, 210, 210)}
 
 # ------------------------------------------------------------
 # GUÍA DEL MEDIDOR (tema Moderna): EDITABLE
@@ -326,5 +326,5 @@ GUIA_BARRA_COLOR = {
 # OJO: las claves de la guía son rojo/amarillo/verde (las 3 zonas
 # vistas como colores, igual que GUIA_BARRA_COLOR de arriba).
 GUIA_BARRA_GRIS = {
-    "rojo": (180, 180, 180), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
+    "rojo": (65, 65, 65), "amarillo": (130, 130, 130), "verde": (100, 100, 100),
 }
