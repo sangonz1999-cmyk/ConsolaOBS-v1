@@ -100,6 +100,13 @@ def main():
     if E.tema_interfaz not in E.TEMAS_INTERFAZ:
         E.tema_interfaz = "Profesional"
 
+    E.mod_degradado = E.config_interfaz_previa.get("mod_degradado", "Sutil")
+    if E.mod_degradado not in E.DEGRADADOS_BARRA:
+        E.mod_degradado = "Sutil"
+    E.mod_color_barra = E.config_interfaz_previa.get("mod_color_barra", "Verde")
+    if E.mod_color_barra not in E.COLORES_BARRA:
+        E.mod_color_barra = "Verde"
+
     E.orientacion_paneles = E.config_interfaz_previa.get("orientacion_paneles", "vertical")
     if E.orientacion_paneles not in ("vertical", "horizontal"):
         E.orientacion_paneles = "vertical"
@@ -484,6 +491,34 @@ def main():
     E.selector_tema.bind(
         "<<ComboboxSelected>>",
         lambda e: mod_ui_ventana.cambiar_tema_interfaz(E.variable_tema.get())
+    )
+
+    E.variable_degradado = tk.StringVar(value=E.mod_degradado)
+    E.selector_degradado = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Degradado"),
+        textvariable=E.variable_degradado,
+        values=list(E.DEGRADADOS_BARRA),
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_degradado.pack(side="left", fill="x", expand=True)
+    E.selector_degradado.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_ui_ventana.cambiar_degradado_barra(E.variable_degradado.get())
+    )
+
+    E.variable_color_barra = tk.StringVar(value=E.mod_color_barra)
+    E.selector_color_barra = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Color barra"),
+        textvariable=E.variable_color_barra,
+        values=list(E.COLORES_BARRA),
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_color_barra.pack(side="left", fill="x", expand=True)
+    E.selector_color_barra.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_ui_ventana.cambiar_color_barra(E.variable_color_barra.get())
     )
 
     mod_ui_cabecera._seccion_menu("AUDIO")

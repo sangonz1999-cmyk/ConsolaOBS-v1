@@ -108,36 +108,46 @@ def _mezclar_rgb(c1, c2, t):
     return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
 
 
-# Paletas de la barra OBS: brillante (nivel). La GUÍA (tenue) vive en
-# constantes.py (GUIA_BARRA_COLOR / GUIA_BARRA_GRIS) para editarla fácil.
-_PALETA_BARRA_COLOR = {
-    "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
+# Esquemas de color de la barra (zona alta/media/baja). El clip de
+# saturación siempre es rojo (gris claro en variante gris).
+ESQUEMAS_BARRA = {
+    "Verde": {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)},
+    "Azul": {"alta": (156, 192, 255), "media": (47, 124, 246), "baja": (23, 74, 148)},
+    "Naranja": {"alta": (255, 82, 48), "media": (246, 164, 47), "baja": (180, 110, 20)},
+    "Violeta": {"alta": (255, 120, 200), "media": (170, 120, 250), "baja": (100, 70, 180)},
 }
-_PALETA_BARRA_GRIS = {
-    "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
-}
+# Ancho de mezcla (dB) por ajuste de degradado: (borde alto, borde medio).
+MEZCLAS_DEGRADADO = {"Nulo": (0.0, 0.0), "Sutil": (1.5, 2.0), "Suave": (6.0, 10.0)}
+
+
+def _esquema_barra_actual():
+    return ESQUEMAS_BARRA.get(E.mod_color_barra, ESQUEMAS_BARRA["Verde"])
+
+
+def _mezcla_degradado_actual():
+    return MEZCLAS_DEGRADADO.get(E.mod_degradado, MEZCLAS_DEGRADADO["Sutil"])
 _PALETA_BARRA_COLOR_TENUE = C.GUIA_BARRA_COLOR
 _PALETA_BARRA_GRIS_TENUE = C.GUIA_BARRA_GRIS
 
 
-def _color_zona_barra(db, paleta):
-    """Color para un dB dado, con degradado mínimo (transiciones de
-    1-2 dB, casi cortes duros entre zonas)."""
-    if db >= -9:
+def _color_zona_barra(db, paleta, mezcla=(1.5, 2.0)):
+    """Color para un dB dado. `mezcla` = (ancho1, ancho2) en dB de los
+    degradados entre zonas; (0, 0) son cortes duros."""
+    m1, m2 = mezcla
+    if db >= -9.0:
         return paleta["rojo"]
-    if db >= -10.5:
-        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 10.5) / 1.5)
+    if m1 > 0 and db >= -9.0 - m1:
+        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 9.0 + m1) / m1)
     if db >= -18.5:
         return paleta["amarillo"]
-    if db >= -20.5:
-        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 20.5) / 2)
+    if m2 > 0 and db >= -18.5 - m2:
+        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 18.5 + m2) / m2)
     return paleta["verde"]
 
 
 def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
-    """Tira vertical para la barra estilo OBS, cacheada por tamaño. Con
-    `tenue` devuelve la guía de fondo (mismos colores pero oscuros).
-    None sin Pillow (se usa un relleno liso de respaldo)."""
+    """Tira vertical de la GUÍA de fondo (colores oscuros, editables en
+    constantes.py), cacheada por tamaño. None sin Pillow."""
     try:
         from consola_obs.compat import HAY_PILLOW, Image, ImageTk
     except Exception:
@@ -148,10 +158,7 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
     if clave in _cache_barra_obs:
         return _cache_barra_obs[clave]
     try:
-        if gris:
-            paleta = _PALETA_BARRA_GRIS_TENUE if tenue else _PALETA_BARRA_GRIS
-        else:
-            paleta = _PALETA_BARRA_COLOR_TENUE if tenue else _PALETA_BARRA_COLOR
+        paleta = _PALETA_BARRA_GRIS_TENUE if gris else _PALETA_BARRA_COLOR_TENUE
         ancho, alto = max(2, int(ancho)), max(2, int(alto))
         tira = Image.new("RGB", (1, alto))
         px = tira.load()
@@ -180,10 +187,13 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
         id_img_tenue = canvas.create_image(x0, y0, anchor="nw", image=foto_tenue)
     colores = []
     colores_gris = []
+    esquema = _esquema_barra_actual()
+    paleta = {"rojo": esquema["alta"], "amarillo": esquema["media"], "verde": esquema["baja"]}
+    mezcla = _mezcla_degradado_actual()
     for i in range(alto):
         db = -(i / max(1, alto - 1)) * 60.0
-        colores.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_COLOR))
-        colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_GRIS))
+        colores.append("#%02x%02x%02x" % _color_zona_barra(db, paleta, mezcla))
+        colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_GRIS, mezcla))
     id_filas = []
     for i in range(alto):
         id_filas.append(canvas.create_rectangle(
