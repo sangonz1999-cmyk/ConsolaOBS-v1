@@ -693,12 +693,20 @@ def _imagen_emoji(texto, tam_px, color):
                 continue
         if fuente is None:
             return None
-        bb = fuente.getmask(texto).getbbox()
-        pad = max(2, tam_px * S // 16)
-        w, h = (bb[2] - bb[0]) + pad * 2, (bb[3] - bb[1]) + pad * 2
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        ImageDraw.Draw(img).text((pad - bb[0], pad - bb[1]), texto, font=fuente,
+        # Se dibuja en la caja del em y se recorta por lo que SALIÓ
+        # (no por la caja de la máscara, que en estas fuentes queda
+        # más chica y cortaba el glifo por abajo).
+        em = tam_px * S
+        img = Image.new("RGBA", (em, em), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text((0, 0), texto, font=fuente, anchor="lt",
                                  fill=_hex_a_rgb(color) + (255,))
+        bb = img.getbbox()
+        if not bb:
+            return None
+        pad = max(2, tam_px * S // 16)
+        img = img.crop((max(0, bb[0] - pad), max(0, bb[1] - pad),
+                        min(em, bb[2] + pad), min(em, bb[3] + pad)))
+        w, h = img.size
         lado = max(w, h)
         lienzo = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
         lienzo.paste(img, ((lado - w) // 2, (lado - h) // 2), img)
