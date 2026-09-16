@@ -97,11 +97,14 @@ def _presionar_divisor(event):
         return
     # Se toma el control del arrastre (sin el break, Tk movería el sash
     # píxel por píxel por su cuenta y volverían las posiciones
-    # intermedias). No se tapa nada acá: cada salto se resuelve
-    # completo y sincrónico en _mover_divisor.
+    # intermedias).
+    # Si quedó una sesión vieja colgada (release perdido fuera de la
+    # ventana), se asienta primero para arrancar limpio.
+    if getattr(E.cuerpo, "_arrastrando_sash", False):
+        _asentar_grillas()
     E.cuerpo._arrastrando_sash = True
+    # FASE 1: foto fija que queda hasta soltar (sin timers en el medio).
     _tapar_pads_con_foto()
-    _programar_asentado()
     return "break"
 
 
@@ -209,10 +212,12 @@ def _mover_divisor(event):
             return
         # Sólo se actúa si cambió de posición fija. FASE 2: se coloca
         # el sash y se renderiza todo en segundo plano (tapado por la
-        # foto de la FASE 1), sin mostrar nada hasta la FASE 3.
+        # foto de la FASE 1), sin mostrar nada hasta la FASE 3. Sin
+        # timers en el medio: la copia queda hasta soltar.
         if getattr(E.cuerpo, "_ultimo_snap", None) == (nx, ny):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
+        _tapar_grillas()
         E.cuerpo.sash_place(0, nx, ny)
         try:
             E.ventana.update_idletasks()
@@ -230,7 +235,6 @@ def _mover_divisor(event):
             E.ventana.update_idletasks()
         except Exception:
             pass
-        _programar_asentado()
     except Exception:
         pass
     return "break"
@@ -452,6 +456,9 @@ def construir_cuerpo():
     # ocultas con cada construir_cuerpo.
     E.tapa_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
     E.tapa_pads.place_forget()
+    # Si alguna vez queda tapado sin sesión (release perdido), un clic
+    # sobre la tapa lo destapa y acomoda (asentar es idempotente).
+    E.tapa_pads.bind("<ButtonPress-1>", lambda e: _asentar_grillas())
 
 
 def actualizar_scroll(event=None):
