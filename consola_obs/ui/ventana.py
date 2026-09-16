@@ -434,9 +434,9 @@ def construir_cuerpo():
         pass
 
 
-    E.marco_fuentes = tk.Frame(E.cuerpo, bg="#10141b")
+    E.marco_fuentes = tk.Frame(E.cuerpo, bg=E.color_fondo_panel())
 
-    barra_titulo_fuentes = tk.Frame(E.marco_fuentes, bg="#151a24", height=40)
+    barra_titulo_fuentes = tk.Frame(E.marco_fuentes, bg=E.color_barra_titulo(), height=40)
     barra_titulo_fuentes.pack(fill="x")
     barra_titulo_fuentes.pack_propagate(False)
 
@@ -445,16 +445,16 @@ def construir_cuerpo():
 
     titulo_fuentes = tk.Label(
         barra_titulo_fuentes, text="☰  FUENTES DE AUDIO   ·   arrastrá para mover el panel",
-        bg="#151a24", fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="fleur"
+        bg=E.color_barra_titulo(), fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="fleur"
     )
     titulo_fuentes.pack(side="left", padx=12)
     titulo_fuentes.bind("<ButtonPress-1>", lambda e: _iniciar_arrastre_panel("fuentes"))
     titulo_fuentes.bind("<ButtonRelease-1>", lambda e: _soltar_panel("fuentes", e))
 
-    E.marco_canvas = tk.Frame(E.marco_fuentes, bg="#10141b")
+    E.marco_canvas = tk.Frame(E.marco_fuentes, bg=E.color_fondo_panel())
     E.marco_canvas.pack(fill="both", expand=True)
 
-    E.canvas = tk.Canvas(E.marco_canvas, bg="#10141b", highlightthickness=0)
+    E.canvas = tk.Canvas(E.marco_canvas, bg=E.color_fondo_panel(), highlightthickness=0)
     E.scrollbar_v = ttk.Scrollbar(
         E.marco_canvas, orient="vertical", command=E.canvas.yview, style="Discreta.Vertical.TScrollbar"
     )
@@ -471,7 +471,7 @@ def construir_cuerpo():
     E.scrollbar_v.grid_remove()
     E.scrollbar_h.grid_remove()
 
-    E.panel_fuentes = tk.Frame(E.canvas, bg="#10141b")
+    E.panel_fuentes = tk.Frame(E.canvas, bg=E.color_fondo_panel())
     E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
@@ -480,9 +480,9 @@ def construir_cuerpo():
     E.canvas.bind("<Leave>", _desactivar_rueda_fuentes)
 
 
-    E.marco_derecho = tk.Frame(E.cuerpo, bg="#10141b")
+    E.marco_derecho = tk.Frame(E.cuerpo, bg=E.color_fondo_panel())
 
-    E.barra_soundboard = tk.Frame(E.marco_derecho, bg="#151a24", height=40)
+    E.barra_soundboard = tk.Frame(E.marco_derecho, bg=E.color_barra_titulo(), height=40)
     E.barra_soundboard.pack(fill="x")
     E.barra_soundboard.pack_propagate(False)
 
@@ -491,21 +491,21 @@ def construir_cuerpo():
 
     titulo_soundboard = tk.Label(
         E.barra_soundboard, text="☰  Efectos De Sonido",
-        bg="#151a24", fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="fleur"
+        bg=E.color_barra_titulo(), fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="fleur"
     )
     titulo_soundboard.pack(side="left", padx=12)
     titulo_soundboard.bind("<ButtonPress-1>", lambda e: _iniciar_arrastre_panel("soundboard"))
     titulo_soundboard.bind("<ButtonRelease-1>", lambda e: _soltar_panel("soundboard", e))
 
     # Tapa del título: mismas 4 fases que los pads (foto fija hasta soltar).
-    E.tapa_titulo = tk.Label(E.barra_soundboard, bg="#151a24", bd=0, highlightthickness=0)
+    E.tapa_titulo = tk.Label(E.barra_soundboard, bg=E.color_barra_titulo(), bd=0, highlightthickness=0)
     E.tapa_titulo.place_forget()
     E.tapa_titulo.bind("<ButtonPress-1>", lambda e: _asentar_grillas())
 
-    E.marco_soundboard_scroll = tk.Frame(E.marco_derecho, bg="#10141b")
+    E.marco_soundboard_scroll = tk.Frame(E.marco_derecho, bg=E.color_fondo_panel())
     E.marco_soundboard_scroll.pack(fill="both", expand=True)
 
-    E.canvas_sb = tk.Canvas(E.marco_soundboard_scroll, bg="#10141b", highlightthickness=0)
+    E.canvas_sb = tk.Canvas(E.marco_soundboard_scroll, bg=E.color_fondo_panel(), highlightthickness=0)
     E.scrollbar_sb = ttk.Scrollbar(
         E.marco_soundboard_scroll, orient="vertical", command=E.canvas_sb.yview,
         style="Discreta.Vertical.TScrollbar"
@@ -514,7 +514,7 @@ def construir_cuerpo():
 
     E.canvas_sb.pack(side="left", fill="both", expand=True)
 
-    E.panel_soundboard = tk.Frame(E.canvas_sb, bg="#10141b")
+    E.panel_soundboard = tk.Frame(E.canvas_sb, bg=E.color_fondo_panel())
     E.canvas_sb.create_window((0, 0), window=E.panel_soundboard, anchor="nw")
 
     E.panel_soundboard.bind("<Configure>", actualizar_scroll_soundboard)
@@ -595,7 +595,7 @@ def construir_cuerpo():
     # Tapas anti-corte: cubren sólo las grillas (pads y faders). Todo lo
     # demás (divisor, títulos, scrollbars) queda visible. Se recrean
     # ocultas con cada construir_cuerpo.
-    E.tapa_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
+    E.tapa_pads = tk.Label(E.marco_soundboard_scroll, bg=E.color_fondo_panel(), bd=0, highlightthickness=0)
     E.tapa_pads.place_forget()
     # Si alguna vez queda tapado sin sesión (release perdido), un clic
     # sobre la tapa lo destapa y acomoda (asentar es idempotente).

@@ -116,6 +116,16 @@ tema_interfaz = "Profesional"
 def es_moderna():
     return tema_interfaz == "Moderna"
 
+
+def color_fondo_panel():
+    """Fondo de paneles según el tema (más oscuro en Moderna)."""
+    return C.MOD_FONDO if es_moderna() else "#10141b"
+
+
+def color_barra_titulo():
+    """Barra de títulos de panel según el tema."""
+    return C.MOD_CABECERA if es_moderna() else "#151a24"
+
 orientacion_paneles = "vertical"                                             
 orden_paneles = ["fuentes", "soundboard"]                          
 

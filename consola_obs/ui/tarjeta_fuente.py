@@ -262,16 +262,21 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     alto_contenedor = medida_icono["fuente_alto"]
 
     color_etiqueta = E.colores_fuentes.get(nombre)
-    color_cabecera_base = color_etiqueta or "#3d4d66"
-    color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.42) if color_etiqueta else "#202633"
-    color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.30) if color_etiqueta else "#141a26"
+    if E.es_moderna():
+        color_cabecera_base = C.MOD_CABECERA
+        color_cuerpo = C.MOD_TARJETA
+        color_meta = C.MOD_FONDO
+    else:
+        color_cabecera_base = color_etiqueta or "#3d4d66"
+        color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.42) if color_etiqueta else "#202633"
+        color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.30) if color_etiqueta else "#141a26"
 
     es_principal_inicial = nombre in E.fuentes_principales
     color_borde = C.COLOR_BORDE_PRINCIPAL if es_principal_inicial else "#0e1219"
     grosor_borde = 3 if es_principal_inicial else 2
 
     tarjeta_sombra = tk.Canvas(
-        E.panel_fuentes, bg="#10141b",
+        E.panel_fuentes, bg=E.color_fondo_panel(),
         width=ancho_contenedor + 18, height=alto_contenedor + 18,
         highlightthickness=0
     )
@@ -352,6 +357,9 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         cx, cy = ancho_cab / 2, alto_cab / 2
         cv.coords(id_sombra, cx + 1, cy + 2)
         cv.coords(id_nombre, cx, cy + 1)
+        if E.es_moderna():
+            # Cabecera lisa en Moderna (sin degradado): sólo se centra el texto.
+            return
         if E._modo_super.get("activo"):
             # En modo super el texto se recentra pero las bandas no se
             # tocan: se repintan todas juntas al salir del modo.
@@ -422,17 +430,27 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
     vu_canvas = tk.Canvas(
         fila_vertical, width=ancho_barra_vu + 16, height=alto_canal + margen_marcas_db * 2,
-        bg="#0e1219", highlightthickness=0
+        bg=(C.MOD_BARRA_FONDO if E.es_moderna() else "#0e1219"), highlightthickness=0
     )
     vu_canvas.pack(side="left", anchor="n")
 
-    vu_segmentos = mod_ui_medidores._dibujar_segmentos_led(vu_canvas, ancho_barra_vu, alto_canal, offset_y=margen_marcas_db)
+    if E.es_moderna():
+        vu_obs = mod_ui_medidores._dibujar_barra_obs(
+            vu_canvas, ancho_barra_vu, alto_canal, bg=C.MOD_BARRA_FONDO, offset_y=margen_marcas_db)
+        vu_segmentos = []
+        marcas_db = mod_ui_medidores.MARCAS_DB_OBS
+        color_marcas = C.MOD_MARCA_DB
+    else:
+        vu_obs = None
+        vu_segmentos = mod_ui_medidores._dibujar_segmentos_led(vu_canvas, ancho_barra_vu, alto_canal, offset_y=margen_marcas_db)
+        marcas_db = E.MARCAS_DB
+        color_marcas = "#79859f"
 
-    for marca in E.MARCAS_DB:
+    for marca in marcas_db:
         y = mod_ui_medidores._y_para_db(marca, alto_canal) + margen_marcas_db
         vu_canvas.create_text(
             ancho_barra_vu + 3, y, text=str(marca),
-            fill="#79859f", font=(E.FUENTE_UI, 6), anchor="w"
+            fill=color_marcas, font=(E.FUENTE_UI, 6), anchor="w"
         )
 
     escala = tk.Scale(
@@ -519,6 +537,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         "monitor": boton_monitor,
         "vu_canvas": vu_canvas,
         "vu_segmentos": vu_segmentos,
+        "vu_obs": vu_obs,
         "vu_alto": alto_canal,
         "vu_visual_db": -60.0,                                                              
         "muted": muted,
@@ -577,6 +596,11 @@ def _actualizar_estado_gris(nombre):
         color_texto = "#202633"
         color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.42)
         color_meta = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.30)
+    elif E.es_moderna():
+        color_cabecera = C.MOD_CABECERA
+        color_texto = C.MOD_TEXTO
+        color_cuerpo = C.MOD_TARJETA
+        color_meta = C.MOD_FONDO
     else:
         color_cabecera = color_etiqueta or "#3d4d66"
         color_texto = "white"

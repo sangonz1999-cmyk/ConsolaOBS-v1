@@ -98,17 +98,128 @@ def _y_para_db(db, alto=C.ALTO_CANAL):
     return (-db / 60.0) * alto
 
 
+# Escala del medidor estilo OBS (tema Moderna).
+MARCAS_DB_OBS = [0, -6, -12, -18, -24, -30, -36, -48, -60]
+
+_cache_barra_obs = {}
+
+
+def _imagen_barra_obs(ancho, alto, gris=False):
+    """Degradado vertical para la barra estilo OBS (rojo arriba,
+    amarillo al medio, verde abajo; todo en grises si `gris`), cacheado
+    por tamaño. None sin Pillow (se usa un relleno liso de respaldo)."""
+    try:
+        from consola_obs.compat import HAY_PILLOW, Image, ImageTk
+    except Exception:
+        return None
+    if not HAY_PILLOW:
+        return None
+    clave = (ancho, alto, gris)
+    if clave in _cache_barra_obs:
+        return _cache_barra_obs[clave]
+    try:
+        ancho, alto = max(2, int(ancho)), max(2, int(alto))
+        tira = Image.new("RGB", (1, alto))
+        px = tira.load()
+        for y in range(alto):
+            t = y / max(1, alto - 1)
+            if gris:
+                if t < 0.15:
+                    c = (232, 235, 242)
+                elif t < 1 / 3:
+                    c = (154, 164, 178)
+                else:
+                    c = (91, 100, 120)
+            else:
+                if t < 0.15:
+                    c = (255, 59, 48)
+                elif t < 1 / 3:
+                    c = (242, 196, 100)
+                else:
+                    c = (47, 214, 147)
+            px[0, y] = c
+        foto = ImageTk.PhotoImage(tira.resize((ancho, alto)))
+        _cache_barra_obs[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
+def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
+    """Barra de nivel continua estilo OBS: fondo sin color, degradado
+    completo tapado por una máscara oscura que baja hasta el nivel,
+    línea de pico y testigo de clip rojo arriba. Devuelve el dict de ids."""
+    x0, x1 = 1, max(2, ancho_barra - 1)
+    y0, y1 = offset_y, offset_y + alto
+    canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    foto = _imagen_barra_obs(x1 - x0, alto, gris=False)
+    id_img = None
+    id_barra = None
+    if foto is not None:
+        canvas.imagen_barra_obs = foto
+        id_img = canvas.create_image(x0, y0, anchor="nw", image=foto)
+    else:
+        id_barra = canvas.create_rectangle(x0, y0, x1, y1, fill="#2fd693", outline="")
+    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
+    id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
+    return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
+            "bg": bg, "id_img": id_img, "id_barra": id_barra,
+            "id_mascara": id_mascara, "id_clip": id_clip, "id_pico": id_pico,
+            "gris": False}
+
+
+def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, saturado=False, estado=None):
+    """Mueve la máscara hasta el nivel, el pico a su marca y muestra el
+    clip rojo si satura. En gris (mute/otra escena) usa el degradado
+    gris. Sólo toca el canvas si algo cambió (píxel, pico o modo)."""
+    if not dib:
+        return
+    y_nivel = int(round(_y_para_db(db_visual, dib["alto"])))
+    y_pico = int(round(_y_para_db(db_pico, dib["alto"])))
+    actual = (y_nivel, y_pico, saturado, atenuado)
+    if estado is not None:
+        if estado.get("ultimo") == actual:
+            return
+        estado["ultimo"] = actual
+    if atenuado != dib.get("gris"):
+        foto = _imagen_barra_obs(dib["x1"] - dib["x0"], dib["alto"], gris=atenuado)
+        if foto is not None and dib.get("id_img") is not None:
+            canvas.imagen_barra_obs = foto
+            canvas.itemconfig(dib["id_img"], image=foto)
+        dib["gris"] = atenuado
+    canvas.coords(dib["id_mascara"], dib["x0"], dib["y0"], dib["x1"], dib["y0"] + y_nivel)
+    canvas.coords(dib["id_pico"], dib["x0"], dib["y0"] + y_pico, dib["x1"], dib["y0"] + y_pico)
+    canvas.itemconfig(dib["id_pico"], fill=C.MOD_PICO_GRIS if atenuado else C.MOD_PICO)
+    canvas.itemconfig(dib["id_clip"], state="normal" if saturado else "hidden")
+    if dib.get("id_barra") is not None:
+        if db_visual >= -9:
+            color = "#cbd2e6" if atenuado else "#ff5d6c"
+        elif db_visual >= -20:
+            color = "#8e9ab3" if atenuado else "#f2c464"
+        else:
+            color = "#6b7492" if atenuado else "#2fd693"
+        canvas.coords(dib["id_barra"], dib["x0"], dib["y0"] + y_nivel, dib["x1"], dib["y1"])
+        canvas.itemconfig(dib["id_barra"], fill=color)
+
+
 def apagar_medidores():
-    """Apaga todos los medidores (todos los LEDs al color de fondo) de
-    una sola vez. Se usa al entrar en modo super-optimizador; al salir,
-    el próximo cuadro VU los repinta completos (el estado se invalida
-    acá mismo)."""
+    """Apaga todos los medidores de una sola vez (LEDs al fondo o barra
+    tapada). Se usa al entrar en modo super-optimizador; al salir, el
+    próximo cuadro VU los repinta completos (el estado se invalida acá)."""
     for widgets in list(E.fuentes.values()):
         try:
             canvas = widgets.get("vu_canvas")
-            segmentos = widgets.get("vu_segmentos") or []
             if canvas is None:
                 continue
+            dib = widgets.get("vu_obs")
+            if dib:
+                canvas.coords(dib["id_mascara"], dib["x0"], dib["y0"], dib["x1"], dib["y1"])
+                canvas.coords(dib["id_pico"], dib["x0"], dib["y1"], dib["x1"], dib["y1"])
+                canvas.itemconfig(dib["id_clip"], state="hidden")
+                widgets.setdefault("vu_obs_estado", {}).pop("ultimo", None)
+                continue
+            segmentos = widgets.get("vu_segmentos") or []
             for seg in segmentos:
                 canvas.itemconfig(seg["id"], fill="#10161f")
             widgets.setdefault("vu_led_estado", {}).pop("ultimo", None)
@@ -275,6 +386,25 @@ def actualizar_vu_meters_ui():
             # el pintado se pausa y se invalida para repintar completo
             # al salir, sin saltos.
             widgets.setdefault("vu_led_estado", {}).pop("ultimo", None)
+            widgets.setdefault("vu_obs_estado", {}).pop("ultimo", None)
+            continue
+
+        if E.es_moderna():
+            # Pico con sostenido (estilo OBS): sube al instante, se queda
+            # 0.8s quieto y después cae.
+            pico = widgets.get("vu_pico_db", -60.0)
+            pico_t = widgets.get("vu_pico_t", 0.0)
+            if db_objetivo >= pico:
+                pico, pico_t = db_objetivo, ahora
+            elif ahora - pico_t > 0.8:
+                pico = max(db_objetivo, pico - E.CAIDA_POR_CUADRO)
+            widgets["vu_pico_db"] = pico
+            widgets["vu_pico_t"] = pico_t
+            _actualizar_barra_obs(
+                widgets["vu_canvas"], widgets.get("vu_obs"), db_visual, pico,
+                atenuado=atenuado, saturado=saturado,
+                estado=widgets.setdefault("vu_obs_estado", {})
+            )
             continue
 
         _actualizar_medidor_led(

@@ -276,3 +276,17 @@ COLOR_PANEL_SOUNDBOARD = "#10141b"
 # en vez de reaccionar a cada posición intermedia (infinitas), se responde
 # cada ~32px (unas 30 posiciones en un arrastre típico) para no saturar.
 SALTO_MINIMO_REDIBUJO_PX = 32
+
+
+# Tema "Moderna" (estilo OBS): gris azulado bastante oscuro, barra de
+# nivel continua con pico y clip rojo, fader azul con perilla blanca.
+MOD_FONDO = "#0d1017"
+MOD_TARJETA = "#141a24"
+MOD_CABECERA = "#1b2230"
+MOD_TEXTO = "#e8ebf2"
+MOD_APAGADO = "#79859f"
+MOD_MARCA_DB = "#6b7688"
+MOD_PICO = "#f2f5fa"
+MOD_PICO_GRIS = "#9aa4b2"
+MOD_CLIP = "#ff2441"
+MOD_BARRA_FONDO = "#080b10"
