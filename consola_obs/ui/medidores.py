@@ -112,10 +112,22 @@ def _mezclar_rgb(c1, c2, t):
 # (BARRA_MODERNA / BARRA_MODERNA_MEZCLA). El clip de saturación siempre
 # es rojo (gris claro en variante gris).
 _BARRA_MODERNA_DEFECTO = {"alta": (255, 59, 48), "media": (242, 196, 100), "baja": (47, 214, 147)}
-# Gris funcional (mute/otra escena): fijo, no depende del esquema.
-_PALETA_BARRA_GRIS = {
+# Gris funcional (mute/otra escena): editable en constantes.py
+# (BARRA_MODERNA_GRIS), con los mismos valores por defecto.
+_PALETA_BARRA_GRIS_DEFECTO = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
+
+
+def _gris_barra_actual():
+    gris = getattr(C, "BARRA_MODERNA_GRIS", None)
+    if not isinstance(gris, dict):
+        return dict(_PALETA_BARRA_GRIS_DEFECTO)
+    limpio = {}
+    for zona, clave in (("alta", "rojo"), ("media", "amarillo"), ("baja", "verde")):
+        v = gris.get(zona)
+        limpio[clave] = tuple(int(x) for x in v) if _rgb_valido(v) else _PALETA_BARRA_GRIS_DEFECTO[clave]
+    return limpio
 
 
 def _rgb_valido(v):
@@ -206,11 +218,12 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     colores_gris = []
     esquema = _esquema_barra_actual()
     paleta = {"rojo": esquema["alta"], "amarillo": esquema["media"], "verde": esquema["baja"]}
+    gris_cfg = _gris_barra_actual()
     mezcla = _mezcla_degradado_actual()
     for i in range(alto):
         db = -(i / max(1, alto - 1)) * 60.0
         colores.append("#%02x%02x%02x" % _color_zona_barra(db, paleta, mezcla))
-        colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_GRIS, mezcla))
+        colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, gris_cfg, mezcla))
     id_filas = []
     for i in range(alto):
         id_filas.append(canvas.create_rectangle(
