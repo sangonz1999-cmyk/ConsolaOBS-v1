@@ -96,6 +96,10 @@ def main():
     if E.tamano_icono_actual not in C.TAMANOS_ICONO:
         E.tamano_icono_actual = C.TAMANO_ICONO_POR_DEFECTO
 
+    E.tema_interfaz = E.config_interfaz_previa.get("tema_interfaz", "Profesional")
+    if E.tema_interfaz not in E.TEMAS_INTERFAZ:
+        E.tema_interfaz = "Profesional"
+
     E.orientacion_paneles = E.config_interfaz_previa.get("orientacion_paneles", "vertical")
     if E.orientacion_paneles not in ("vertical", "horizontal"):
         E.orientacion_paneles = "vertical"
@@ -476,6 +480,20 @@ def main():
     E.selector_fuente.bind(
         "<<ComboboxSelected>>",
         lambda e: mod_ui_ventana.cambiar_fuente(E.variable_fuente.get())
+    )
+
+    E.variable_tema = tk.StringVar(value=E.tema_interfaz)
+    E.selector_tema = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Interfaz"),
+        textvariable=E.variable_tema,
+        values=list(E.TEMAS_INTERFAZ),
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_tema.pack(side="left", fill="x", expand=True)
+    E.selector_tema.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_ui_ventana.cambiar_tema_interfaz(E.variable_tema.get())
     )
 
     mod_ui_cabecera._seccion_menu("AUDIO")

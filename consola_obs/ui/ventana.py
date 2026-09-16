@@ -14,6 +14,18 @@ from consola_obs.ui import soundboard as mod_ui_soundboard
 from consola_obs.ui import medidores as mod_ui_medidores
 
 
+def cambiar_tema_interfaz(nuevo_tema):
+    """Se llama desde el combobox 'Interfaz' de Ajustes → Apariencia.
+    Sólo cambia lo visual (Profesional/Moderna); la funcionalidad es la
+    misma. Como los dibujos tienen tamaño fijo, se reconstruye todo."""
+    if nuevo_tema not in E.TEMAS_INTERFAZ:
+        return
+    E.tema_interfaz = nuevo_tema
+    E.miniaturas_cargadas.clear()
+    _reconstruir_interfaz_con_velo()
+    mod_configuracion.guardar_config_interfaz({"tema_interfaz": nuevo_tema})
+
+
 def cambiar_tamano_icono(nuevo_tamano):
     """Se llama desde el combobox de la barra superior. Como los botones
     circulares y los pads del soundboard se dibujan en un Canvas de un
