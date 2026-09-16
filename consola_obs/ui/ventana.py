@@ -41,6 +41,82 @@ def cambiar_tamano_icono(nuevo_tamano):
     mod_configuracion.guardar_config_interfaz({"tamano_icono": nuevo_tamano})
 
 
+def _foto_panel(widget):
+    """Foto PIL del rectángulo en pantalla de un widget (o None)."""
+    if not HAY_PILLOW or ImageGrab is None:
+        return None
+    try:
+        E.ventana.update_idletasks()
+        x, y = widget.winfo_rootx(), widget.winfo_rooty()
+        ancho, alto = widget.winfo_width(), widget.winfo_height()
+        if ancho <= 1 or alto <= 1:
+            return None
+        return ImageGrab.grab(bbox=(x, y, x + ancho, y + alto))
+    except Exception:
+        return None
+
+
+def _tapar_paneles_divisor():
+    """Tapa cada panel con su foto fija para el arrastre del divisor:
+    el sash queda visible y se mueve en vivo, pero abajo no se ve
+    ningún repintado a medio hacer (ni franjas sin pintar)."""
+    for velo, marco, cajafoto in ((E.velo_fuentes, E.marco_fuentes, E.velo_fuentes_foto),
+                                  (E.velo_derecho, E.marco_derecho, E.velo_derecho_foto)):
+        try:
+            foto = _foto_panel(marco)
+            if foto is not None:
+                fototk = ImageTk.PhotoImage(foto)
+                cajafoto["tk"] = fototk
+                velo.config(image=fototk)
+            else:
+                cajafoto["tk"] = None
+                velo.config(image="")
+            velo.place(x=0, y=0, relwidth=1, relheight=1)
+            velo.lift()
+        except Exception:
+            pass
+    E.tapas_divisor["puestas"] = True
+
+
+def _destapar_paneles_divisor():
+    for velo in (E.velo_fuentes, E.velo_derecho):
+        try:
+            velo.place_forget()
+        except Exception:
+            pass
+    E.tapas_divisor["puestas"] = False
+
+
+def _acomodar_tras_divisor():
+    mod_ui_tarjeta._aplicar_redimension_fuentes()
+    mod_ui_soundboard._aplicar_redimension_soundboard()
+
+
+def _presionar_divisor(event):
+    """Arranca el tapado de paneles, pero SÓLO si el clic cayó justo
+    sobre la barra del divisor."""
+    try:
+        es_divisor = E.cuerpo.identify(event.x, event.y) == "sash"
+    except Exception:
+        es_divisor = False
+    if not es_divisor:
+        return
+    if E.tapas_divisor["puestas"]:
+        # Release perdido anteriormente: destapar y acomodar primero.
+        _destapar_paneles_divisor()
+        _acomodar_tras_divisor()
+    _tapar_paneles_divisor()
+
+
+def _soltar_divisor(event):
+    """Soltar el botón en cualquier parte termina el tapado y acomoda
+    las grillas una sola vez."""
+    if not E.tapas_divisor["puestas"]:
+        return
+    _acomodar_tras_divisor()
+    _destapar_paneles_divisor()
+
+
 def _iniciar_arrastre_panel(nombre):
     E._panel_en_arrastre["origen"] = nombre
 
@@ -114,6 +190,7 @@ def construir_cuerpo():
         E.velo_redimension.lift()
     except NameError:
         pass
+    E.cuerpo.bind("<ButtonPress-1>", _presionar_divisor)
 
 
     E.marco_fuentes = tk.Frame(E.cuerpo, bg="#10141b")
@@ -268,6 +345,19 @@ def construir_cuerpo():
     # van a encontrar ningún cambio y no van a mover nada en pantalla.
     E.ventana.after(30, mod_ui_soundboard._aplicar_redimension_soundboard)
     E.ventana.after(30, mod_ui_tarjeta._aplicar_redimension_fuentes)
+
+    # Tapas para el arrastre del divisor: un Label por panel (ocultos).
+    # Al arrastrar el divisor se tapan con su foto fija (ver
+    # _tapar_paneles_divisor): el sash sigue visible y movible, pero
+    # dejan de verse repintados a medio hacer. Se recrean acá porque
+    # viven dentro de los paneles y mueren con ellos en cada rebuild.
+    E.velo_fuentes = tk.Label(E.marco_fuentes, bg="#10141b", bd=0, highlightthickness=0)
+    E.velo_fuentes.place_forget()
+    E.velo_fuentes_foto = {"tk": None}
+    E.velo_derecho = tk.Label(E.marco_derecho, bg="#10141b", bd=0, highlightthickness=0)
+    E.velo_derecho.place_forget()
+    E.velo_derecho_foto = {"tk": None}
+    E.tapas_divisor = {"puestas": False}
 
 
 def actualizar_scroll(event=None):

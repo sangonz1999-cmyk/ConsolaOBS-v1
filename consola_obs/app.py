@@ -510,6 +510,7 @@ def main():
 
 
     E.ventana.bind("<Configure>", mod_ui_cabecera._seguir_ventana_con_menu, add="+")
+    E.ventana.bind("<ButtonRelease-1>", mod_ui_ventana._soltar_divisor, add="+")
 
 
     mod_ui_ventana.construir_cuerpo()
