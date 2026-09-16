@@ -104,40 +104,63 @@ MARCAS_DB_OBS = [0, -6, -12, -18, -24, -30, -36, -48, -60]
 _cache_barra_obs = {}
 
 
-def _imagen_barra_obs(ancho, alto, gris=False):
-    """Degradado vertical para la barra estilo OBS (rojo arriba,
-    amarillo al medio, verde abajo; todo en grises si `gris`), cacheado
-    por tamaño. None sin Pillow (se usa un relleno liso de respaldo)."""
+def _mezclar_rgb(c1, c2, t):
+    return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
+
+
+# Paletas de la barra OBS: brillante (nivel) y tenue (guía de fondo).
+_PALETA_BARRA_COLOR = {
+    "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
+}
+_PALETA_BARRA_COLOR_TENUE = {
+    "rojo": (76, 20, 16), "amarillo": (62, 50, 26), "verde": (13, 56, 38),
+}
+_PALETA_BARRA_GRIS = {
+    "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
+}
+_PALETA_BARRA_GRIS_TENUE = {
+    "rojo": (72, 79, 94), "amarillo": (58, 65, 80), "verde": (44, 50, 63),
+}
+
+
+def _color_zona_barra(db, paleta):
+    """Color para un dB dado, con degradado sutil entre zonas
+    (4-6 dB de mezcla en cada borde)."""
+    if db >= -8:
+        return paleta["rojo"]
+    if db >= -12:
+        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 12) / 4)
+    if db >= -18:
+        return paleta["amarillo"]
+    if db >= -24:
+        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 24) / 6)
+    return paleta["verde"]
+
+
+def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
+    """Tira vertical para la barra estilo OBS, cacheada por tamaño. Con
+    `tenue` devuelve la guía de fondo (mismos colores pero oscuros).
+    None sin Pillow (se usa un relleno liso de respaldo)."""
     try:
         from consola_obs.compat import HAY_PILLOW, Image, ImageTk
     except Exception:
         return None
     if not HAY_PILLOW:
         return None
-    clave = (ancho, alto, gris)
+    clave = (ancho, alto, gris, tenue)
     if clave in _cache_barra_obs:
         return _cache_barra_obs[clave]
     try:
+        if gris:
+            paleta = _PALETA_BARRA_GRIS_TENUE if tenue else _PALETA_BARRA_GRIS
+        else:
+            paleta = _PALETA_BARRA_COLOR_TENUE if tenue else _PALETA_BARRA_COLOR
         ancho, alto = max(2, int(ancho)), max(2, int(alto))
         tira = Image.new("RGB", (1, alto))
         px = tira.load()
         for y in range(alto):
-            t = y / max(1, alto - 1)
-            if gris:
-                if t < 0.15:
-                    c = (232, 235, 242)
-                elif t < 1 / 3:
-                    c = (154, 164, 178)
-                else:
-                    c = (91, 100, 120)
-            else:
-                if t < 0.15:
-                    c = (255, 59, 48)
-                elif t < 1 / 3:
-                    c = (242, 196, 100)
-                else:
-                    c = (47, 214, 147)
-            px[0, y] = c
+            db = -(y / max(1, alto - 1)) * 60.0
+            px[0, y] = _color_zona_barra(db, paleta)
         foto = ImageTk.PhotoImage(tira.resize((ancho, alto)))
         _cache_barra_obs[clave] = foto
         return foto
@@ -146,33 +169,42 @@ def _imagen_barra_obs(ancho, alto, gris=False):
 
 
 def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
-    """Barra de nivel continua estilo OBS: fondo sin color, degradado
-    completo tapado por una máscara oscura que baja hasta el nivel,
-    línea de pico y testigo de clip rojo arriba. Devuelve el dict de ids."""
+    """Barra de nivel continua estilo OBS: fondo con guía tenue de los
+    colores, degradado brillante tapado por una máscara oscura que baja
+    hasta el nivel, capa roja para saturación, testigo de clip y línea
+    de pico. Devuelve el dict de ids."""
     x0, x1 = 1, max(2, ancho_barra - 1)
     y0, y1 = offset_y, offset_y + alto
     canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
-    foto = _imagen_barra_obs(x1 - x0, alto, gris=False)
-    id_img = None
+    id_img_tenue = id_img = None
+    foto_tenue = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=True)
+    if foto_tenue is not None:
+        canvas.imagen_barra_obs_tenue = foto_tenue
+        id_img_tenue = canvas.create_image(x0, y0, anchor="nw", image=foto_tenue)
+    foto = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=False)
     id_barra = None
     if foto is not None:
         canvas.imagen_barra_obs = foto
         id_img = canvas.create_image(x0, y0, anchor="nw", image=foto)
     else:
         id_barra = canvas.create_rectangle(x0, y0, x1, y1, fill="#2fd693", outline="")
+    id_rojo = canvas.create_rectangle(x0, y0, x1, y1, fill=C.MOD_CLIP, outline="", state="hidden")
     id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
-            "bg": bg, "id_img": id_img, "id_barra": id_barra,
+            "bg": bg, "id_img": id_img, "id_img_tenue": id_img_tenue,
+            "id_barra": id_barra, "id_rojo": id_rojo,
             "id_mascara": id_mascara, "id_clip": id_clip, "id_pico": id_pico,
             "gris": False}
 
 
 def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, saturado=False, estado=None):
-    """Mueve la máscara hasta el nivel, el pico a su marca y muestra el
-    clip rojo si satura. En gris (mute/otra escena) usa el degradado
-    gris. Sólo toca el canvas si algo cambió (píxel, pico o modo)."""
+    """Mueve la máscara hasta el nivel, el pico a su marca y, si satura,
+    tiñe de rojo (gris claro en variante gris) todo el tramo visible,
+    como el aviso de clipping del otro diseño. En gris (mute/otra
+    escena) usa los degradados grises. Sólo toca el canvas si algo
+    cambió (píxel, pico o modo)."""
     if not dib:
         return
     y_nivel = int(round(_y_para_db(db_visual, dib["alto"])))
@@ -183,17 +215,32 @@ def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, satur
             return
         estado["ultimo"] = actual
     if atenuado != dib.get("gris"):
-        foto = _imagen_barra_obs(dib["x1"] - dib["x0"], dib["alto"], gris=atenuado)
-        if foto is not None and dib.get("id_img") is not None:
-            canvas.imagen_barra_obs = foto
-            canvas.itemconfig(dib["id_img"], image=foto)
+        for clave_img, id_clave, es_tenue in (
+                ("tenue", "id_img_tenue", True), ("brillante", "id_img", False)):
+            foto = _imagen_barra_obs(dib["x1"] - dib["x0"], dib["alto"],
+                                     gris=atenuado, tenue=es_tenue)
+            id_item = dib.get(id_clave)
+            if foto is not None and id_item is not None:
+                if es_tenue:
+                    canvas.imagen_barra_obs_tenue = foto
+                else:
+                    canvas.imagen_barra_obs = foto
+                canvas.itemconfig(id_item, image=foto)
         dib["gris"] = atenuado
     canvas.coords(dib["id_mascara"], dib["x0"], dib["y0"], dib["x1"], dib["y0"] + y_nivel)
     canvas.coords(dib["id_pico"], dib["x0"], dib["y0"] + y_pico, dib["x1"], dib["y0"] + y_pico)
     canvas.itemconfig(dib["id_pico"], fill=C.MOD_PICO_GRIS if atenuado else C.MOD_PICO)
+    if saturado:
+        canvas.itemconfig(dib["id_rojo"],
+                          fill=C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP,
+                          state="normal")
+    else:
+        canvas.itemconfig(dib["id_rojo"], state="hidden")
     canvas.itemconfig(dib["id_clip"], state="normal" if saturado else "hidden")
     if dib.get("id_barra") is not None:
-        if db_visual >= -9:
+        if saturado:
+            color = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
+        elif db_visual >= -9:
             color = "#cbd2e6" if atenuado else "#ff5d6c"
         elif db_visual >= -20:
             color = "#8e9ab3" if atenuado else "#f2c464"
