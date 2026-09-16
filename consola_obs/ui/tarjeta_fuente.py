@@ -359,9 +359,14 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
     color_etiqueta = E.colores_fuentes.get(nombre)
     if E.es_moderna():
-        color_cabecera_base = color_etiqueta or C.MOD_CABECERA
-        color_cuerpo = C.MOD_TARJETA
-        color_meta = C.MOD_FONDO
+        if color_etiqueta:
+            color_cabecera_base = color_etiqueta
+            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.50)
+            color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.35)
+        else:
+            color_cabecera_base = C.MOD_CABECERA
+            color_cuerpo = C.MOD_TARJETA
+            color_meta = C.MOD_FONDO
     else:
         color_cabecera_base = color_etiqueta or "#3d4d66"
         color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.42) if color_etiqueta else "#202633"
@@ -716,10 +721,15 @@ def _actualizar_estado_gris(nombre):
         color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.42)
         color_meta = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.30)
     elif E.es_moderna():
-        color_cabecera = color_etiqueta or C.MOD_CABECERA
+        if color_etiqueta:
+            color_cabecera = color_etiqueta
+            color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.50)
+            color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.35)
+        else:
+            color_cabecera = C.MOD_CABECERA
+            color_cuerpo = C.MOD_TARJETA
+            color_meta = C.MOD_FONDO
         color_texto = C.MOD_TEXTO
-        color_cuerpo = C.MOD_TARJETA
-        color_meta = C.MOD_FONDO
     else:
         color_cabecera = color_etiqueta or "#3d4d66"
         color_texto = "white"
