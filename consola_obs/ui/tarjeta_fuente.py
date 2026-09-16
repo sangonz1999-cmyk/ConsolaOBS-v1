@@ -268,8 +268,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         width=ancho_contenedor + 18, height=alto_contenedor + 18,
         highlightthickness=0
     )
-    fila, col = _fila_col_fuente(nombre)
-    tarjeta_sombra.grid(row=fila, column=col, padx=6, pady=6, sticky="n")
+    # OJO: no se grilla acá a propósito. La tarjeta se muestra al final
+    # de esta función, ya con todo su contenido construido y pintado,
+    # para que el primer cuadro que se ve sea la versión cargada y
+    # nunca la tarjeta vacía.
     tarjeta_sombra.grid_propagate(False)
 
     mod_ui_dibujo._dibujar_sombra_difusa(
@@ -510,6 +512,18 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     }
 
     _actualizar_estado_gris(nombre)
+
+    # Recién ahora, con la tarjeta completa, se la ubica en la grilla y
+    # se fuerza su pintado: el primer cuadro visible ya es la versión
+    # cargada (degradado, nombre centrado, VU, fader y botones), nunca
+    # la tarjeta vacía.
+    fila, col = _fila_col_fuente(nombre)
+    tarjeta_sombra.grid(row=fila, column=col, padx=6, pady=6, sticky="n")
+    try:
+        tarjeta_sombra.update_idletasks()
+        _redibujar_gradiente_cabecera_fuente()
+    except Exception:
+        pass
 
 
 def _actualizar_estado_gris(nombre):
