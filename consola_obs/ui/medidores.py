@@ -166,94 +166,96 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
 
 
 def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
-    """Barra de nivel continua estilo OBS: fondo con guía tenue de los
-    colores, degradado brillante tapado por una máscara oscura que baja
-    hasta el nivel, capa roja para saturación, testigo de clip y línea
-    de pico. Devuelve el dict de ids."""
+    """Barra de nivel continua estilo OBS: fondo con guía tenue SÓLIDA
+    (sin puntos) y, encima, una fila por píxel con el degradado
+    brillante que se muestra/oculta hasta el nivel. Más línea de pico
+    y testigo de clip rojo. Devuelve el dict de ids."""
     x0, x1 = 1, max(2, ancho_barra - 1)
     y0, y1 = offset_y, offset_y + alto
-    id_fondo = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
     id_img_tenue = id_img = None
     foto_tenue = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=True)
     if foto_tenue is not None:
         canvas.imagen_barra_obs_tenue = foto_tenue
         id_img_tenue = canvas.create_image(x0, y0, anchor="nw", image=foto_tenue)
-    foto = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=False)
+    colores = []
+    colores_gris = []
+    for i in range(alto):
+        db = -(i / max(1, alto - 1)) * 60.0
+        colores.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_COLOR))
+        colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, _PALETA_BARRA_GRIS))
+    id_filas = []
+    for i in range(alto):
+        id_filas.append(canvas.create_rectangle(
+            x0, y0 + i, x1, y0 + i + 1, fill=colores[i], outline="", state="hidden"))
     id_barra = None
-    if foto is not None:
-        canvas.imagen_barra_obs = foto
-        id_img = canvas.create_image(x0, y0, anchor="nw", image=foto)
-    else:
-        id_barra = canvas.create_rectangle(x0, y0, x1, y1, fill="#2fd693", outline="")
-    id_rojo = canvas.create_rectangle(x0, y0, x1, y1, fill=C.MOD_CLIP, outline="", state="hidden")
-    # La máscara lleva punteado (stipple): tapa el degradado brillante
-    # pero deja ver la guía tenue de abajo, que es la que se ve arriba
-    # del nivel en vez de negro liso.
-    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="", stipple="gray75")
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
             "bg": bg, "id_img": id_img, "id_img_tenue": id_img_tenue,
-            "id_barra": id_barra, "id_rojo": id_rojo, "id_fondo": id_fondo,
-            "id_mascara": id_mascara, "id_clip": id_clip, "id_pico": id_pico,
-            "gris": False}
+            "id_barra": id_barra, "id_filas": id_filas,
+            "colores": colores, "colores_gris": colores_gris,
+            "id_clip": id_clip, "id_pico": id_pico, "gris": False}
 
 
 def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, saturado=False, estado=None):
-    """Mueve la máscara hasta el nivel, el pico a su marca y, si satura,
-    tiñe de rojo (gris claro en variante gris) todo el tramo visible,
-    como el aviso de clipping del otro diseño. En gris (mute/otra
-    escena) usa los degradados grises. Sólo toca el canvas si algo
-    cambió (píxel, pico o modo)."""
+    """Muestra las filas hasta el nivel, el pico en su marca y, si
+    satura, tiñe de rojo (gris claro en variante gris) todo el tramo
+    visible, como el aviso de clipping del otro diseño. En gris
+    (mute/otra escena) filas y guía usan los tonos grises. Sólo toca
+    las filas que cambian."""
     if not dib:
         return
-    y_nivel = int(round(_y_para_db(db_visual, dib["alto"])))
-    y_pico = int(round(_y_para_db(db_pico, dib["alto"])))
+    alto = dib["alto"]
+    y_nivel = int(round(_y_para_db(db_visual, alto)))
+    y_pico = int(round(_y_para_db(db_pico, alto)))
     actual = (y_nivel, y_pico, saturado, atenuado)
+    anterior = estado.get("ultimo") if estado is not None else None
+    if anterior == actual:
+        return
     if estado is not None:
-        if estado.get("ultimo") == actual:
-            return
         estado["ultimo"] = actual
+    filas = dib.get("id_filas") or []
     if atenuado != dib.get("gris"):
-        for clave_img, id_clave, es_tenue in (
-                ("tenue", "id_img_tenue", True), ("brillante", "id_img", False)):
-            foto = _imagen_barra_obs(dib["x1"] - dib["x0"], dib["alto"],
-                                     gris=atenuado, tenue=es_tenue)
-            id_item = dib.get(id_clave)
-            if foto is not None and id_item is not None:
-                if es_tenue:
-                    canvas.imagen_barra_obs_tenue = foto
-                else:
-                    canvas.imagen_barra_obs = foto
-                canvas.itemconfig(id_item, image=foto)
+        colores = dib["colores_gris"] if atenuado else dib["colores"]
+        sat_fill = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
+        for i, iid in enumerate(filas):
+            if saturado and i >= y_nivel:
+                canvas.itemconfig(iid, fill=sat_fill)
+            else:
+                canvas.itemconfig(iid, fill=colores[i])
+        foto_tenue = _imagen_barra_obs(dib["x1"] - dib["x0"], alto,
+                                       gris=atenuado, tenue=True)
+        if foto_tenue is not None and dib.get("id_img_tenue") is not None:
+            canvas.imagen_barra_obs_tenue = foto_tenue
+            canvas.itemconfig(dib["id_img_tenue"], image=foto_tenue)
         dib["gris"] = atenuado
-    canvas.coords(dib["id_mascara"], dib["x0"], dib["y0"], dib["x1"], dib["y0"] + y_nivel)
+    # Filas visibles: desde y_nivel hasta abajo. Sólo flippean las que
+    # están entre el borde viejo y el nuevo (o todas si no hay previo
+    # o si cambió la saturación, que recolorea el tramo visible).
+    y_viejo = anterior[0] if anterior else 0
+    desde = max(0, min(y_viejo, y_nivel))
+    hasta = min(alto, max(y_viejo, y_nivel))
+    if anterior is None or anterior[2] != saturado:
+        desde = min(desde, y_nivel)
+        hasta = alto
+    color_sat = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
+    colores = dib["colores_gris"] if atenuado else dib["colores"]
+    for i in range(desde, hasta):
+        if i >= y_nivel:
+            canvas.itemconfig(filas[i], fill=color_sat if saturado else colores[i],
+                              state="normal")
+        else:
+            canvas.itemconfig(filas[i], state="hidden")
     canvas.coords(dib["id_pico"], dib["x0"], dib["y0"] + y_pico, dib["x1"], dib["y0"] + y_pico)
     canvas.itemconfig(dib["id_pico"], fill=C.MOD_PICO_GRIS if atenuado else C.MOD_PICO)
-    if saturado:
-        canvas.itemconfig(dib["id_rojo"],
-                          fill=C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP,
-                          state="normal")
-    else:
-        canvas.itemconfig(dib["id_rojo"], state="hidden")
     canvas.itemconfig(dib["id_clip"], state="normal" if saturado else "hidden")
-    if dib.get("id_barra") is not None:
-        if saturado:
-            color = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
-        elif db_visual >= -9:
-            color = "#cbd2e6" if atenuado else "#ff5d6c"
-        elif db_visual >= -20:
-            color = "#8e9ab3" if atenuado else "#f2c464"
-        else:
-            color = "#6b7492" if atenuado else "#2fd693"
-        canvas.coords(dib["id_barra"], dib["x0"], dib["y0"] + y_nivel, dib["x1"], dib["y1"])
-        canvas.itemconfig(dib["id_barra"], fill=color)
 
 
 def apagar_medidores():
-    """Apaga todos los medidores de una sola vez (LEDs al fondo o barra
-    tapada). Se usa al entrar en modo super-optimizador; al salir, el
-    próximo cuadro VU los repinta completos (el estado se invalida acá)."""
+    """Apaga todos los medidores de una sola vez. Se usa al entrar en
+    modo super-optimizador; al salir, el próximo cuadro VU los repinta
+    completos (el estado se invalida acá)."""
     for widgets in list(E.fuentes.values()):
         try:
             canvas = widgets.get("vu_canvas")
@@ -261,7 +263,8 @@ def apagar_medidores():
                 continue
             dib = widgets.get("vu_obs")
             if dib:
-                canvas.coords(dib["id_mascara"], dib["x0"], dib["y0"], dib["x1"], dib["y1"])
+                for iid in dib.get("id_filas") or []:
+                    canvas.itemconfig(iid, state="hidden")
                 canvas.coords(dib["id_pico"], dib["x0"], dib["y1"], dib["x1"], dib["y1"])
                 canvas.itemconfig(dib["id_clip"], state="hidden")
                 widgets.setdefault("vu_obs_estado", {}).pop("ultimo", None)

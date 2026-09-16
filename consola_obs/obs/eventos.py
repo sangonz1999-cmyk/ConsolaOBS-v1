@@ -177,7 +177,7 @@ def _sincronizar_mute_remoto(nombre, muted):
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["mute"],
         texto_nuevo=("🔇" if muted else "🔊"),
-        color_nuevo=("#ff5567" if muted else "#394151")
+        color_nuevo=mod_ui_dibujo._color_mute(muted)
     )
     mod_ui_tarjeta._actualizar_estado_gris(nombre)
 
@@ -216,7 +216,7 @@ def _sincronizar_monitor_remoto(nombre, tipo):
     if not widgets:
         return
     widgets["tipo_monitor"] = tipo
-    mod_ui_dibujo._actualizar_boton_circular(widgets["monitor"], color_nuevo=C.COLORES_MONITOREO.get(tipo, "#394151"))
+    mod_ui_dibujo._actualizar_boton_circular(widgets["monitor"], color_nuevo=mod_ui_dibujo._color_monitor(tipo))
 
 
 def on_input_name_changed(datos):

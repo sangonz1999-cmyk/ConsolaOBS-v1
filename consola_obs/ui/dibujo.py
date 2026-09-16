@@ -585,6 +585,20 @@ def _imagen_circulo_blanco(radio):
         return None
 
 
+def _color_mute(muted):
+    """Color del altavoz: rojo si muteado, o gris (más claro en Moderna)."""
+    if muted:
+        return "#ff5567"
+    return C.MOD_ICONO_APAGADO if E.es_moderna() else "#394151"
+
+
+def _color_monitor(tipo):
+    """Color del auricular según monitoreo (más claro el apagado en Moderna)."""
+    if tipo == "OBS_MONITORING_TYPE_NONE" and E.es_moderna():
+        return C.MOD_ICONO_APAGADO
+    return C.COLORES_MONITOREO.get(tipo, "#394151")
+
+
 def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
     """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
     clickeable cuyo color marca el estado. Compatible con

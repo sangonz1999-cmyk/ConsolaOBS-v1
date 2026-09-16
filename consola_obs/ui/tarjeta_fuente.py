@@ -99,20 +99,6 @@ class _FaderOBS:
             pass
 
 
-def _color_mute(muted):
-    """Color del altavoz: rojo si muteado, o gris (más claro en Moderna)."""
-    if muted:
-        return "#ff5567"
-    return C.MOD_ICONO_APAGADO if E.es_moderna() else "#394151"
-
-
-def _color_monitor(tipo):
-    """Color del auricular según monitoreo (más claro el apagado en Moderna)."""
-    if tipo == "OBS_MONITORING_TYPE_NONE" and E.es_moderna():
-        return C.MOD_ICONO_APAGADO
-    return C.COLORES_MONITOREO.get(tipo, "#394151")
-
-
 def _ancho_preferido_fuente():
     """Ancho 'de catálogo' (mínimo) de una tarjeta de fuente, según el
     tamaño de ícono elegido (Chico/Mediano/Grande) y el factor de escala
@@ -609,7 +595,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fila_iconos,
             "🔇" if muted else "🔊",
             medida_icono["fuente_boton"] + 4,
-            _color_mute(muted),
+            mod_ui_dibujo._color_mute(muted),
             lambda: cambiar_mute(nombre)
         )
         boton_mute.pack(side="left", padx=6)
@@ -618,7 +604,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fila_iconos,
             "🎧",
             medida_icono["fuente_boton"] + 4,
-            _color_monitor(tipo_monitor),
+            mod_ui_dibujo._color_monitor(tipo_monitor),
             lambda: cambiar_monitor(nombre)
         )
         boton_monitor.pack(side="left", padx=6)
@@ -963,13 +949,13 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["mute"],
         texto_nuevo=("🔇" if muted else "🔊"),
-        color_nuevo=_color_mute(muted)
+        color_nuevo=mod_ui_dibujo._color_mute(muted)
     )
 
     widgets["tipo_monitor"] = tipo_monitor
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["monitor"],
-        color_nuevo=_color_monitor(tipo_monitor)
+        color_nuevo=mod_ui_dibujo._color_monitor(tipo_monitor)
     )
 
     _actualizar_estado_gris(nombre)
@@ -987,7 +973,7 @@ def cambiar_mute(nombre):
         mod_ui_dibujo._actualizar_boton_circular(
             widgets["mute"],
             texto_nuevo=("🔇" if nuevo_estado else "🔊"),
-            color_nuevo=_color_mute(nuevo_estado)
+            color_nuevo=mod_ui_dibujo._color_mute(nuevo_estado)
         )
         _actualizar_estado_gris(nombre)
     except Exception as e:
@@ -1006,7 +992,7 @@ def _fijar_monitor(nombre, tipo):
         widgets = E.fuentes[nombre]
         widgets["tipo_monitor"] = tipo
         mod_ui_dibujo._actualizar_boton_circular(
-            widgets["monitor"], color_nuevo=_color_monitor(tipo))
+            widgets["monitor"], color_nuevo=mod_ui_dibujo._color_monitor(tipo))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
 
