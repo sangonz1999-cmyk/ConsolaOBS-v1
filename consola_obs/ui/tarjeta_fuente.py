@@ -937,7 +937,7 @@ def _renombrar_fuente_en_hilo(nombre_viejo, nombre_nuevo):
     try:
         E.cliente_obs.set_input_name(nombre_viejo, nombre_nuevo)
     except Exception as e:
-        E.ventana.after(0, lambda: messagebox.showerror(
+        E.ventana.after(0, lambda e=e: messagebox.showerror(
             "Error al renombrar",
             f"No se pudo renombrar la fuente en OBS.\n\n{e}"
         ))

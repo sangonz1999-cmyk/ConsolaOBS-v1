@@ -12,6 +12,7 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
+from consola_obs.ui import ventana as mod_ui_ventana
 
 
 def asignar_sonido(indice):
@@ -549,7 +550,7 @@ def _reubicar_pads():
             continue
         celda.grid_forget()
         celda.grid(row=i // columnas, column=i % columnas, padx=6, pady=6)
-    actualizar_scroll_soundboard()
+    mod_ui_ventana.actualizar_scroll_soundboard()
 
 
 def construir_soundboard():
