@@ -132,8 +132,7 @@ Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el 
   - Ganancia de filtros: cada INTERVALO_REFRESCO_GANANCIA_MS (1000 ms).
   - Sondeo de cambios externos de filtros mientras un editor está abierto: cada ~500 ms.
   - Redibujado de la cabecera (degradado): con throttle tras 120 ms.
-  - Reajuste de columnas de fuentes: con throttle tras 16 ms.
-  - Reajuste de columnas del soundboard: tras 16 ms + histéresis.
+  - Reajuste de columnas de fuentes y soundboard: con throttle tras 30 ms (solo reubica, nunca reconstruye).
 
 
 ## 3. CONEXIÓN A OBS
@@ -351,9 +350,9 @@ pad de borde y del LED).
 - `_obtener_imagen_decodificada`/`_cargar_miniatura`: carga y cachea la imagen decodificada por ruta, y genera miniaturas por (indice, tamaño). Redimensiona la imagen para que entre completa en el pad sin recortarla (contain) o la escala con LANCZOS.
 - Cache `_imagenes_decodificadas` y `_miniaturas_cargadas` por (ruta, tamaño), para no reabrir/redecodificar archivos pesados al reconstruir el soundboard (muy importante para no tildar).
 
-### Grilla responsive del soundboard (_columnas_soundboard):
-- Calcula cuántas columnas entran selon el ancho del canvas y la medida del pad (tamaño de ícono + factor de escala). Con histéresis para no saltar columnas en achiques mínimos.
-- Al cambiar el ancho se reconstruye sólo si cambió el nº de columnas.
+### Grilla responsive del soundboard (_columnas_disponibles):
+- Calcula cuántas columnas entran según el ancho del canvas y la medida del pad (tamaño de ícono, fijo). Con histéresis para no saltar columnas en achiques mínimos.
+- Al cambiar el ancho sólo se reubica (`_reubicar_pads`); nunca se reconstruye por resize.
 
 ### Config de medidas (TAMANOS_ICONO):
 - "Chico", "Mediano" (default), "Grande": cambian diámetro del botón, fuente de botón, ancho/alto del pad, íconos, fuente del nombre, etc.
@@ -375,26 +374,26 @@ Barra de acción inferior: botones para agregar pads, conectar, etc.
 - Las dos grillas (fuentes y soundboard) se ordenan según la config "orientacion_paneles" (vertical/horizontal) y "orden_paneles" (fuentes arriba/abajo o izquierda/derecha), persistidos en config_interfaz.json. La posición del divisor se guarda al cerrar.
 
 
-## 13. REDIMENSIONADO RESPONSIVE + ANTI-PIXELADO
-Escala de UI:
-- factor_escala_ui(): compara el tamaño actual de la ventana con ANCHO/AlTO_REFERENCIA (1300x760) y devuelve factor entre 0.4 y 1.5.
-- Se usa en cada medida (medida_actual, _ancho_preferido_fuente, _columnas_disponibles_*, etc.) para que toda la interfaz escale proporcionalmente.
+## 13. REDIMENSIONADO (estilo soundboard de Nico)
+Tamaños fijos por ajuste de íconos (Chico/Mediano/Grande), sin importar
+el tamaño de la ventana. Al mover el borde o el divisor, las grillas
+sólo se REUBICAN (grid_forget + grid, sin destruir ni crear nada, con
+un toque de calma de 30 ms): los pads y faders se mueven de fila/
+columna en vivo y nunca parpadean. Si falta espacio, aparece scroll.
+Sólo se reconstruye con acciones explícitas (tamaño de íconos, diseño,
+tipografía, agregar/quitar pads).
 
 ### Anti-parpadeo al redimensionar (win32):
-- _congelar_pintado_ventana/_descongelar: WM_SETREDRAW=0/1 + RedrawWindow para que Windows no repinte a mitad del arrastre del borde.
 - _fijar_color_fondo_nativo: cambia el pincel de fondo de la clase de ventana (SetClassLongPtrW + CreateSolidBrush) para que el fondo sea del color oscuro correcto (evita el flash blanco).
-- Sin redimensionado automático: al mover el borde o el divisor no se recalcula, reacomoda ni reconstruye nada (las grillas quedan con el tamaño que tenían; si algo queda cortado aparecen las barras de desplazamiento). Sólo se reconstruye con acciones explícitas (tamaño de íconos, diseño, tipografía, agregar pads).
-- Velo de redimensionado: se usa sólo en esas reconstrucciones explícitas, tapando con una "foto" (ImageGrab) mientras se arma todo de una sola vez.
+- Velo de redimensionado: se usa sólo en reconstrucciones explícitas, tapando con una "foto" (ImageGrab) mientras se arma todo de una sola vez.
 
 ### Supersampling (antialias sin pixelado):
 - FACTOR_SUPERSAMPLING_CIRCULOS = 6: los círculos (botones, LED, pads) se dibujan en un canvas 6 veces más grande y se reducen con ImageOps.fit + LANCZOS para que los bordes salgan suaves.
 - _dibujar_rect_redondeado, _dibujar_boton_circular, _dibujar_gradiente etc. dibujan a mano, con Pillow si disponible.
 
-Al cambiar el tamaño se reconstruye la grilla con col y rows; para no
-perder el estado del fader durante el redimensionado, se usa
-_reubicar_fuentes (no reconstruye, solo reposiciona) mientras el ancho
-no cambia el nº de columnas; cuando cambia, se reconstruye tras
-_ocultar_velo (ver _aplicar_redimension).
+Al cambiar el tamaño, tanto faders (_reubicar_fuentes) como pads
+(_reubicar_pads) sólo se reposicionan en la grilla: ningún widget se
+destruye ni se recrea, así no hay nada que parpadee.
 
 
 ## 14. PERSISTENCIA (JSON)

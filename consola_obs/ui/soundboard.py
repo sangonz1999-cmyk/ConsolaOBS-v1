@@ -1,5 +1,4 @@
 import os
-import time
 import tkinter as tk
 
 from tkinter import filedialog, messagebox, simpledialog
@@ -13,7 +12,6 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
-from consola_obs.ui import ventana as mod_ui_ventana
 
 
 def asignar_sonido(indice):
@@ -524,70 +522,47 @@ def _columnas_disponibles():
     return columnas_teoricas
 
 
-def _arrastre_ventana_en_curso():
-    """True mientras el usuario está arrastrando el borde de LA VENTANA
-    (no el divisor entre paneles) y todavía no se soltó: es la ventana
-    de tiempo en la que _al_redimensionar_ventana ya mostró el velo y
-    está esperando a que el arrastre se quede quieto para reconstruir
-    todo de una (ver _trabajo_redimension, más abajo en el archivo).
-    Se consulta con try/except porque ese nombre se define más adelante
-    en el archivo (mismo motivo que el try/except de velo_redimension
-    en construir_cuerpo): a esta altura de la carga del módulo todavía
-    no existe, pero para cuando esta función se llegue a llamar de
-    verdad (el usuario ya movió el mouse) sí."""
-    try:
-        return E._trabajo_redimension["id"] is not None
-    except NameError:
-        return False
-
-
 def _al_redimensionar_soundboard(event=None):
-    """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
-    no se programa nada al cambiar el tamaño. Lo único que se hace
-    acá es extender la calma de una eventual sesión de divisor."""
-    if E._arrastre_divisor["activo"]:
-        mod_ui_ventana._reprogramar_fin_divisor()
-    return
+    """Reacomoda la grilla con un toque de calma (igual que faders):
+    reaccionar en CADA evento mientras se arrastra es lo que hacía
+    que todo saltara. No destruye ni crea nada (ver _reubicar_pads)."""
+    if E._trabajo_redimension_soundboard["id"] is not None:
+        E.ventana.after_cancel(E._trabajo_redimension_soundboard["id"])
+    E._trabajo_redimension_soundboard["id"] = E.ventana.after(30, _aplicar_redimension_soundboard)
 
 
 def _aplicar_redimension_soundboard():
     E._trabajo_redimension_soundboard["id"] = None
-    if (E._reconstruccion_en_curso["activa"] or E._arrastre_ventana["activo"]
-            or E._trabajo_redimension["id"] is not None
-            or E._arrastre_divisor["activo"]):
-        # Idem grilla de fuentes: a mitad de un arrastre no se
-        # reconstruye nada (la reconstrucción de fin de arrastre deja
-        # todo en su lugar). El reintento se agota solo.
-        E._trabajo_redimension_soundboard["id"] = E.ventana.after(150, _aplicar_redimension_soundboard)
-        return
-    nuevas_columnas = _columnas_disponibles()
-    ancho_actual = E.canvas_sb.winfo_width()
-    ancho_referencia = E._ultimo_ancho_soundboard["valor"]
-    ancho_se_corrio_de_mas = (
-        ancho_actual > 1
-        and ancho_referencia is not None
-        and abs(ancho_actual - ancho_referencia) > C.MARGEN_REAJUSTE_ANCHO_SOUNDBOARD
-    )
-    if nuevas_columnas != E.columnas_soundboard or ancho_se_corrio_de_mas:
-        E.columnas_soundboard = nuevas_columnas
-        construir_soundboard()
+    _reubicar_pads()
+
+
+def _reubicar_pads():
+    """Reacomoda las celdas ya existentes según las columnas que entran
+    ahora, SIN destruir ni recrear nada (como el soundboard de Nico:
+    pads de tamaño fijo que solo cambian de fila/columna). Es barato y
+    no parpadea, así que se puede llamar en vivo durante un arrastre."""
+    columnas = max(1, _columnas_disponibles())
+    E.columnas_soundboard = columnas
+    for i in range(E.num_pads_soundboard):
+        celda = E._celdas_pads.get(i)
+        if celda is None:
+            continue
+        celda.grid_forget()
+        celda.grid(row=i // columnas, column=i % columnas, padx=6, pady=6)
+    actualizar_scroll_soundboard()
 
 
 def construir_soundboard():
-    E._ultimo_ancho_soundboard["valor"] = E.canvas_sb.winfo_width()
     for widget in E.panel_soundboard.winfo_children():
         widget.destroy()
 
     columnas = max(1, E.columnas_soundboard)
     medida = mod_utilidades.medida_actual()
 
-    ancho_preferido = medida["pad_ancho"]
-    ancho_disponible = E.canvas_sb.winfo_width()
-    padding_por_celda = 20
-    if ancho_disponible > 1:
-        ancho_celda = max(ancho_preferido, (ancho_disponible // columnas) - padding_por_celda)
-    else:
-        ancho_celda = ancho_preferido
+    # Tamaño FIJO de catálogo (como los pads de Nico): la celda no se
+    # estira según el espacio disponible; lo único que cambia con el
+    # ancho del panel es la cantidad de columnas (ver _reubicar_pads).
+    ancho_celda = medida["pad_ancho"]
 
     ancho_imagen_pad_base = ancho_celda - 12
     pie_celda = 76
@@ -801,7 +776,7 @@ def construir_soundboard():
     # ------------------------------------------------------------------
     # BOTÓN "AGREGAR PAD": misma placa de vidrio, en formato barra ancha
     # ------------------------------------------------------------------
-    alto_barra_agregar = max(62, round(76 * mod_utilidades.factor_escala_ui()))
+    alto_barra_agregar = 76
 
     marco_agregar = tk.Frame(E.panel_soundboard, bg=C.COLOR_PANEL_SOUNDBOARD)
     marco_agregar.pack(fill="x")

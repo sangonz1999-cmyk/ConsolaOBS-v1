@@ -298,17 +298,6 @@ _sesion_reproduccion = {"indice": None, "token": 0, "inicio": 0.0}
 
 
 _trabajo_redimension_soundboard = {"id": None}
-# Ancho de canvas_sb que tenía el panel la última vez que se construyó
-# la grilla de pads de verdad (construir_soundboard). Sirve para
-# detectar el mismo problema que en la grilla de fuentes: si el panel
-# se achica/agranda sin llegar a cambiar la cantidad de columnas, las
-# celdas quedan con el ancho "estirado" viejo y la última puede terminar
-# sobresaliendo del borde visible. A diferencia de fuentes, acá no
-# conviene reajustar el ancho en cada asentamiento (esta grilla destruye
-# y recrea todos los pads, es cara), así que sólo se fuerza una
-# reconstrucción completa cuando el ancho cambió lo suficiente como para
-# que de verdad haga falta.
-_ultimo_ancho_soundboard = {"valor": None}
 
 
 # INTERVALO_VU_MS, CAIDA_DB_POR_SEG, CAIDA_POR_CUADRO,

@@ -153,24 +153,16 @@ def _reubicar_fuentes(forzar=False):
 
 
 def _al_redimensionar_fuentes(event=None):
-    """Reacomodo automático ELIMINADO (ver _al_redimensionar_ventana):
-    no se programa nada al cambiar el tamaño. Lo único que se hace
-    acá es extender la calma de una eventual sesión de divisor."""
-    if E._arrastre_divisor["activo"]:
-        mod_ui_ventana._reprogramar_fin_divisor()
-    return
+    """Reacomoda la grilla con un toque de calma (igual que soundboard):
+    reaccionar en CADA evento mientras se arrastra es lo que hacía que
+    las tarjetas saltaran. No destruye ni crea nada (ver _reubicar)."""
+    if E._trabajo_redimension_fuentes["id"] is not None:
+        E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
+    E._trabajo_redimension_fuentes["id"] = E.ventana.after(30, _aplicar_redimension_fuentes)
 
 
 def _aplicar_redimension_fuentes():
     E._trabajo_redimension_fuentes["id"] = None
-    if (E._reconstruccion_en_curso["activa"] or E._arrastre_ventana["activo"]
-            or E._trabajo_redimension["id"] is not None):
-        # A mitad de un arrastre de la ventana no se reacomoda nada: la
-        # reconstrucción de fin de arrastre deja todo en su lugar. Se
-        # reintenta más tarde por si ese arrastre termina sin
-        # reconstruir (cambio chico): el reintento se agota solo.
-        E._trabajo_redimension_fuentes["id"] = E.ventana.after(150, _aplicar_redimension_fuentes)
-        return
     nuevas_columnas = _columnas_disponibles_fuentes()
     if nuevas_columnas != E.columnas_fuentes:
         E.columnas_fuentes = nuevas_columnas
@@ -256,7 +248,6 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         nombre_visible = nombre
 
     medida_icono = mod_utilidades.medida_actual()
-    f = mod_utilidades.factor_escala_ui()
     alto_canal = medida_icono["fuente_alto_canal"]
     ancho_barra_vu = medida_icono["fuente_ancho_vu"]
     ancho_contenedor = _ancho_celda_fuentes()

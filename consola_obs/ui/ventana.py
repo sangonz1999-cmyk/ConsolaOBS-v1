@@ -1,4 +1,3 @@
-import time
 import tkinter as tk
 
 from tkinter import ttk
@@ -12,17 +11,6 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
-
-
-# Cuánto tiene que quedarse quieta la ventana para dar por terminado un
-# arrastre y recién ahí reconstruir (antes: 180 ms, que con movimientos
-# suaves se cumplía a mitad del arrastre y reconstruía a cada pausa,
-# y eso era el parpadeo).
-DEMORA_FIN_ARRASTRE_MS = 300
-# La foto del velo no se reescala más seguido que esto durante el
-# arrastre (reescalar la foto completa en cada evento traba el hilo
-# de la interfaz y se nota como tironeo).
-INTERVALO_MINIMO_FOTO_VELO_SEG = 0.06
 
 
 def cambiar_tamano_icono(nuevo_tamano):
@@ -39,63 +27,6 @@ def cambiar_tamano_icono(nuevo_tamano):
     E.miniaturas_cargadas.clear()                                                            
     _reconstruir_interfaz_con_velo()
     mod_configuracion.guardar_config_interfaz({"tamano_icono": nuevo_tamano})
-
-
-def _presionar_divisor(event):
-    # OJO: identify devuelve una LISTA como [0, 'sash'] (no el string
-    # 'sash' solo), por eso se busca adentro y no con ==.
-    try:
-        donde = E.cuerpo.identify(event.x, event.y)
-    except Exception:
-        donde = ""
-    es_divisor = "sash" in str(donde)
-    if not es_divisor:
-        return
-    E._arrastre_divisor["activo"] = True
-    _tapar_pads()
-    _reprogramar_fin_divisor()
-
-
-def _tapar_pads():
-    """Tapa sólo la zona de pads con el fondo del panel (el divisor,
-    el título, el scrollbar y el resto quedan visibles y movibles)."""
-    try:
-        E.velo_pads.place(in_=E.canvas_sb, x=0, y=0, relwidth=1, relheight=1)
-        E.velo_pads.lift()
-    except Exception:
-        pass
-
-
-def _destapar_pads():
-    try:
-        E.velo_pads.place_forget()
-    except Exception:
-        pass
-
-
-def _reprogramar_fin_divisor():
-    if E._trabajo_divisor["id"] is not None:
-        try:
-            E.ventana.after_cancel(E._trabajo_divisor["id"])
-        except Exception:
-            pass
-    E._trabajo_divisor["id"] = E.ventana.after(
-        DEMORA_FIN_ARRASTRE_MS, _fin_arrastre_divisor)
-
-
-def _fin_arrastre_divisor():
-    E._trabajo_divisor["id"] = None
-    if not E._arrastre_divisor["activo"]:
-        return
-    E._arrastre_divisor["activo"] = False
-    mod_ui_tarjeta._aplicar_redimension_fuentes()
-    mod_ui_soundboard._aplicar_redimension_soundboard()
-    _destapar_pads()
-
-
-def _soltar_divisor(event):
-    if E._arrastre_divisor["activo"]:
-        _fin_arrastre_divisor()
 
 
 def _iniciar_arrastre_panel(nombre):
@@ -171,7 +102,6 @@ def construir_cuerpo():
         E.velo_redimension.lift()
     except NameError:
         pass
-    E.cuerpo.bind("<ButtonPress-1>", _presionar_divisor)
 
 
     E.marco_fuentes = tk.Frame(E.cuerpo, bg="#10141b")
@@ -248,14 +178,6 @@ def construir_cuerpo():
     E.canvas_sb.configure(yscrollcommand=E.scrollbar_sb.set)
 
     E.canvas_sb.pack(side="left", fill="both", expand=True)
-
-    # Tapa para el arrastre del divisor: cubre SÓLO la zona de pads
-    # (el scrollbar, el divisor, el título y el resto quedan visibles).
-    # Vive acá (hermana del canvas, no adentro del panel) para sobrevivir
-    # a las reconstrucciones de la grilla; se recrea oculta con cada
-    # construir_cuerpo.
-    E.velo_pads = tk.Label(E.marco_soundboard_scroll, bg="#10141b", bd=0, highlightthickness=0)
-    E.velo_pads.place_forget()
 
     E.panel_soundboard = tk.Frame(E.canvas_sb, bg="#10141b")
     E.canvas_sb.create_window((0, 0), window=E.panel_soundboard, anchor="nw")
@@ -494,20 +416,9 @@ def _capturar_snapshot_ventana():
         pass
 
 
-def _actualizar_imagen_velo(forzar=False):
+def _actualizar_imagen_velo():
     """Escala la última foto guardada al tamaño actual de la ventana y
-    la deja puesta en el velo. Escalar una imagen ya capturada es
-    barato (no reconstruye ningún widget), así que esto sí se puede
-    llamar en cada evento de arrastre sin volver a generar el lag que
-    se quería eliminar: es lo que da la sensación de que la interfaz
-    "sigue" al mouse en tiempo real. Igual se limita a una tasa máxima
-    (salvo forzar=True al mostrar el velo) porque el reescalado en el
-    hilo de la interfaz, evento tras evento, se nota como tironeo."""
-    if not forzar:
-        ahora = time.monotonic()
-        if ahora - E._foto_velo.get("t", 0.0) < INTERVALO_MINIMO_FOTO_VELO_SEG:
-            return
-        E._foto_velo["t"] = ahora
+    la deja puesta en el velo (para las reconstrucciones explícitas)."""
     imagen = E._captura_ventana["imagen_pil"]
     ancho, alto = max(1, E.ventana.winfo_width()), max(1, E.ventana.winfo_height())
     if imagen is None:
@@ -538,7 +449,7 @@ def _mostrar_velo_redimension():
     # repintados no saldrían y el arrastre se vería como un cuadro
     # congelado. El freeze se usa sólo alrededor de la reconstrucción
     # (ver _reconstruir_interfaz_con_velo y _aplicar_redimension).
-    _actualizar_imagen_velo(forzar=True)
+    _actualizar_imagen_velo()
     E.velo_redimension.place(x=0, y=0, relwidth=1, relheight=1)
     E.velo_redimension.lift()
 
@@ -580,57 +491,6 @@ def _al_redimensionar_ventana(event):
     las barras de desplazamiento). Sólo se reconstruye con acciones
     explícitas (tamaño de íconos, diseño, tipografía, agregar pads)."""
     return
-
-
-def _fin_arrastre_ventana():
-    """La ventana se quedó quieta: termina la sesión de arrastre y
-    recién ahora se evalúa si hace falta reconstruir (una sola vez)."""
-    E._trabajo_redimension["id"] = None
-    E._arrastre_ventana["activo"] = False
-    _aplicar_redimension()
-
-
-def _aplicar_redimension():
-    E._trabajo_redimension["id"] = None
-
-    # Si ya hay una reconstrucción corriendo (poco probable, pero puede
-    # pasar si el usuario suelta y vuelve a arrastrar muy rápido),
-    # reprogramamos para más tarde en vez de superponerla: lanzar una
-    # segunda reconstrucción a mitad de la primera es lo que producía
-    # los "bugs visuales" (paneles a medio armar, sashes en posiciones
-    # raras, tarjetas duplicadas un instante). El velo (con su foto)
-    # sigue puesto mientras tanto, así que no se ve nada raro en el medio.
-    if E._reconstruccion_en_curso["activa"]:
-        E._trabajo_redimension["id"] = E.ventana.after(
-            DEMORA_FIN_ARRASTRE_MS, _aplicar_redimension)
-        return
-
-    nuevo_factor = mod_utilidades.factor_escala_ui()
-    if abs(nuevo_factor - E._ultimo_factor_escala["valor"]) < 0.03:
-        # El arrastre terminó pero el cambio de tamaño fue chico y no
-        # amerita reconstruir nada: se reacomoda la grilla una vez (los
-        # reacomodos de a mitad del arrastre se saltearon a propósito)
-        # y se destapa.
-        mod_ui_tarjeta._reubicar_fuentes()
-        _ocultar_velo_redimension()
-        return
-    E._ultimo_factor_escala["valor"] = nuevo_factor
-
-    E._reconstruccion_en_curso["activa"] = True
-    if P._ES_WINDOWS:
-        P._congelar_pintado_ventana()
-    try:
-        # El velo (con la foto) ya está puesto desde que arrancó el
-        # arrastre (ver _al_redimensionar_ventana), así que durante toda
-        # esta reconstrucción el usuario sigue viendo esa foto, nunca
-        # los paneles a medio armar. El freeze va sólo acá adentro.
-        construir_cuerpo()
-        E.ventana.update_idletasks()
-    finally:
-        if P._ES_WINDOWS:
-            P._descongelar_pintado_ventana()
-        _ocultar_velo_redimension()
-        E._reconstruccion_en_curso["activa"] = False
 
 
 def al_cerrar():

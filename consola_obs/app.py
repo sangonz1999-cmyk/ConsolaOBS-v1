@@ -228,13 +228,6 @@ def main():
     # Linux (ver la versión de la función para esos sistemas).
     P._fijar_color_fondo_nativo("#10141b")
 
-    E._trabajo_redimension = {"id": None}
-    E._ultimo_factor_escala = {"valor": mod_utilidades.factor_escala_ui()}
-    E._reconstruccion_en_curso = {"activa": False}
-    E._arrastre_ventana = {"activo": False}
-    E._arrastre_divisor = {"activo": False}
-    E._trabajo_divisor = {"id": None}
-
     # ------------------------------------------------------------------
     # VELO DE REDIMENSIONADO
     # ------------------------------------------------------------------
@@ -272,7 +265,7 @@ def main():
     E.velo_redimension = tk.Label(E.ventana, bg="#10141b", bd=0, highlightthickness=0)
 
     E._captura_ventana = {"imagen_pil": None}   # última foto buena de la interfaz completa
-    E._foto_velo = {"tk": None, "t": 0.0}       # imagen del velo + cuándo se actualizó por última vez
+    E._foto_velo = {"tk": None}                   # referencia viva de la imagen actualmente mostrada en el velo
 
 
     E.ventana.bind("<Configure>", mod_ui_ventana._al_redimensionar_ventana)
@@ -510,7 +503,6 @@ def main():
 
 
     E.ventana.bind("<Configure>", mod_ui_cabecera._seguir_ventana_con_menu, add="+")
-    E.ventana.bind("<ButtonRelease-1>", mod_ui_ventana._soltar_divisor, add="+")
 
 
     mod_ui_ventana.construir_cuerpo()
