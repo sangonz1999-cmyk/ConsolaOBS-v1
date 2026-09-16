@@ -113,13 +113,13 @@ _PALETA_BARRA_COLOR = {
     "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
 }
 _PALETA_BARRA_COLOR_TENUE = {
-    "rojo": (78, 21, 17), "amarillo": (64, 52, 28), "verde": (14, 58, 40),
+    "rojo": (44, 12, 10), "amarillo": (36, 30, 16), "verde": (8, 34, 24),
 }
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
 _PALETA_BARRA_GRIS_TENUE = {
-    "rojo": (72, 79, 94), "amarillo": (58, 64, 78), "verde": (46, 52, 66),
+    "rojo": (48, 52, 62), "amarillo": (42, 46, 56), "verde": (36, 40, 50),
 }
 
 
@@ -192,7 +192,7 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     # La máscara lleva punteado (stipple): tapa el degradado brillante
     # pero deja ver la guía tenue de abajo, que es la que se ve arriba
     # del nivel en vez de negro liso.
-    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="", stipple="gray25")
+    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="", stipple="gray50")
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
