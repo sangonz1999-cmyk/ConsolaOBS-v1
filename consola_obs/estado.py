@@ -139,8 +139,9 @@ _ultima_grilla_fuentes = {"clave": None}
 _ultimas_columnas_pads = {"valor": None}
 # Modo super-optimizador: mientras se está redimensionando (borde de la
 # ventana, divisor o grillas) se pausa lo secundario (pintado de LEDs y
-# degradados) para darle todo el hilo al layout. Se apaga solo a los
-# 200ms de quietud, con repintado final.
+# degradados) para darle todo el hilo al layout. Se apaga SÓLO al soltar
+# el botón del mouse (o si la vigilancia detecta que ya no está
+# presionado): quedarse quieto con el botón agarrado nunca lo apaga.
 _modo_super = {"activo": False, "timer": None, "origen": None}
 
 

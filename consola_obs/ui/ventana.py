@@ -192,6 +192,11 @@ def entrar_modo_super(origen=None):
             mod_ui_medidores.apagar_medidores()
         except Exception:
             pass
+    # Vigilancia, NO salida por tiempo: cada evento la renueva; cuando
+    # pasan 150ms sin movimiento se mira el botón real: si sigue
+    # presionado se sigue esperando (sin prender nada), si ya se soltó
+    # se sale. Quedarse quieto con el botón agarrado NUNCA prende los
+    # LEDs: sólo la soltada lo hace.
     try:
         timer = E._modo_super.get("timer")
         if timer is not None:
@@ -199,9 +204,29 @@ def entrar_modo_super(origen=None):
     except Exception:
         pass
     try:
-        E._modo_super["timer"] = E.ventana.after(200, salir_modo_super)
+        E._modo_super["timer"] = E.ventana.after(150, _vigilar_modo_super)
     except Exception:
         pass
+
+
+def _vigilar_modo_super():
+    """150ms sin movimiento: si el botón sigue presionado, se sigue
+    esperando (se reprograma); si ya se soltó (o el release se perdió
+    por el camino, ej. maximizar), se sale."""
+    E._modo_super["timer"] = None
+    if not E._modo_super.get("activo"):
+        return
+    try:
+        sigue_agarrado = P._boton_izquierdo_presionado()
+    except Exception:
+        sigue_agarrado = False
+    if sigue_agarrado:
+        try:
+            E._modo_super["timer"] = E.ventana.after(150, _vigilar_modo_super)
+        except Exception:
+            pass
+        return
+    salir_modo_super()
 
 
 def salir_modo_super():
@@ -341,9 +366,9 @@ def _soltar_divisor(event):
 
 def _soltar_boton_termina_resize(event=None):
     """Cualquier soltada del botón izquierdo termina el resize de borde
-    de ventana: los medidores vuelven en el acto (sin esperar los 200ms
-    de quietud). Sólo actúa si el modo se originó en un resize real
-    (borde o divisor); los clics comunes no hacen nada."""
+    de ventana o divisor: los medidores vuelven en el acto. Sólo actúa
+    si el modo se originó en un resize real (borde o divisor); los clics
+    comunes no hacen nada."""
     try:
         if E._modo_super.get("activo") and E._modo_super.get("origen") in ("ventana", "divisor"):
             salir_modo_super()

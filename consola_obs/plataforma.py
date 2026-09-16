@@ -150,6 +150,21 @@ if _ES_WINDOWS:
             except Exception:
                 pass
 
+    _user32.GetAsyncKeyState.restype = ctypes.c_short
+    _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    _VK_LBUTTON = 0x01
+
+    def _boton_izquierdo_presionado():
+        """True si el botón izquierdo del mouse está físicamente
+        presionado AHORA (lectura directa al sistema, funciona aunque
+        el arrastre lo haya iniciado el borde de la ventana, cuyos
+        eventos no pasan por Tk). Se usa para salir del modo
+        super-optimizador SÓLO al soltar de verdad."""
+        try:
+            return bool(_user32.GetAsyncKeyState(_VK_LBUTTON) & 0x8000)
+        except Exception:
+            return False
+
     _FR_PRIVATE = 0x10  # la fuente sólo queda disponible para ESTE
     # proceso (no se "instala" en Windows ni queda visible para otros
     # programas) y Windows la desregistra solo cuando el programa
@@ -166,6 +181,9 @@ else:
 
     def _descongelar_pintado_ventana():
         pass
+
+    def _boton_izquierdo_presionado():
+        return False
 
     def _fijar_color_fondo_nativo(hex_color):
         pass
