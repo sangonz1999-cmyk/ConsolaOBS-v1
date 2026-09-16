@@ -15,6 +15,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
+from consola_obs.audio import fuentes as mod_audio_fuentes
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
@@ -426,6 +427,15 @@ def main():
         command=mod_ui_tarjeta.actualizar
     )
     E.boton_actualizar.pack(fill="x", padx=16, pady=(6, 2))
+
+    # Fase 3 del plan: crear una fuente de audio nueva sin ir a OBS.
+    E.boton_agregar_fuente = tk.Button(
+        E.barra, text="+  AGREGAR FUENTE", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        activebackground="#2f3a4d", activeforeground="white",
+        relief="flat", bd=0, pady=7, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
+        command=mod_audio_fuentes.abrir_selector_nueva_fuente
+    )
+    E.boton_agregar_fuente.pack(fill="x", padx=16, pady=(4, 2))
 
     mod_ui_cabecera._seccion_menu("APARIENCIA")
 

@@ -12,6 +12,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import filtros as mod_audio_filtros
+from consola_obs.audio import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import ventana as mod_ui_ventana
@@ -795,6 +796,58 @@ def _actualizar_estado_gris(nombre):
     widgets["fila_meta"].config(bg=color_meta)
 
 
+def _abrir_menu_contextual_panel_fuentes(event):
+    """Menú de clic derecho sobre una zona VACÍA del panel de fuentes
+    (el fondo, no una tarjeta): es el equivalente al clic derecho en la
+    lista de fuentes de OBS. Lo principal es "Agregar fuente", con un
+    submenú de los tipos de entrada de AUDIO que esa instancia de OBS
+    tiene registrados, con los mismos nombres que usa el menú de OBS.
+
+    Si el clic cayó encima de una tarjeta, no se hace nada acá: esa
+    tarjeta ya tiene su propio menú (_abrir_menu_contextual_fuente) y
+    Tk manda el evento primero al widget de más adentro."""
+    # Import acá adentro y no arriba del archivo a propósito:
+    # consola_obs.audio.fuentes importa este mismo módulo (necesita
+    # actualizar() para refrescar la consola después de crear), así que
+    # importarlo arriba sería una dependencia circular.
+    from consola_obs.audio import fuentes as mod_audio_fuentes
+
+    menu = tk.Menu(
+        E.ventana, tearoff=0, bg="#151a24", fg="white",
+        activebackground="#323b4c", activeforeground="white"
+    )
+
+    if not E.conectado:
+        menu.add_command(label="Conectate a OBS para agregar fuentes", state="disabled")
+    else:
+        submenu_tipos = tk.Menu(
+            menu, tearoff=0, bg="#151a24", fg="white",
+            activebackground="#323b4c", activeforeground="white"
+        )
+        tipos = mod_audio_fuentes.tipos_de_audio_para_menu()
+        if tipos:
+            for nombre_amigable, icono, kind in tipos:
+                submenu_tipos.add_command(
+                    label=f"{icono}  {nombre_amigable}",
+                    command=lambda k=kind, n=nombre_amigable: (
+                        mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
+                    )
+                )
+            submenu_tipos.add_separator()
+        submenu_tipos.add_command(
+            label="⋯  Otros tipos de fuente…",
+            command=mod_audio_fuentes.abrir_selector_nueva_fuente
+        )
+        menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
+        menu.add_separator()
+        menu.add_command(label="↻  Actualizar fuentes", command=actualizar)
+
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
+
+
 def _abrir_menu_contextual_fuente(nombre, event):
     """Menú de clic derecho de una tarjeta de fuente: agrupa acá todo lo
     que antes eran botones sueltos siempre visibles en la tarjeta
@@ -812,6 +865,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
         command=lambda: _alternar_principal(nombre)
     )
     menu.add_command(label="🎚  Filtros…", command=lambda: mod_audio_filtros.abrir_filtros(nombre))
+    menu.add_command(label="⚙  Propiedades…", command=lambda: mod_audio_propiedades.abrir_propiedades(nombre))
     menu.add_separator()
 
     submenu_color = tk.Menu(menu, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c")

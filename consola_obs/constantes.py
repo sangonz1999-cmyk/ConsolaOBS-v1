@@ -149,9 +149,18 @@ INTERVALO_DEBUG_VU_SEG = 0.25
 # de "Ganancia" es el caso obvio, pero la "Ganancia de salida" del
 # Compresor hace exactamente lo mismo (sube la señal después de
 # comprimirla), así que se suma igual.
+# NOTA (Fase 1 del plan de mejoras): el Compresor ascendente y el
+# Expansor también tienen su propia "Ganancia de salida" (mismo
+# concepto que la del Compresor, output_gain), así que se agregan acá
+# por la misma razón por la que ya estaba la del Compresor -si no, el
+# medidor VU volvería a quedar corrido en una fuente que use alguno de
+# estos dos filtros nuevos, el mismo síntoma que ya se había
+# diagnosticado y corregido para el Compresor y la Ganancia-.
 CAMPOS_GANANCIA_FILTRO = {
     "gain_filter": "db",
     "compressor_filter": "output_gain",
+    "upward_compressor_filter": "output_gain",
+    "expander_filter": "output_gain",
 }
 
 # Cada cuánto (en milisegundos) se vuelve a consultar a OBS, en
