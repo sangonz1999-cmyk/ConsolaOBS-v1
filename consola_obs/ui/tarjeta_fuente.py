@@ -25,22 +25,25 @@ def _ancho_preferido_fuente():
 
 
 def _ancho_contenedor_fuente():
-    """Ancho aproximado (con su padding) de una tarjeta de fuente, al
-    factor de escala actual. Se usa para calcular cuántas entran por
-    fila, igual que se hace con los pads del soundboard."""
-    return _ancho_preferido_fuente() + 12                  
+    """Ancho real (con su padding) que ocupa una tarjeta de fuente en la
+    grilla: tarjeta + sombra (18) + padx de grilla (6+6). Es el paso de
+    columna que usa _reubicar_fuentes, así el cálculo de columnas
+    coincide con lo que se ve y la tarjeta que no entra baja de fila
+    en vez de quedar tapada."""
+    return _ancho_preferido_fuente() + 30                  
 
 
 def _columnas_disponibles_fuentes():
     """Cuántas tarjetas de fuente entran por fila: piso estricto, sin
-    tolerancia. Apenas una tarjeta quedaría tapada (aunque sea un
-    píxel), baja a la fila de abajo. Así ninguna fuente queda nunca a
-    medio ver tapada por el panel de sonidos."""
+    tolerancia más que 2px. Apenas una tarjeta quedaría tapada (aunque
+    sea un píxel más allá de esos 2px), baja a la fila de abajo. Así
+    ninguna fuente queda nunca a medio ver ni se oculta: siempre se
+    ve entera, en su fila."""
     ancho_disponible = E.canvas.winfo_width()
     celda = _ancho_contenedor_fuente()
     if ancho_disponible <= 1 or celda <= 0:
         return E.columnas_fuentes
-    return max(1, int(ancho_disponible // celda))
+    return max(1, int((ancho_disponible + 2) // celda))
 
 
 def _ancho_celda_fuentes():
@@ -125,11 +128,6 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
-    try:
-        ancho_visible = E.canvas.winfo_width()
-    except Exception:
-        ancho_visible = 0
-    paso_celda = ancho_celda + 18 + 12
     for idx, nombre in enumerate(E.orden_fuentes):
         if nombre not in E.fuentes:
             continue
@@ -148,27 +146,20 @@ def _reubicar_fuentes(forzar=False):
             _reajustar_fuente_nombre_tarjeta(nombre, ancho_celda - 24)
         # Reposicionar en la grilla es barato (no crea nada nuevo), así
         # que se hace siempre, haya cambiado el ancho o no: es lo que
-        # de verdad mueve una tarjeta a otra fila/columna.
+        # de verdad mueve una tarjeta a otra fila/columna. Las tarjetas
+        # siempre se ven enteras: la que no entra baja de fila (ver
+        # _columnas_disponibles_fuentes), nunca se oculta.
         tarjeta_sombra.grid(row=fila, column=col, padx=6, pady=6, sticky="n")
-        # Visibilidad: si alguna parte de la tarjeta quedó fuera del
-        # ancho visible (tapada por el borde), no se muestra hasta
-        # volver a verse. Como se evalúa en cada reacomodo, el cambio
-        # es imperceptible.
-        try:
-            if ancho_visible > 1 and col * paso_celda + ancho_celda + 18 > ancho_visible + 2:
-                tarjeta_sombra.grid_remove()
-        except Exception:
-            pass
     mod_ui_ventana.actualizar_scroll()
 
 
 def _al_redimensionar_fuentes(event=None):
-    """Reacomoda la grilla con un toque de calma (igual que soundboard):
-    reaccionar en CADA evento mientras se arrastra es lo que hacía que
-    las tarjetas saltaran. No destruye ni crea nada (ver _reubicar)."""
+    """Reacomoda la grilla en vivo durante el arrastre (throttle corto
+    de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
+    nada (ver _reubicar)."""
     if E._trabajo_redimension_fuentes["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
-    E._trabajo_redimension_fuentes["id"] = E.ventana.after(30, _aplicar_redimension_fuentes)
+    E._trabajo_redimension_fuentes["id"] = E.ventana.after(15, _aplicar_redimension_fuentes)
 
 
 def _aplicar_redimension_fuentes():

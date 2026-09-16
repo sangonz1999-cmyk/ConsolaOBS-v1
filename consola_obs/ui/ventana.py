@@ -712,10 +712,29 @@ def _reconstruir_interfaz_con_velo():
         _ocultar_velo_redimension()
 
 
+def _reubicar_vivo_ventana():
+    """Reacomoda ambas grillas en vivo durante el redimensionado de la
+    ventana, sin tapar nada: sólo grid_forget + grid, sin destruir ni
+    crear nada, así el movimiento se ve fluido."""
+    try:
+        E.ventana._timer_resize_vivo = None
+    except Exception:
+        pass
+    try:
+        mod_ui_tarjeta._reubicar_fuentes()
+    except Exception:
+        pass
+    try:
+        mod_ui_soundboard._reubicar_pads()
+    except Exception:
+        pass
+
+
 def _al_redimensionar_ventana(event):
-    """Si cambió el TAMAÑO de la ventana, tapa las grillas y programa el
-    asentado (se acomodan y se muestran sólo cuando todo está quieto y
-    renderizado). Mover la ventana de lugar (misma medida) no hace nada."""
+    """Si cambió el TAMAÑO de la ventana, reacomoda las grillas en vivo
+    (throttle corto, sin tapas). Mover la ventana de lugar (misma
+    medida) no hace nada. Las tapas con foto quedan sólo para el drag
+    del divisor."""
     if event.widget is not E.ventana:
         return
     try:
@@ -725,7 +744,16 @@ def _al_redimensionar_ventana(event):
     if getattr(E.ventana, "_ult_geom", None) == tam:
         return
     E.ventana._ult_geom = tam
-    _programar_asentado()
+    try:
+        timer = getattr(E.ventana, "_timer_resize_vivo", None)
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+    except Exception:
+        pass
+    try:
+        E.ventana._timer_resize_vivo = E.ventana.after(15, _reubicar_vivo_ventana)
+    except Exception:
+        pass
 
 
 def al_cerrar():
