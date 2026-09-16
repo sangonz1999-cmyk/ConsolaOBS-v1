@@ -113,27 +113,27 @@ _PALETA_BARRA_COLOR = {
     "rojo": (255, 59, 48), "amarillo": (242, 196, 100), "verde": (47, 214, 147),
 }
 _PALETA_BARRA_COLOR_TENUE = {
-    "rojo": (76, 20, 16), "amarillo": (62, 50, 26), "verde": (13, 56, 38),
+    "rojo": (96, 26, 22), "amarillo": (80, 64, 34), "verde": (18, 72, 48),
 }
 _PALETA_BARRA_GRIS = {
     "rojo": (232, 235, 242), "amarillo": (154, 164, 178), "verde": (91, 100, 120),
 }
 _PALETA_BARRA_GRIS_TENUE = {
-    "rojo": (72, 79, 94), "amarillo": (58, 65, 80), "verde": (44, 50, 63),
+    "rojo": (80, 87, 102), "amarillo": (66, 73, 88), "verde": (52, 58, 72),
 }
 
 
 def _color_zona_barra(db, paleta):
-    """Color para un dB dado, con degradado sutil entre zonas
-    (4-6 dB de mezcla en cada borde)."""
-    if db >= -8:
+    """Color para un dB dado, con degradado muy sutil entre zonas
+    (mezclas largas para que no se note el corte)."""
+    if db >= -6:
         return paleta["rojo"]
     if db >= -12:
-        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 12) / 4)
-    if db >= -18:
+        return _mezclar_rgb(paleta["amarillo"], paleta["rojo"], (db + 12) / 6)
+    if db >= -16:
         return paleta["amarillo"]
-    if db >= -24:
-        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 24) / 6)
+    if db >= -26:
+        return _mezclar_rgb(paleta["verde"], paleta["amarillo"], (db + 26) / 10)
     return paleta["verde"]
 
 
@@ -189,7 +189,10 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     else:
         id_barra = canvas.create_rectangle(x0, y0, x1, y1, fill="#2fd693", outline="")
     id_rojo = canvas.create_rectangle(x0, y0, x1, y1, fill=C.MOD_CLIP, outline="", state="hidden")
-    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    # La máscara lleva punteado (stipple): tapa el degradado brillante
+    # pero deja ver la guía tenue de abajo, que es la que se ve arriba
+    # del nivel en vez de negro liso.
+    id_mascara = canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="", stipple="gray25")
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
