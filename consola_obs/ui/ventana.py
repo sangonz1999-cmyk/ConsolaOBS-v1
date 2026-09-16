@@ -68,7 +68,7 @@ def _soltar_panel(nombre_actual, event):
 # divide en POSICIONES_DIVISOR partes iguales y el sash salta a la más
 # cercana al mouse. Sin posiciones intermedias no hay estados a medio
 # pintar.
-POSICIONES_DIVISOR = 15
+POSICIONES_DIVISOR = 30
 MIN_PANEL_FUENTES = 140
 MIN_PANEL_SOUNDBOARD = 220
 
@@ -118,7 +118,21 @@ def _mover_divisor(event):
         ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
         if nx is None or ny is None:
             return
+        # Sólo se actúa si cambió de posición fija: se coloca y se
+        # reacomodan las grillas EN EL ACTO (sin debounce), tan rápido
+        # que no se llega a ver el hueco. Reubicar no destruye nada.
+        if getattr(E.cuerpo, "_ultimo_snap", None) == (nx, ny):
+            return
+        E.cuerpo._ultimo_snap = (nx, ny)
         E.cuerpo.sash_place(0, nx, ny)
+        try:
+            mod_ui_tarjeta._reubicar_fuentes()
+        except Exception:
+            pass
+        try:
+            mod_ui_soundboard._reubicar_pads()
+        except Exception:
+            pass
     except Exception:
         pass
     return "break"
