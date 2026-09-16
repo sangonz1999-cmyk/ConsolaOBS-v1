@@ -97,9 +97,9 @@ def _presionar_divisor(event):
         return
     # Se toma el control del arrastre (sin el break, Tk movería el sash
     # píxel por píxel por su cuenta y volverían las posiciones
-    # intermedias).
+    # intermedias). No se tapa nada acá: cada salto se resuelve
+    # completo y sincrónico en _mover_divisor.
     E.cuerpo._arrastrando_sash = True
-    _programar_asentado()
     return "break"
 
 
@@ -180,14 +180,31 @@ def _mover_divisor(event):
         ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
         if nx is None or ny is None:
             return
-        # Sólo se actúa si cambió de posición fija: se coloca el sash
-        # y se programa el asentado (las grillas se acomodan y se
-        # muestran sólo cuando todo está quieto y renderizado).
+        # Sólo se actúa si cambió de posición fija. El orden importa:
+        # 1) se coloca el sash, 2) se deja asentar la geometría, 3) se
+        # reacomodan las grillas, 4) se fuerza el pintado completo.
+        # Todo sincrónico: cuando vuelve el control ya está todo
+        # cargado, nunca se ve un estado a medio generar.
         if getattr(E.cuerpo, "_ultimo_snap", None) == (nx, ny):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
         E.cuerpo.sash_place(0, nx, ny)
-        _programar_asentado()
+        try:
+            E.ventana.update_idletasks()
+        except Exception:
+            pass
+        try:
+            mod_ui_tarjeta._reubicar_fuentes()
+        except Exception:
+            pass
+        try:
+            mod_ui_soundboard._reubicar_pads()
+        except Exception:
+            pass
+        try:
+            E.ventana.update_idletasks()
+        except Exception:
+            pass
     except Exception:
         pass
     return "break"
