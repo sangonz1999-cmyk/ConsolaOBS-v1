@@ -359,7 +359,8 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         color_meta = mod_ui_dibujo._oscurecer_color_pct(color_etiqueta, 0.30) if color_etiqueta else "#141a26"
 
     es_principal_inicial = nombre in E.fuentes_principales
-    color_borde = C.COLOR_BORDE_PRINCIPAL if es_principal_inicial else "#0e1219"
+    color_borde_principal = C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL
+    color_borde = color_borde_principal if es_principal_inicial else "#0e1219"
     grosor_borde = 3 if es_principal_inicial else 2
 
     tarjeta_sombra = tk.Canvas(
@@ -737,7 +738,7 @@ def _actualizar_estado_gris(nombre):
 
     widgets["contenedor"].config(
         bg=color_cuerpo,
-        highlightbackground=(C.COLOR_BORDE_PRINCIPAL if es_principal else "#0e1219"),
+        highlightbackground=((C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL) if es_principal else "#0e1219"),
         highlightthickness=(3 if es_principal else 2)
     )
     widgets["db"].config(bg=color_cuerpo)
@@ -832,7 +833,9 @@ def _resaltar_destino_fuente(nombre_nuevo):
     if anterior is not None and anterior in E.fuentes:
         _actualizar_estado_gris(anterior)
     if nombre_nuevo is not None and nombre_nuevo in E.fuentes:
-        E.fuentes[nombre_nuevo]["contenedor"].config(highlightbackground="#2fd693", highlightthickness=3)
+        E.fuentes[nombre_nuevo]["contenedor"].config(
+            highlightbackground=C.MOD_ACENTO if E.es_moderna() else "#2fd693",
+            highlightthickness=3)
     E._arrastre_fuente["destino_resaltado"] = nombre_nuevo
 
 

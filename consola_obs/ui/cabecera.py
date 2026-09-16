@@ -50,7 +50,7 @@ def _redibujar_degradado_cabecera():
     ids = mod_ui_dibujo._gradiente_vertical(E.cabecera_fondo, 0, 0, ancho, C.ALTO_CABECERA, C.COLOR_CABECERA_ARRIBA, C.COLOR_CABECERA_ABAJO, pasos=14)
     for iid in ids:
         E.cabecera_fondo.addtag_withtag("fondo_cabecera", iid)
-    ids_acento = mod_ui_dibujo._gradiente_horizontal(E.cabecera_fondo, 0, C.ALTO_CABECERA - 3, ancho, C.ALTO_CABECERA, "#2fd693", "#17b8b0", pasos=14)
+    ids_acento = mod_ui_dibujo._gradiente_horizontal(E.cabecera_fondo, 0, C.ALTO_CABECERA - 3, ancho, C.ALTO_CABECERA, C.MOD_ACENTO if E.es_moderna() else "#2fd693", C.MOD_ACENTO_OSCURO if E.es_moderna() else "#17b8b0", pasos=14)
     for iid in ids_acento:
         E.cabecera_fondo.addtag_withtag("fondo_cabecera", iid)
     E.cabecera_fondo.tag_lower("fondo_cabecera")

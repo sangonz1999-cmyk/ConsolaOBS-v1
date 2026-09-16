@@ -278,19 +278,21 @@ COLOR_PANEL_SOUNDBOARD = "#10141b"
 SALTO_MINIMO_REDIBUJO_PX = 32
 
 
-# Tema "Moderna" (estilo OBS): gris azulado bastante oscuro, barra de
-# nivel continua con pico y clip rojo, fader azul con perilla blanca.
-MOD_FONDO = "#0d1017"
-MOD_TARJETA = "#141a24"
-MOD_CABECERA = "#1b2230"
-MOD_TEXTO = "#e8ebf2"
-MOD_APAGADO = "#79859f"
-MOD_MARCA_DB = "#6b7688"
-MOD_PICO = "#f2f5fa"
-MOD_PICO_GRIS = "#9aa4b2"
+# Tema "Moderna" (estilo OBS): grises oscuros con acento azul.
+MOD_FONDO = "#141414"
+MOD_TARJETA = "#1f1f1f"
+MOD_CABECERA = "#262626"
+MOD_TEXTO = "#ededed"
+MOD_APAGADO = "#8a8a8a"
+MOD_MARCA_DB = "#7a7a7a"
+MOD_PICO = "#f5f5f5"
+MOD_PICO_GRIS = "#a3a3a3"
 MOD_CLIP = "#ff2441"
-MOD_BARRA_FONDO = "#080b10"
-MOD_ICONO_APAGADO = "#a8b2c4"
+MOD_BARRA_FONDO = "#0a0a0a"
+MOD_ICONO_APAGADO = "#b5b5b5"
+MOD_ACENTO = "#2f7cf6"
+MOD_ACENTO_OSCURO = "#1f5fd0"
+MOD_ACENTO_CLARO = "#7aa8ff"
 
 # ------------------------------------------------------------
 # GUÍA DEL MEDIDOR (tema Moderna): EDITABLE
@@ -300,7 +302,7 @@ MOD_ICONO_APAGADO = "#a8b2c4"
 # fondo (8, 11, 16), menos se nota. La guía en gris (mute/otra escena)
 # usa la segunda paleta.
 GUIA_BARRA_COLOR = {
-    "rojo": (9, 7, 6), "amarillo": (9, 8, 6), "verde": (7, 10, 8),
+    "rojo": (82, 1, 0), "amarillo": (80, 82, 0), "verde": (0, 82, 3),
 }
 GUIA_BARRA_GRIS = {
     "rojo": (12, 13, 15), "amarillo": (11, 12, 14), "verde": (10, 11, 13),

@@ -440,8 +440,10 @@ def construir_cuerpo():
     barra_titulo_fuentes.pack(fill="x")
     barra_titulo_fuentes.pack_propagate(False)
 
-    tk.Frame(barra_titulo_fuentes, bg="#2fd693", width=4).pack(side="left", fill="y")
-    tk.Frame(barra_titulo_fuentes, bg="#17b8b0", height=2).pack(side="bottom", fill="x")
+    _acento_barra = C.MOD_ACENTO if E.es_moderna() else "#2fd693"
+    _acento_linea = C.MOD_ACENTO_OSCURO if E.es_moderna() else "#17b8b0"
+    tk.Frame(barra_titulo_fuentes, bg=_acento_barra, width=4).pack(side="left", fill="y")
+    tk.Frame(barra_titulo_fuentes, bg=_acento_linea, height=2).pack(side="bottom", fill="x")
 
     titulo_fuentes = tk.Label(
         barra_titulo_fuentes, text="☰  FUENTES DE AUDIO   ·   arrastrá para mover el panel",
@@ -486,8 +488,8 @@ def construir_cuerpo():
     E.barra_soundboard.pack(fill="x")
     E.barra_soundboard.pack_propagate(False)
 
-    tk.Frame(E.barra_soundboard, bg="#17b8b0", width=4).pack(side="left", fill="y")
-    tk.Frame(E.barra_soundboard, bg="#2fd693", height=2).pack(side="bottom", fill="x")
+    tk.Frame(E.barra_soundboard, bg=_acento_linea, width=4).pack(side="left", fill="y")
+    tk.Frame(E.barra_soundboard, bg=_acento_barra, height=2).pack(side="bottom", fill="x")
 
     titulo_soundboard = tk.Label(
         E.barra_soundboard, text="☰  Efectos De Sonido",

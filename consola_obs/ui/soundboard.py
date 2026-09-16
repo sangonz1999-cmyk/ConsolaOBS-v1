@@ -156,7 +156,8 @@ def _resaltar_destino_pad(indice_nuevo):
     if indice_nuevo is not None:
         celda = E._celdas_pads.get(indice_nuevo)
         if celda:
-            celda.config(highlightbackground="#2fd693", highlightthickness=3)
+            celda.config(highlightbackground=C.MOD_ACENTO if E.es_moderna() else "#2fd693",
+                         highlightthickness=3)
     E._arrastre_pad["destino_resaltado"] = indice_nuevo
 
 
@@ -621,7 +622,7 @@ def construir_soundboard():
         # Color de acento del pad: el que eligió el usuario si puso uno,
         # el verde de la consola si tiene sonido, y nada (gris de fábrica)
         # si está vacío.
-        acento_pad = color_etiqueta_pad or ("#2fd693" if tiene_sonido else None)
+        acento_pad = color_etiqueta_pad or ((C.MOD_ACENTO if E.es_moderna() else "#2fd693") if tiene_sonido else None)
 
         pad_esta_sonando = E._sesion_reproduccion.get("indice") == i
         _hacer_placa = (mod_ui_dibujo._placa_moderna_tk if E.es_moderna()
@@ -776,8 +777,11 @@ def construir_soundboard():
     marco_detectar.pack(fill="x")
     boton_detectar = tk.Button(
         marco_detectar, text="🔍 DETECTAR SONIDOS DE LA CARPETA",
-        bg="#242d3d", fg="#4fe3ae", activebackground="#2e3a4f",
-        activeforeground="#4fe3ae", relief="flat", bd=0, pady=6,
+        bg="#242d3d" if not E.es_moderna() else "#232323",
+        fg="#4fe3ae" if not E.es_moderna() else C.MOD_ACENTO_CLARO,
+        activebackground="#2e3a4f" if not E.es_moderna() else "#2e2e2e",
+        activeforeground="#4fe3ae" if not E.es_moderna() else C.MOD_ACENTO_CLARO,
+        relief="flat", bd=0, pady=6,
         font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=lambda: detectar_sonidos_carpeta(avisar=True),
     )
@@ -816,9 +820,10 @@ def construir_soundboard():
         # cuando el mouse está encima, para que se lea como "acción".
         _hacer_mas = (mod_ui_dibujo._placa_moderna_tk if E.es_moderna()
                       else mod_ui_dibujo._placa_tk)
+        _acento_mas = C.MOD_ACENTO if E.es_moderna() else "#2fd693"
         placa = _hacer_mas(
             ancho_mas, alto_mas,
-            "#2fd693" if _estado_mas["hover"] else None,
+            _acento_mas if _estado_mas["hover"] else None,
             False, _estado_mas["hover"]
         )
         if placa is not None:
@@ -845,11 +850,13 @@ def construir_soundboard():
         x_mas = ancho_mas / 2 - (ancho_mas_txt + 18 + ancho_agregar_txt) / 2 + ancho_mas_txt / 2
         x_agregar = x_mas + ancho_mas_txt / 2 + 18 + ancho_agregar_txt / 2
         canvas_mas.create_text(
-            x_mas, alto_mas / 2, text="+", fill="#4fe3ae",
+            x_mas, alto_mas / 2, text="+",
+            fill=C.MOD_ACENTO_CLARO if E.es_moderna() else "#4fe3ae",
             font=(E.FUENTE_UI, tam_mas, "bold")
         )
         canvas_mas.create_text(
-            x_agregar, alto_mas / 2, text=texto_agregar, fill="#c3cee5",
+            x_agregar, alto_mas / 2, text=texto_agregar,
+            fill="#c3cee5" if not E.es_moderna() else "#d5d5d5",
             font=(E.FUENTE_UI, tam_agregar, "bold")
         )
 
