@@ -736,7 +736,7 @@ def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
     etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
     etiqueta.texto_icono = texto
-    etiqueta.tam_icono = max(14, int(fuente_tam * 1.6))
+    etiqueta.tam_icono = max(12, int(fuente_tam + 2))
     etiqueta.color_icono = color
     etiqueta.bind("<Button-1>", lambda _e: comando())
     _repintar_icono_plano(etiqueta)
