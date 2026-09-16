@@ -64,6 +64,71 @@ def _soltar_panel(nombre_actual, event):
         })
 
 
+# El divisor se mueve SÓLO entre posiciones fijas (snap): la ventana se
+# divide en POSICIONES_DIVISOR partes iguales y el sash salta a la más
+# cercana al mouse. Sin posiciones intermedias no hay estados a medio
+# pintar.
+POSICIONES_DIVISOR = 15
+MIN_PANEL_FUENTES = 140
+MIN_PANEL_SOUNDBOARD = 220
+
+
+def _snap_divisor(valor, total, minimo_antes, minimo_despues):
+    """Posición entera más cercana a `valor` dentro del rango útil,
+    considerando sólo las POSICIONES_DIVISOR fijas. None si no hay
+    recorrido válido."""
+    lo = max(0, minimo_antes)
+    hi = min(total, total - minimo_despues)
+    if hi <= lo or total <= 1:
+        return None
+    puntos = [lo + i * (hi - lo) / (POSICIONES_DIVISOR - 1)
+              for i in range(POSICIONES_DIVISOR)]
+    return int(round(min(puntos, key=lambda p: abs(p - valor))))
+
+
+def _presionar_divisor(event):
+    # OJO: identify devuelve una LISTA como [0, 'sash'] (no el string
+    # 'sash' solo), por eso se busca adentro y no con ==.
+    try:
+        donde = E.cuerpo.identify(event.x, event.y)
+    except Exception:
+        return
+    if "sash" not in str(donde):
+        return
+    # Se toma el control del arrastre (sin el break, Tk movería el sash
+    # píxel por píxel por su cuenta y volverían las posiciones
+    # intermedias).
+    E.cuerpo._arrastrando_sash = True
+    return "break"
+
+
+def _mover_divisor(event):
+    if not getattr(E.cuerpo, "_arrastrando_sash", False):
+        return
+    try:
+        # El evento puede venir de cualquier widget (burbujea hasta la
+        # ventana): se pasa a coordenadas del PanedWindow.
+        px = event.x_root - E.cuerpo.winfo_rootx()
+        py = event.y_root - E.cuerpo.winfo_rooty()
+        mins = {"fuentes": MIN_PANEL_FUENTES, "soundboard": MIN_PANEL_SOUNDBOARD}
+        orden = list(E.orden_paneles or ["fuentes", "soundboard"])
+        min_antes = mins.get(orden[0], 140)
+        min_despues = mins.get(orden[-1], 140)
+        nx = _snap_divisor(px, E.cuerpo.winfo_width(), min_antes, min_despues)
+        ny = _snap_divisor(py, E.cuerpo.winfo_height(), min_antes, min_despues)
+        if nx is None or ny is None:
+            return
+        E.cuerpo.sash_place(0, nx, ny)
+    except Exception:
+        pass
+    return "break"
+
+
+def _soltar_divisor(event):
+    if not getattr(E.cuerpo, "_arrastrando_sash", False):
+        return
+    E.cuerpo._arrastrando_sash = False
+
 
 def construir_cuerpo():
 
@@ -91,6 +156,11 @@ def construir_cuerpo():
 
     E.cuerpo = tk.PanedWindow(E.ventana, orient=E.orientacion_paneles, bg="#0b0e13", sashwidth=8, sashrelief="flat")
     E.cuerpo.pack(fill="both", expand=True)
+    # El press va acá (a nivel widget, para frenar el drag nativo con
+    # break antes de que arranque); motion y release van una sola vez
+    # a nivel ventana en app.py (llegan se esté donde se esté el mouse,
+    # por bubbling).
+    E.cuerpo.bind("<ButtonPress-1>", _presionar_divisor)
     # Los widgets nuevos se apilan por encima de los que ya existían;
     # si el velo de redimensionado está puesto (ver más abajo, cerca
     # del final del archivo), hay que volver a subirlo por encima de
