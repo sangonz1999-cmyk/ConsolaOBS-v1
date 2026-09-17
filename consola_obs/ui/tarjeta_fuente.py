@@ -36,6 +36,7 @@ class _FaderOBS:
     COLOR_PISTA = "#0a0a0a"
     COLOR_MARCA_FADER = "#565c6c"
     COLOR_LLENO_FADER = "#4365cb"
+    MARCAS_FADER_DB = (0, -10, -20, -30, -40, -50)
 
     def __init__(self, parent, alto, bg, al_cambiar):
         self.alto = max(60, int(alto) + self.FADER_EXTRA_PX)
@@ -71,13 +72,8 @@ class _FaderOBS:
         self.id_fill = self.canvas.create_rectangle(
             cx - 2, self.alto - pb, cx + 2, self.alto - pb,
             fill=self.COLOR_LLENO_FADER, outline="")
-        # Marcas en las mismas posiciones que la escala dB del medidor
-        # (mismo juego de marcas y mismo mapeo sobre el alto total, no
-        # sobre el recorrido de la pastilla): así quedan a la misma
-        # altura en ambas columnas.
-        for _db_marca in mod_ui_medidores.MARCAS_DB_OBS:
-            _y = (-_db_marca / 60.0) * self.alto
-            _y = min(max(_y, 1), self.alto - 1)
+        for _db_marca in self.MARCAS_FADER_DB:
+            _y = self._y_de_db(_db_marca)
             for _lado in (-1, 1):
                 self.canvas.create_line(
                     cx + _lado * 3, _y, cx + _lado * 7, _y,
