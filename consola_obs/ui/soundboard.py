@@ -77,9 +77,10 @@ def _abrir_menu_contextual_pad(indice, event):
         )
     menu.add_cascade(label="🏷  Color de etiqueta", menu=submenu_color)
 
+    menu.add_separator()
     if tiene_sonido:
-        menu.add_separator()
-        menu.add_command(label="🗑  Quitar sonido", command=lambda: _quitar_pad(indice))
+        menu.add_command(label="🗑  Vaciar pad", command=lambda: _quitar_pad(indice))
+    menu.add_command(label="🗑  Eliminar pad", command=lambda: _eliminar_pad(indice))
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
@@ -115,6 +116,55 @@ def _quitar_pad(indice):
     for clave in [c for c in E.miniaturas_cargadas if c[0] == indice]:
         E.miniaturas_cargadas.pop(clave, None)
     mod_configuracion.guardar_config_soundboard()
+    construir_soundboard()
+
+
+def _eliminar_pad(indice):
+    """A diferencia de 'Vaciar pad' (que sólo borra el sonido y deja el
+    botón vacío en su lugar), esto saca el pad de la grilla por
+    completo: corre todos los que están después una posición hacia
+    atrás para cerrar el hueco -justo al revés de cómo
+    _insertar_pad_al_principio los corre hacia adelante- y encoge la
+    grilla en uno. Es 100% local: los pads no son objetos de OBS (todos
+    comparten la única fuente Soundboard_Efectos), así que no hay nada
+    que avisarle a OBS acá."""
+    if not messagebox.askyesno(
+        "Eliminar pad",
+        "¿Eliminar este botón del soundboard? Los pads siguientes se corren un lugar para "
+        "ocupar el hueco."
+    ):
+        return
+
+    total = E.num_pads_soundboard
+    if indice >= total:
+        return
+
+    # Si el pad que se está borrando es el que está sonando ahora mismo
+    # (o cualquier otro, ya que a todos los que están después se les va
+    # a correr el índice), se corta la reproducción antes de tocar
+    # nada: si no, la sesión de reproducción queda apuntando a un
+    # índice que después de correr pasa a ser otro pad distinto.
+    if E._sesion_reproduccion.get("indice") is not None:
+        mod_audio_reproduccion.detener_sonido(E._sesion_reproduccion["indice"])
+
+    for i in range(indice, total - 1):
+        siguiente = E.config_soundboard.pop(str(i + 1), None)
+        if siguiente is None:
+            E.config_soundboard.pop(str(i), None)
+        else:
+            E.config_soundboard[str(i)] = siguiente
+    E.config_soundboard.pop(str(total - 1), None)
+    E.num_pads_soundboard -= 1
+
+    # Los índices de todo lo que estaba después del que se borró
+    # cambiaron de lugar, así que las miniaturas cacheadas para esas
+    # posiciones ya no corresponden al pad que muestran ahora: se
+    # invalidan y se vuelven a generar solas al reconstruir la grilla.
+    for clave in [c for c in E.miniaturas_cargadas if c[0] >= indice]:
+        E.miniaturas_cargadas.pop(clave, None)
+
+    mod_configuracion.guardar_config_soundboard()
+    mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
     construir_soundboard()
 
 

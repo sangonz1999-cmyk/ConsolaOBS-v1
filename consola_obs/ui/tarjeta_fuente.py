@@ -880,6 +880,9 @@ def _abrir_menu_contextual_fuente(nombre, event):
         )
     menu.add_cascade(label="🏷  Color de etiqueta", menu=submenu_color)
 
+    menu.add_separator()
+    menu.add_command(label="🗑  Eliminar fuente…", command=lambda: _eliminar_fuente(nombre))
+
     try:
         menu.tk_popup(event.x_root, event.y_root)
     finally:
@@ -1222,6 +1225,78 @@ def _renombrar_fuente_en_hilo(nombre_viejo, nombre_nuevo):
         ))
 
 
+def _eliminar_fuente(nombre):
+    """Clic derecho > 'Eliminar fuente…': a diferencia de todo lo demás
+    en este menú, esto borra la fuente de OBS de verdad (no sólo la
+    tarjeta de la consola), así que primero se avisa bien claro y
+    después se chequea si es una fuente 'global' (Mic/Aux, Audio de
+    escritorio: las que vienen de Configuración > Audio de OBS, no de
+    una escena puntual), porque borrar esas no es lo mismo que borrar
+    una fuente común y puede dejar ese canal roto en OBS -así que no se
+    permite desde acá-. La tarjeta se termina de sacar sola cuando
+    llegue el evento on_input_removed, igual que si se hubiera borrado
+    directamente desde OBS."""
+    if not E.conectado:
+        messagebox.showwarning("Sin conexión", "Conectate a OBS para eliminar una fuente.")
+        return
+    if nombre == C.NOMBRE_FUENTE_EFECTOS:
+        messagebox.showinfo(
+            "No se puede eliminar",
+            "Esta es la fuente interna del soundboard y el programa depende de que exista. "
+            "No se puede eliminar."
+        )
+        return
+
+    # La consulta de si es una fuente global se hace en un hilo (como
+    # cualquier otro pedido a OBS) para no trabar la interfaz mientras
+    # se espera la respuesta; recién con eso resuelto se sigue con el
+    # aviso o la confirmación, ya de vuelta en el hilo principal.
+    threading.Thread(target=_chequear_global_y_eliminar_fuente, args=(nombre,), daemon=True).start()
+
+
+def _chequear_global_y_eliminar_fuente(nombre):
+    try:
+        globales = mod_obs_cliente._leer_fuentes_globales_obs()
+    except Exception:
+        globales = set()
+    E.ventana.after(0, lambda: _continuar_eliminar_fuente(nombre, nombre in globales))
+
+
+def _continuar_eliminar_fuente(nombre, es_global):
+    if nombre not in E.fuentes:
+        # Pudo haber desaparecido mientras se consultaba si era global.
+        return
+
+    if es_global:
+        messagebox.showinfo(
+            "No se puede eliminar",
+            f"\"{nombre}\" es un canal de audio global de OBS (Mic/Aux o Audio de escritorio, "
+            "de Configuración > Audio), no una fuente común de una escena. Borrarlo desde acá "
+            "puede dejar ese canal roto en OBS, así que no está permitido desde la consola: "
+            "si hace falta, se cambia desde la propia Configuración > Audio de OBS."
+        )
+        return
+
+    if not messagebox.askyesno(
+        "Eliminar fuente",
+        f"Se va a borrar la fuente \"{nombre}\" de OBS por completo -no sólo de la consola-. "
+        "Esta acción no se puede deshacer.\n\n¿Confirmar?"
+    ):
+        return
+
+    threading.Thread(target=_eliminar_fuente_en_hilo, args=(nombre,), daemon=True).start()
+
+
+def _eliminar_fuente_en_hilo(nombre):
+    try:
+        E.cliente_obs.remove_input(nombre)
+    except Exception as e:
+        E.ventana.after(0, lambda e=e: messagebox.showerror(
+            "Error al eliminar",
+            f"No se pudo eliminar la fuente en OBS.\n\n{e}"
+        ))
+
+
 
 def actualizar():
     if not E.conectado:
@@ -1363,6 +1438,7 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
             E.ultima_vez_saturado.pop(nombre_existente, None)
             if nombre_existente in E.orden_fuentes:
                 E.orden_fuentes.remove(nombre_existente)
+            _limpiar_referencias_fuente_borrada(nombre_existente)
 
     for datos in datos_fuentes:
         nombre = datos["nombre"]
@@ -1384,3 +1460,45 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
 
     _al_redimensionar_fuentes()
     _reubicar_fuentes()
+
+
+def _limpiar_referencias_fuente_borrada(nombre):
+    """Cuando una fuente desaparece de OBS -sea porque se la borró
+    desde 'Eliminar fuente…' acá mismo, sea porque se la borró
+    directamente desde OBS- no alcanza con sacar la tarjeta: antes esto
+    dejaba basura colgada (la fuente seguía marcada como 'principal' o
+    con color de etiqueta en la config guardada para siempre, y si
+    tenía una ventana de Filtros o Propiedades abierta, esa ventana
+    quedaba editando una fuente que ya no existe). Se limpia todo acá,
+    en un único lugar, para que valga tanto si el borrado se hizo desde
+    la consola como desde OBS."""
+    cambios_interfaz = {}
+    if nombre in E.fuentes_principales:
+        E.fuentes_principales.discard(nombre)
+        cambios_interfaz["fuentes_principales"] = sorted(E.fuentes_principales)
+    if nombre in E.colores_fuentes:
+        E.colores_fuentes.pop(nombre, None)
+        cambios_interfaz["colores_fuentes"] = E.colores_fuentes
+    if cambios_interfaz:
+        mod_configuracion.guardar_config_interfaz(cambios_interfaz)
+
+    if E._dialogo_filtros_abierto.get("nombre") == nombre:
+        ventana_filtros = E._dialogo_filtros_abierto.get("ventana")
+        E._dialogo_filtros_abierto["nombre"] = None
+        E._dialogo_filtros_abierto["refrescar"] = None
+        E._dialogo_filtros_abierto["ventana"] = None
+        if ventana_filtros is not None:
+            try:
+                ventana_filtros.destroy()
+            except Exception:
+                pass
+
+    if E._dialogo_propiedades_abierto.get("nombre") == nombre:
+        ventana_propiedades = E._dialogo_propiedades_abierto.get("ventana")
+        E._dialogo_propiedades_abierto["nombre"] = None
+        E._dialogo_propiedades_abierto["ventana"] = None
+        if ventana_propiedades is not None:
+            try:
+                ventana_propiedades.destroy()
+            except Exception:
+                pass
