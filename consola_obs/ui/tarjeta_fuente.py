@@ -28,6 +28,9 @@ class _FaderOBS:
     PILDORA_ALTO = 28
     # Recorrido más largo que la barra de nivel (como en OBS).
     FADER_EXTRA_PX = 40
+    # La pista ocupa casi todo el canvas (mismo largo visual que el
+    # medidor); la pastilla viaja con margen adentro.
+    PISTA_BORDE = 2
     # Pista negra (no gris) y marcas perpendiculares grises cada 10 dB
     # de -10 a -60, como la escala del fader de OBS.
     COLOR_PISTA = "#0a0a0a"
@@ -46,22 +49,23 @@ class _FaderOBS:
         cx = self.ANCHO / 2
         self._cx = cx
         m = self._margen
-        self.canvas.create_rectangle(cx - 2, m, cx + 2, self.alto - m,
+        pb = self.PISTA_BORDE
+        self.canvas.create_rectangle(cx - 2, pb, cx + 2, self.alto - pb,
                                      fill=self.COLOR_PISTA, outline="")
         # Terminaciones redondas de la pista (semicírculos del mismo color).
-        self.canvas.create_oval(cx - 2, m - 2, cx + 2, m + 2,
+        self.canvas.create_oval(cx - 2, pb - 2, cx + 2, pb + 2,
                                 fill=self.COLOR_PISTA, outline="")
-        self.canvas.create_oval(cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
+        self.canvas.create_oval(cx - 2, self.alto - pb - 2, cx + 2, self.alto - pb + 2,
                                 fill=self.COLOR_PISTA, outline="")
         self.id_fill = self.canvas.create_rectangle(
-            cx - 2, self.alto - m, cx + 2, self.alto - m,
+            cx - 2, self.alto - pb, cx + 2, self.alto - pb,
             fill=self.COLOR_LLENO_FADER, outline="")
         # El relleno llega hasta el final con terminación redonda: punta
         # fija abajo y punta móvil que sigue al nivel.
-        self.canvas.create_oval(cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
+        self.canvas.create_oval(cx - 2, self.alto - pb - 2, cx + 2, self.alto - pb + 2,
                                 fill=self.COLOR_LLENO_FADER, outline="")
         self.id_fill_cap = self.canvas.create_oval(
-            cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
+            cx - 2, self.alto - pb - 2, cx + 2, self.alto - pb + 2,
             fill=self.COLOR_LLENO_FADER, outline="")
         for _db_marca in self.MARCAS_FADER_DB:
             _y = self._y_de_db(_db_marca)
@@ -115,7 +119,8 @@ class _FaderOBS:
     def _repintar(self):
         y = self._y_de_db(self._db)
         pw, ph = self.PILDORA_ANCHO, self.PILDORA_ALTO
-        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - self._margen)
+        pb = self.PISTA_BORDE
+        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - pb)
         self.canvas.coords(self.id_fill_cap, self._cx - 2, y - 2, self._cx + 2, y + 2)
         if self._handle_es_foto:
             self.canvas.coords(self.id_handle, self._cx, y)
