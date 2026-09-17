@@ -104,6 +104,13 @@ MARCAS_DB_OBS = [0, -6, -12, -18, -24, -30, -36, -48, -60]
 _cache_barra_obs = {}
 
 
+# Geometría del medidor Moderna: dos canales (L/R) con divisora negra
+# en el medio, como en OBS. El ancho total es apenas mayor que la
+# barra única anterior.
+ANCHO_BARRA_MODERNA_TOTAL = 24
+ANCHO_DIVISORA_MODERNA = 4
+
+
 def _mezclar_rgb(c1, c2, t):
     return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
 
@@ -188,9 +195,10 @@ def _color_zona_barra(db, paleta, mezcla=(1.5, 2.0)):
 
 def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
     """Tira vertical de la GUÍA de fondo (colores oscuros, editables en
-    constantes.py), cacheada por tamaño. None sin Pillow."""
+    constantes.py), con la divisora negra del medio ya pintada, cacheada
+    por tamaño. None sin Pillow."""
     try:
-        from consola_obs.compat import HAY_PILLOW, Image, ImageTk
+        from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageTk
     except Exception:
         return None
     if not HAY_PILLOW:
@@ -207,7 +215,13 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
         for y in range(alto):
             db = -(y / max(1, alto - 1)) * 60.0
             px[0, y] = _color_zona_barra(db, paleta)
-        foto = ImageTk.PhotoImage(tira.resize((ancho, alto)))
+        foto = tira.resize((ancho, alto))
+        # Divisora negra entre canales, en la misma posición que el hueco
+        # que dejan las filas del frente (ver _dibujar_barra_obs).
+        _div = ANCHO_DIVISORA_MODERNA
+        _x0 = (ancho - _div) // 2
+        ImageDraw.Draw(foto).rectangle([_x0, 0, _x0 + _div - 1, alto - 1], fill=(0, 0, 0))
+        foto = ImageTk.PhotoImage(foto)
         _cache_barra_obs[clave] = foto
         return foto
     except Exception:
@@ -215,12 +229,17 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
 
 
 def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
-    """Barra de nivel continua estilo OBS: fondo con guía tenue SÓLIDA
-    (sin puntos) y, encima, una fila por píxel con el degradado
-    brillante que se muestra/oculta hasta el nivel. Más línea de pico
-    y testigo de clip rojo. Devuelve el dict de ids."""
+    """Barra de nivel de dos canales estilo OBS: guía tenue de fondo con
+    divisora negra y, encima, una fila por píxel y por canal con cortes
+    duros de color (sin difuminado) que se muestran/ocultan hasta el
+    nivel. Más línea de pico y testigo de clip rojo. Devuelve el dict
+    de ids (id_filas guarda pares [izquierdo, derecho] por fila)."""
     x0, x1 = 1, max(2, ancho_barra - 1)
     y0, y1 = offset_y, offset_y + alto
+    div = ANCHO_DIVISORA_MODERNA
+    ancho_canal = max(2, (x1 - x0 - div) // 2)
+    x_div0 = x0 + (x1 - x0 - div) // 2
+    x_div1 = x_div0 + div
     canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
     id_img_tenue = id_img = None
     foto_tenue = _imagen_barra_obs(x1 - x0, alto, gris=False, tenue=True)
@@ -232,15 +251,20 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     esquema = _esquema_barra_actual()
     paleta = {"rojo": esquema["alta"], "amarillo": esquema["media"], "verde": esquema["baja"]}
     gris_cfg = _gris_barra_actual()
-    mezcla = _mezcla_degradado_actual()
+    # Cortes duros entre zonas como en OBS (BARRA_MODERNA_MEZCLA queda
+    # sin efecto a propósito).
+    mezcla = (0.0, 0.0)
     for i in range(alto):
         db = -(i / max(1, alto - 1)) * 60.0
         colores.append("#%02x%02x%02x" % _color_zona_barra(db, paleta, mezcla))
         colores_gris.append("#%02x%02x%02x" % _color_zona_barra(db, gris_cfg, mezcla))
     id_filas = []
     for i in range(alto):
-        id_filas.append(canvas.create_rectangle(
-            x0, y0 + i, x1, y0 + i + 1, fill=colores[i], outline="", state="hidden"))
+        id_izq = canvas.create_rectangle(
+            x0, y0 + i, x0 + ancho_canal, y0 + i + 1, fill=colores[i], outline="", state="hidden")
+        id_der = canvas.create_rectangle(
+            x1 - ancho_canal, y0 + i, x1, y0 + i + 1, fill=colores[i], outline="", state="hidden")
+        id_filas.append((id_izq, id_der))
     id_barra = None
     id_clip = canvas.create_rectangle(x0, y0, x1, y0 + 3, fill=C.MOD_CLIP, outline="", state="hidden")
     id_pico = canvas.create_line(x0, y1, x1, y1, fill=C.MOD_PICO, width=2)
@@ -274,11 +298,10 @@ def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, satur
     if atenuado != dib.get("gris"):
         colores = dib["colores_gris"] if atenuado else dib["colores"]
         sat_fill = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
-        for i, iid in enumerate(filas):
-            if saturado and i >= y_nivel:
-                canvas.itemconfig(iid, fill=sat_fill)
-            else:
-                canvas.itemconfig(iid, fill=colores[i])
+        for i, par in enumerate(filas):
+            relleno = sat_fill if (saturado and i >= y_nivel) else colores[i]
+            for iid in par:
+                canvas.itemconfig(iid, fill=relleno)
         foto_tenue = _imagen_barra_obs(dib["x1"] - dib["x0"], alto,
                                        gris=atenuado, tenue=True)
         if foto_tenue is not None and dib.get("id_img_tenue") is not None:
@@ -297,11 +320,14 @@ def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, satur
     color_sat = C.COLOR_LED_SATURADO_GRIS if atenuado else C.MOD_CLIP
     colores = dib["colores_gris"] if atenuado else dib["colores"]
     for i in range(desde, hasta):
+        par = filas[i]
         if i >= y_nivel:
-            canvas.itemconfig(filas[i], fill=color_sat if saturado else colores[i],
-                              state="normal")
+            relleno = color_sat if saturado else colores[i]
+            for iid in par:
+                canvas.itemconfig(iid, fill=relleno, state="normal")
         else:
-            canvas.itemconfig(filas[i], state="hidden")
+            for iid in par:
+                canvas.itemconfig(iid, state="hidden")
     canvas.coords(dib["id_pico"], dib["x0"], dib["y0"] + y_pico, dib["x1"], dib["y0"] + y_pico)
     canvas.itemconfig(dib["id_pico"], fill=C.MOD_PICO_GRIS if atenuado else C.MOD_PICO)
     canvas.itemconfig(dib["id_clip"], state="normal" if saturado else "hidden")
@@ -318,8 +344,9 @@ def apagar_medidores():
                 continue
             dib = widgets.get("vu_obs")
             if dib:
-                for iid in dib.get("id_filas") or []:
-                    canvas.itemconfig(iid, state="hidden")
+                for par in dib.get("id_filas") or []:
+                    for iid in par:
+                        canvas.itemconfig(iid, state="hidden")
                 canvas.coords(dib["id_pico"], dib["x0"], dib["y1"], dib["x1"], dib["y1"])
                 canvas.itemconfig(dib["id_clip"], state="hidden")
                 widgets.setdefault("vu_obs_estado", {}).pop("ultimo", None)

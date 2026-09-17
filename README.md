@@ -216,6 +216,9 @@ Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
 ## 6. MEDIDORES VU TIPO LED
 Cada tarjeta de fuente tiene un medidor de dos canales (barra LED
 vertical, NUM_SEGMENTOS_VU=24 segmentos) que imita el medidor de OBS.
+En Moderna es barra continua de dos canales con divisora negra
+(`_dibujar_barra_obs`): cortes duros de color, línea gris de escala dB
+pegada a la barra y línea de pico.
 
 ### Mecánica:
 - Los niveles vienen de on_input_volume_meters (datos de OBS en tiempo real, no reconstruidos a mano excepto en el caso mute, ver abajo).

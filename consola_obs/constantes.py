@@ -317,6 +317,7 @@ MOD_ACENTO_CLARO = "#7aa8ff"
 BARRA_MODERNA = {"alta": (227, 59, 87), "media": (229, 175, 36), "baja": (55, 210, 71)}
 # Degradado en dB (ancho de mezcla del borde alto y del borde medio):
 # (0.0, 0.0) = cortes duros; (1.5, 2.0) = sutil; (6.0, 10.0) = suave.
+# NOTA: el medidor Moderna usa cortes duros fijos (sin efecto), como OBS.
 BARRA_MODERNA_MEZCLA = (1.5, 2.0)
 # Gris de la barra (mute/otra escena), también con RGB directo.
 # OJO: las claves acá son alta/media/baja (igual que BARRA_MODERNA).

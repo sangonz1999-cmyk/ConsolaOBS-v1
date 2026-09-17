@@ -414,6 +414,9 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     medida_icono = mod_utilidades.medida_actual()
     alto_canal = medida_icono["fuente_alto_canal"]
     ancho_barra_vu = medida_icono["fuente_ancho_vu"]
+    if E.es_moderna():
+        # Medidor de dos canales con divisora (ver medidores.py).
+        ancho_barra_vu = mod_ui_medidores.ANCHO_BARRA_MODERNA_TOTAL
     ancho_contenedor = _ancho_celda_fuentes()
     alto_contenedor = medida_icono["fuente_alto"]
 
@@ -626,10 +629,16 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     for marca in marcas_db:
         y = mod_ui_medidores._y_para_db(marca, alto_canal) + margen_marcas_db
         vu_canvas.create_text(
-            ancho_barra_vu + 3, y, text=str(marca),
+            ancho_barra_vu + 5, y, text=str(marca),
             fill=color_marcas, font=(E.FUENTE_UI, tam_marcas_db if E.es_moderna() else 6),
             anchor="w"
         )
+    if E.es_moderna():
+        # Línea divisora gris pegada a la barra, con los dB al lado.
+        vu_canvas.create_line(
+            ancho_barra_vu + 2, margen_marcas_db,
+            ancho_barra_vu + 2, margen_marcas_db + alto_canal,
+            fill=C.MOD_MARCA_DB, width=1)
 
     def cambiar_volumen(valor):
         if not E.conectado:
