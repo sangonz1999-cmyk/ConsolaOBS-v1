@@ -668,7 +668,9 @@ def construir_soundboard():
     ancho_celda = medida["pad_ancho"]
 
     ancho_imagen_pad_base = ancho_celda - 12
-    pie_celda = 76
+    # Sin fila de botones ■/↻ (clic en el pad reproduce y clic de nuevo
+    # detiene con fundido): el pie es sólo la etiqueta de nombre.
+    pie_celda = 48
     alto_celda = ancho_imagen_pad_base + pie_celda
 
     marco_grid = tk.Frame(E.panel_soundboard, bg=E.color_fondo_panel())
@@ -686,12 +688,6 @@ def construir_soundboard():
 
         datos = E.config_soundboard.get(str(i))
         tiene_sonido = bool(datos and datos.get("archivo"))
-
-        def _detener(idx=i):
-            mod_audio_reproduccion.detener_sonido(idx)
-
-        def _reiniciar(idx=i):
-            mod_audio_reproduccion.reiniciar_sonido(idx)
 
         color_etiqueta_pad = datos.get("color") if datos else None
         # La celda ya no es una "tarjeta" gris: es transparente contra el
@@ -859,21 +855,6 @@ def construir_soundboard():
         etiqueta_nombre_pad.bind("<B1-Motion>", lambda e, idx=i: _mover_arrastre_pad(idx, e))
         etiqueta_nombre_pad.bind("<ButtonRelease-1>", lambda e, idx=i: _soltar_arrastre_pad(idx, e))
         etiqueta_nombre_pad.bind("<Button-3>", lambda e, idx=i: _abrir_menu_contextual_pad(idx, e))
-
-        fila_botones = tk.Frame(celda, bg=E.color_fondo_panel())
-        fila_botones.pack()
-
-        boton_stop = mod_ui_dibujo._crear_boton_circular(
-            fila_botones, "■", medida["diametro_pad_chico"], medida["fuente_pad_icono"],
-            "#ff5567", _detener
-        )
-        boton_stop.pack(side="left", padx=4)
-
-        boton_reiniciar = mod_ui_dibujo._crear_boton_circular(
-            fila_botones, "↻", medida["diametro_pad_chico"], medida["fuente_pad_icono"],
-            "#566070", _reiniciar
-        )
-        boton_reiniciar.pack(side="left", padx=4)
 
     # ------------------------------------------------------------------
     # BOTÓN "DETECTAR SONIDOS": crea un pad por cada audio nuevo de la
