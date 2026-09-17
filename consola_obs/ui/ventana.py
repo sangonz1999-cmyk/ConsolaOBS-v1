@@ -539,7 +539,7 @@ def construir_cuerpo():
     E.canvas_sb.pack(side="left", fill="both", expand=True)
 
     E.panel_soundboard = tk.Frame(E.canvas_sb, bg=E.color_fondo_panel())
-    E.canvas_sb.create_window((0, 0), window=E.panel_soundboard, anchor="nw")
+    E._ventana_panel_sb_id = E.canvas_sb.create_window((0, 0), window=E.panel_soundboard, anchor="nw")
 
     E.panel_soundboard.bind("<Configure>", actualizar_scroll_soundboard)
     E.canvas_sb.bind("<Configure>", mod_ui_soundboard._al_redimensionar_soundboard)

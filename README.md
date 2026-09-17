@@ -12,6 +12,8 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Editor de filtros** de audio de OBS en vivo (compresor, EQ, etc.).
 - **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.
 - **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS y sincronización con fuentes creadas/borradas desde OBS.
+- **Eliminar fuente** desde la consola (clic derecho > Eliminar fuente…), borra la fuente de OBS con confirmación y protección de fuentes globales e internas.
+- **Vaciar vs Eliminar pad**: el soundboard distingue entre vaciar el sonido (deja el botón vacío) y eliminar el pad de la grilla (corre los siguientes para cerrar el hueco).
 
 ## Requisitos
 
@@ -61,11 +63,13 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 6. Medidores VU tipo LED + medidores de niveles (VU meters)
 7. Saturación / "rojo" en el medidor
 8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)
+8b. Eliminar fuente (clic derecho > Eliminar fuente…)
 9. Fuentes "principales" (favoritos que se generan siempre)
 ## 10. Filtros de audio (crear, editar, ajustes en tiempo real)
 ## 10b. Propiedades de fuente (clic derecho > Propiedades)
 ## 11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)
 ## 11b. Agregar fuente (clic derecho en el panel > Agregar fuente)
+## 11c. Vaciar pad vs Eliminar pad
 ## 12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable
 ## 13. Redimensionado responsive (factor de escala, velo, supersampling)
 ## 14. Persistencia (config JSON)
@@ -180,7 +184,7 @@ los refleja en la UI al instante:
 Inputs / auditorio:
 - on_input_audio_monitor_type_changed → actualiza botón 🎧 monitor.
 - on_input_mute_state_changed → actualiza botón 🔊/🔇.
-- on_input_name_changed / on_input_removed → renombra/elimina tarjeta.
+- on_input_name_changed / on_input_removed → renombra/elimina tarjeta (al eliminar también limpia `fuentes_principales`, `colores_fuentes` y cierra Filtros/Propiedades de esa fuente, sección 8b).
 - on_input_volume_meters → NUEVO: llega en un hilo; se guarda en niveles_actuales/niveles_crudos y se marca saturación.
 - on_input_audio_* (monitor type, volume, ...) en general.
 
@@ -203,7 +207,8 @@ Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
 - Al monitorear: set_input_audio_monitor_type.
 - Al editar/cambiar filtros: set_source_filter_settings, create_source_filter, set_source_filter_enabled, remove_source_filter, set_source_filter_index.
 - Al reproducir un pad: set_input_settings + trigger_media_input_action (RESTART) sobre la fuente de efectos.
-- Al crear/asegurar fuentes principales: create_scene_item. Todo esta sincronización es EN AMBAS DIRECCIONES y en tiempo real.
+- Al crear/asegurar fuentes principales: create_scene_item.
+- Al eliminar una fuente: remove_input (sección 8b). Todo esta sincronización es EN AMBAS DIRECCIONES y en tiempo real.
 
 
 ## 6. MEDIDORES VU TIPO LED
@@ -262,7 +267,7 @@ Cabecera de la tarjeta:
 - Botón circular de mute 🔊/🔇 (toggle).
 - Botón circular de monitoreo 🎧 (colores por tipo de monitoreo).
 - LED de estado (verde si está en escena activa / encendida, gris si atenuada).
-- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", quitar del panel, color de etiqueta, etc.
+- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", "Propiedades…", color de etiqueta y "Eliminar fuente…".
 - Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
 
 Cuerpo de la tarjeta:
@@ -277,6 +282,14 @@ algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
 - _ancho_preferido_fuente: calcula el ancho de catálogo de las tarjetas según el tamaño de ícono (Chico/Mediano/Grande).
 - _reubicar_fuentes(): reposiciona las tarjetas en la grilla según las columnas disponibles, SIN recrearlas, para no perder el estado del fader mientras se redimensiona.
 - _columna_disponible_fuentes: cuántas tarjetas entran por fila (histéresis de 40 px).
+
+
+## 8b. ELIMINAR FUENTE (clic derecho > Eliminar fuente…)
+`_eliminar_fuente` en `ui/tarjeta_fuente.py`: a diferencia del resto del menú, esto borra la fuente de OBS de verdad (no sólo la tarjeta), vía `remove_input` en un hilo daemon:
+- Pide conexión activa; bloquea la fuente interna del soundboard (`Soundboard_Efectos`).
+- Chequea en un hilo si es fuente global (Mic/Aux, Audio de escritorio de Configuración > Audio, vía `_leer_fuentes_globales_obs`): si lo es, no permite borrarla desde la consola para no dejar ese canal roto en OBS.
+- Pide confirmación ("no se puede deshacer"); la tarjeta se quita sola al llegar `on_input_removed`, igual que si se hubiera borrado desde OBS.
+- Limpieza centralizada (`_limpiar_referencias_fuente_borrada`): al desaparecer una fuente —desde la consola o desde OBS— se la saca de `fuentes_principales` y `colores_fuentes` (con guardado de config) y se cierran sus ventanas de Filtros/Propiedades si estaban abiertas.
 
 
 ## 9. FUENTES "PRINCIPALES" (favoritas que se generan SIEMPRE)
@@ -351,7 +364,7 @@ via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
 - Clic = REPRODUCIR. La fuente de efectos se configura con el archivo (set_input_settings {local_file, ...}) y se lanza con trigger_media_input_action(RESTART) en un hilo. En paralelo, el mismo efecto sale por los parlantes de la PC (miniaudio, `audio/reproduccion.py`), con on/off en Ajustes → Audio.
 - Botones circulares pequeños: ■ DETENER (STOP), ↻ REINICIAR.
 - Botón de mute/escuchar ya cubierto por el fader de la fuente.
-- Doble clic o menú contextual (clic derecho) del pad: reproducir, detener, reiniciar, asignar archivo de audio, asignar imagen, color de etiqueta, renombrar, quitar.
+- Doble clic o menú contextual (clic derecho) del pad: reproducir, detener, reiniciar, asignar/cambiar sonido, asignar imagen, color de etiqueta, renombrar, vaciar o eliminar (sección 11c).
 
 ### Arrastre de pads (reordenar):
 - Se puede arrastrar un pad para reordenarlos (mismo mecanismo que las tarjetas de fuente: _iniciar_arrastre_pad, _mover_arrastre_pad, _soltar_arrastre_pad). Al soltar sobre otro pad se intercambian.
@@ -365,7 +378,8 @@ pad de borde y del LED).
 - Cache `_imagenes_decodificadas` y `_miniaturas_cargadas` por (ruta, tamaño), para no reabrir/redecodificar archivos pesados al reconstruir el soundboard (muy importante para no tildar).
 
 ### Grilla responsive del soundboard (_columnas_disponibles):
-- Calcula cuántas columnas entran según el ancho del canvas y la medida del pad (tamaño de ícono, fijo). Con histéresis para no saltar columnas en achiques mínimos.
+- Calcula cuántas columnas entran según el ancho del canvas y la medida real del pad (pad_ancho + 12 de padx, con tolerancia 25% para la última columna).
+- El panel copia el ancho del canvas (sin esto quedaba angosto con un hueco a la derecha) y el sobrante se reparte parejo entre columnas con las celdas centradas (`_repartir_columnas_grilla`), así la grilla usa todo el ancho.
 - Al cambiar el ancho sólo se reubica (`_reubicar_pads`); nunca se reconstruye por resize.
 
 ### Config de medidas (TAMANOS_ICONO):
@@ -379,6 +393,12 @@ Módulo nuevo `consola_obs/audio/fuentes.py`. Clic derecho sobre una zona VACÍA
 - Al elegir un tipo desde el submenú (`agregar_fuente_de_tipo`): pide el nombre (sugerido = nombre del tipo), lo numera si ya existe (los nombres de fuente son únicos en todo OBS, no por escena), crea la fuente en la escena AL AIRE con create_input(..., None, True) (nace con los ajustes de fábrica del tipo) y abre automáticamente su ventana de Propiedades (sección 10b) a los 400 ms.
 - SINCRONIZACIÓN: on_input_created/on_input_removed (obs/eventos.py) refrescan la lista sola cuando una fuente se crea o se borra desde DENTRO de OBS (antes sólo se enteraba si el cambio tocaba la escena activa, así que una fuente global de audio —Mic/Aux, Audio de escritorio— no se detectaba hasta apretar "Actualizar fuentes"). Los refrescos se agrupan con ~400 ms de espera para no relanzar una actualización completa por cada evento si OBS manda varios juntos, y esperan a que termine un refresco en curso en vez de superponerse.
 - El botón "AGREGAR FUENTE" del menú de Ajustes (barra lateral) sigue existiendo como atajo al selector completo.
+
+
+## 11c. VACIAR PAD vs ELIMINAR PAD
+Menú contextual del pad en `ui/soundboard.py` (100% local: los pads no son objetos de OBS, todos comparten la única fuente `Soundboard_Efectos`):
+- **Vaciar pad** (`_quitar_pad`, sólo si tiene sonido): borra nombre/archivo/imagen pero deja el botón vacío en su lugar (conserva el color de etiqueta). Invalida su miniatura cacheada.
+- **Eliminar pad** (`_eliminar_pad`, siempre visible): saca el pad de la grilla por completo, corre todos los posteriores una posición hacia atrás para cerrar el hueco (inverso a `_insertar_pad_al_principio`) y decrementa `num_pads_soundboard` (guarda `config_soundboard.json` + `config_interfaz.json`). Corta la reproducción activa antes de reordenar para no dejar la sesión apuntando a otro índice, e invalida las miniaturas cacheadas desde ese índice.
 
 
 ## 12. CABECERA Y PANELES

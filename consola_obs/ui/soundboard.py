@@ -557,7 +557,11 @@ def _apagar_pad_si_token_vigente(indice, token):
 
 def _columnas_disponibles():
     ancho_disponible = E.canvas_sb.winfo_width()
-    celda = mod_utilidades.medida_actual()["pad_ancho"] + 20
+    # Huella real por columna: pad_ancho + padx 6 de cada lado (ver los
+    # .grid(..., padx=6) de _reubicar_pads/construir_soundboard). Antes se
+    # usaba +20, 8px de más por columna, y el piso caía una columna antes
+    # de tiempo dejando un hueco de ~1 pad a la derecha.
+    celda = mod_utilidades.medida_actual()["pad_ancho"] + 12
     if ancho_disponible <= 1 or celda <= 0:
         return E.columnas_soundboard
     # Regla 25%: la última columna puede quedar tapada hasta un cuarto
@@ -569,6 +573,16 @@ def _al_redimensionar_soundboard(event=None):
     """Reacomoda la grilla en vivo durante el arrastre (throttle corto
     de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
     nada (ver _reubicar_pads)."""
+    # El panel vive dentro del canvas con anchor="nw" sin ancho propio:
+    # si no se le copia el ancho del canvas, el panel queda más angosto
+    # que la vista y todo (grilla + botones DETECTAR/AGREGAR con fill=x)
+    # se ve recortado a la izquierda con un hueco vacío a la derecha.
+    # Mismo criterio que los canvas de filtros/propiedades/fuentes.
+    try:
+        if event is not None and getattr(event, "width", 0) > 1:
+            E.canvas_sb.itemconfig(E._ventana_panel_sb_id, width=event.width)
+    except Exception:
+        pass
     mod_ui_ventana.entrar_modo_super()
     if E._trabajo_redimension_soundboard["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_soundboard["id"])
@@ -604,12 +618,46 @@ def _reubicar_pads():
             continue
         celda.grid_forget()
         celda.grid(row=i // columnas, column=i % columnas, padx=6, pady=6)
+    _repartir_columnas_grilla(columnas)
     mod_ui_ventana.actualizar_scroll_soundboard()
+
+
+def _repartir_columnas_grilla(columnas):
+    """Reparte el sobrante horizontal entre las columnas (weight=1) con
+    las celdas centradas en su columna: los pads siguen con tamaño fijo
+    de catálogo, pero los huecos crecen parejos y la grilla usa todo el
+    ancho en vez de amontonarse a la izquierda con el resto a la
+    derecha. Se resetean las columnas sobrantes de un layout anterior
+    con más columnas para que no absorban espacio vacías."""
+    marco = getattr(E, "_marco_grid_sb", None)
+    try:
+        if marco is None or not marco.winfo_exists():
+            return
+    except Exception:
+        return
+    # Resetea también las columnas de un layout anterior con más
+    # columnas: una columna vacía con weight=1 absorbería espacio y
+    # descentraría todo.
+    previas = getattr(E, "_columnas_grilla_configuradas", 0) or 0
+    for c in range(max(previas, columnas)):
+        try:
+            marco.grid_columnconfigure(c, weight=1 if c < columnas else 0)
+        except Exception:
+            pass
+    E._columnas_grilla_configuradas = columnas
 
 
 def construir_soundboard():
     for widget in E.panel_soundboard.winfo_children():
         widget.destroy()
+    E._marco_grid_sb = None
+    # Ancho del panel = ancho del canvas desde el primer cuadro (ver
+    # _al_redimensionar_soundboard): si no, el primer pintado sale con
+    # el panel angosto hasta el primer resize.
+    try:
+        E.canvas_sb.itemconfig(E._ventana_panel_sb_id, width=E.canvas_sb.winfo_width())
+    except Exception:
+        pass
 
     columnas = max(1, E.columnas_soundboard)
     medida = mod_utilidades.medida_actual()
@@ -625,6 +673,9 @@ def construir_soundboard():
 
     marco_grid = tk.Frame(E.panel_soundboard, bg=E.color_fondo_panel())
     marco_grid.pack(fill="x")
+    E._marco_grid_sb = marco_grid
+    E._columnas_grilla_configuradas = 0
+    _repartir_columnas_grilla(columnas)
 
     E._celdas_pads.clear()
     E._refrescos_pads.clear()
