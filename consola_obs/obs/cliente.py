@@ -230,6 +230,46 @@ def _asegurar_fuente_en_todas_las_escenas(nombre_fuente):
                 print(f"No se pudo asegurar '{nombre_fuente}' en la escena '{escena}': {e}")
 
 
+def quitar_fuente_de_todas_las_escenas(nombre_fuente):
+    """Inverso de _asegurar_fuente_en_todas_las_escenas: saca
+    'nombre_fuente' de TODAS las escenas (RemoveSceneItem por cada
+    ítem de primer nivel que la referencie) SIN borrar el input de
+    OBS: la fuente sigue existiendo y se puede volver a agregar a
+    cualquier escena desde OBS. Sólo cubre ítems de primer nivel (no
+    los anidados dentro de grupos). Serializada con
+    _lock_sincronizar_escenas como su contraparte. Devuelve en
+    cuántas escenas estaba."""
+    quitadas = 0
+    if not E.conectado:
+        return quitadas
+    with E._lock_sincronizar_escenas:
+        try:
+            escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName") for e in E.cliente_obs.get_scene_list().scenes]
+        except Exception as e:
+            print(f"No se pudieron listar las escenas: {e}")
+            return quitadas
+        for escena in escenas:
+            if not escena:
+                continue
+            try:
+                items = E.cliente_obs.get_scene_item_list(escena).scene_items
+            except Exception as e:
+                print(f"No se pudieron listar los ítems de '{escena}': {e}")
+                continue
+            for it in items:
+                try:
+                    if mod_obs_eventos._valor(it, "source_name", "sourceName") != nombre_fuente:
+                        continue
+                    item_id = mod_obs_eventos._valor(it, "scene_item_id", "sceneItemId")
+                    if item_id is None:
+                        continue
+                    E.cliente_obs.remove_scene_item(escena, item_id)
+                    quitadas += 1
+                except Exception as e:
+                    print(f"No se pudo quitar '{nombre_fuente}' de '{escena}': {e}")
+    return quitadas
+
+
 def asegurar_fuentes_principales_en_todas_las_escenas():
     """Antes esto igualaba TODAS las fuentes de audio en TODAS las
     escenas (invasivo: tocaba escenas del usuario sin que lo pidiera).

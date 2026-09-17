@@ -13,6 +13,7 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.
 - **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS y sincronización con fuentes creadas/borradas desde OBS.
 - **Eliminar fuente** desde la consola (clic derecho > Eliminar fuente…), borra la fuente de OBS con confirmación y protección de fuentes globales e internas.
+- **Quitar de todas las escenas** (clic derecho), saca la fuente de todas las escenas sin borrarla de OBS.
 - **Vaciar vs Eliminar pad**: el soundboard distingue entre vaciar el sonido (deja el botón vacío) y eliminar el pad de la grilla (corre los siguientes para cerrar el hueco).
 
 ## Requisitos
@@ -64,6 +65,7 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 7. Saturación / "rojo" en el medidor
 8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)
 8b. Eliminar fuente (clic derecho > Eliminar fuente…)
+8c. Quitar de todas las escenas (clic derecho)
 9. Fuentes "principales" (favoritos que se generan siempre)
 ## 10. Filtros de audio (crear, editar, ajustes en tiempo real)
 ## 10b. Propiedades de fuente (clic derecho > Propiedades)
@@ -267,7 +269,7 @@ Cabecera de la tarjeta:
 - Botón circular de mute 🔊/🔇 (toggle).
 - Botón circular de monitoreo 🎧 (colores por tipo de monitoreo).
 - LED de estado (verde si está en escena activa / encendida, gris si atenuada).
-- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", "Propiedades…", color de etiqueta y "Eliminar fuente…".
+- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", "Propiedades…", color de etiqueta, "Quitar de todas las escenas…" y "Eliminar fuente…".
 - Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
 
 Cuerpo de la tarjeta:
@@ -291,6 +293,10 @@ algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
 - Chequea en un hilo si es fuente global (Mic/Aux, Audio de escritorio de Configuración > Audio, vía `_leer_fuentes_globales_obs`): si lo es, no permite borrarla desde la consola para no dejar ese canal roto en OBS.
 - Pide confirmación ("no se puede deshacer"); la tarjeta se quita sola al llegar `on_input_removed`, igual que si se hubiera borrado desde OBS.
 - Limpieza centralizada (`_limpiar_referencias_fuente_borrada`): al desaparecer una fuente —desde la consola o desde OBS— se la saca de `fuentes_principales` y `colores_fuentes` (con guardado de config) y se cierran sus ventanas de Filtros/Propiedades si estaban abiertas.
+
+
+## 8c. QUITAR DE TODAS LAS ESCENAS (clic derecho)
+`_quitar_fuente_de_escenas` en `ui/tarjeta_fuente.py` + `quitar_fuente_de_todas_las_escenas` en `obs/cliente.py`: recorre todas las escenas y borra con `remove_scene_item` cada ítem de primer nivel que referencie a la fuente, SIN borrar el input (sigue existiendo y se puede reagregar desde OBS). Corre en hilo daemon, serializado con `_lock_sincronizar_escenas`, pide confirmación, bloquea la fuente interna del soundboard y las marcadas como principales (esas se mantienen en escena por definición), y al terminar refresca la lista e informa en cuántas escenas estaba. La tarjeta queda atenuada hasta que la fuente vuelva a alguna escena.
 
 
 ## 9. FUENTES "PRINCIPALES" (favoritas que se generan SIEMPRE)

@@ -951,6 +951,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
     menu.add_cascade(label="🏷  Color de etiqueta", menu=submenu_color)
 
     menu.add_separator()
+    menu.add_command(label="Quitar de todas las escenas…", command=lambda: _quitar_fuente_de_escenas(nombre))
     menu.add_command(label="🗑  Eliminar fuente…", command=lambda: _eliminar_fuente(nombre))
 
     try:
@@ -1365,6 +1366,67 @@ def _eliminar_fuente_en_hilo(nombre):
             "Error al eliminar",
             f"No se pudo eliminar la fuente en OBS.\n\n{e}"
         ))
+
+
+def _quitar_fuente_de_escenas(nombre):
+    """Clic derecho > 'Quitar de todas las escenas…': saca la fuente de
+    todas las escenas de OBS pero NO la borra (sigue existiendo como
+    input y se puede reagregar desde OBS). La tarjeta queda atenuada
+    hasta que vuelva a alguna escena."""
+    if not E.conectado:
+        messagebox.showwarning("Sin conexión", "Conectate a OBS para modificar las escenas.")
+        return
+    if nombre == C.NOMBRE_FUENTE_EFECTOS:
+        messagebox.showinfo(
+            "No se puede quitar",
+            "Esta es la fuente interna del soundboard y el programa depende de que esté en escena. "
+            "No se puede quitar."
+        )
+        return
+    if nombre not in E.fuentes:
+        return
+    if nombre in E.fuentes_principales:
+        messagebox.showinfo(
+            "Es una fuente principal",
+            f"\"{nombre}\" está marcada como principal y el programa la mantiene en todas las "
+            "escenas. Quitala de principales primero si la querés sacar de escena."
+        )
+        return
+    if not messagebox.askyesno(
+        "Quitar de todas las escenas",
+        f"Se va a quitar \"{nombre}\" de todas las escenas de OBS.\n"
+        "La fuente NO se borra: sigue existiendo y se puede reagregar desde OBS."
+        "\n\n¿Confirmar?"
+    ):
+        return
+    threading.Thread(target=_quitar_de_escenas_en_hilo, args=(nombre,), daemon=True).start()
+
+
+def _quitar_de_escenas_en_hilo(nombre):
+    try:
+        cuantas = mod_obs_cliente.quitar_fuente_de_todas_las_escenas(nombre)
+    except Exception as e:
+        E.ventana.after(0, lambda e=e: messagebox.showerror(
+            "Error al quitar",
+            f"No se pudo quitar la fuente de las escenas.\n\n{e}"
+        ))
+        return
+
+    def _avisar():
+        try:
+            actualizar()
+        except Exception:
+            pass
+        if cuantas:
+            messagebox.showinfo(
+                "Listo",
+                f"\"{nombre}\" se quitó de {cuantas} escena(s).")
+        else:
+            messagebox.showinfo(
+                "Sin cambios",
+                f"\"{nombre}\" no estaba en ninguna escena.")
+
+    E.ventana.after(0, _avisar)
 
 
 
