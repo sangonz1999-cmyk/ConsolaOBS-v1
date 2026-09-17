@@ -370,24 +370,23 @@ def _recortar_a_dos_lineas(texto, fuente, ancho_max):
 
 def _titulo_en_caja_fija(nombre_visible, tam_actual, ancho_texto):
     """Título que entra SIEMPRE en la cabecera de alto fijo (2 renglones
-    como máximo): primero achica la letra (ver _ajustar_titulo_largo),
-    después sigue achicando hasta 5 exigiendo 2 renglones, y sólo si ni
-    así entra recorta con '…' (ver _recortar_a_dos_lineas).
+    como máximo): primero achica la letra (ver _ajustar_titulo_largo);
+    si ni así entra, reintenta con todo el ancho útil (sin el aire
+    extra de adentro) bajando hasta 5; sólo si tampoco entra recorta
+    con '…' (ver _recortar_a_dos_lineas).
     Devuelve (tamaño, ancho_de_envoltura, texto_mostrado)."""
     tam, wrap, lineas = _ajustar_titulo_largo(nombre_visible, tam_actual, ancho_texto)
     if lineas <= 2:
         return tam, wrap, nombre_visible
-    ancho = wrap or ancho_texto
+    ancho_util = max(50, ancho_texto - 4)
     tam2, wrap2, lineas2 = _ajustar_texto_tarjeta(
-        nombre_visible, E.FUENTE_TITULO, min(tam, 7), ancho, 5, 2, "bold")
-    if lineas2 <= 2:
-        fuente2 = tkfont.Font(family=E.FUENTE_TITULO, size=tam2, weight="bold")
-        if all(fuente2.measure(l) <= (wrap2 or ancho_texto)
-               for l in _envolver_texto_por_ancho(nombre_visible, fuente2, wrap2 or ancho_texto)):
-            return tam2, wrap2, nombre_visible
-    ancho2 = wrap2 or ancho_texto
-    fuente = tkfont.Font(family=E.FUENTE_TITULO, size=tam2, weight="bold")
-    return tam2, wrap2, _recortar_a_dos_lineas(nombre_visible, fuente, ancho2)
+        nombre_visible, E.FUENTE_TITULO, min(tam, 7), ancho_util, 5, 2, "bold")
+    fuente2 = tkfont.Font(family=E.FUENTE_TITULO, size=tam2, weight="bold")
+    envueltas = _envolver_texto_por_ancho(nombre_visible, fuente2, ancho_util)
+    if lineas2 <= 2 and len(envueltas) <= 2 and all(
+            fuente2.measure(l) <= ancho_util for l in envueltas):
+        return tam2, wrap2 or ancho_util, nombre_visible
+    return tam2, wrap2 or ancho_util, _recortar_a_dos_lineas(nombre_visible, fuente2, ancho_util)
 
 
 def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None):
@@ -663,7 +662,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         boton_mute = mod_ui_dibujo._crear_icono_plano(
             fila_iconos,
             "🔇" if muted else "🔊",
-            medida_icono["fuente_boton"] + 1,
+            medida_icono["fuente_boton"] - 2,
             mod_ui_dibujo._color_mute(muted),
             lambda: cambiar_mute(nombre)
         )
@@ -672,7 +671,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         boton_monitor = mod_ui_dibujo._crear_icono_plano(
             fila_iconos,
             "🎧",
-            medida_icono["fuente_boton"] + 4,
+            medida_icono["fuente_boton"] + 1,
             mod_ui_dibujo._color_monitor(tipo_monitor),
             lambda: cambiar_monitor(nombre)
         )
