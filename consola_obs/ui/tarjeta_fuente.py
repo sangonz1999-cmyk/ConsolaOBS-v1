@@ -370,15 +370,24 @@ def _recortar_a_dos_lineas(texto, fuente, ancho_max):
 
 def _titulo_en_caja_fija(nombre_visible, tam_actual, ancho_texto):
     """Título que entra SIEMPRE en la cabecera de alto fijo (2 renglones
-    como máximo): primero achica la letra (ver _ajustar_titulo_largo)
-    y, si ni así entra, recorta con '…' (ver _recortar_a_dos_lineas).
+    como máximo): primero achica la letra (ver _ajustar_titulo_largo),
+    después sigue achicando hasta 5 exigiendo 2 renglones, y sólo si ni
+    así entra recorta con '…' (ver _recortar_a_dos_lineas).
     Devuelve (tamaño, ancho_de_envoltura, texto_mostrado)."""
     tam, wrap, lineas = _ajustar_titulo_largo(nombre_visible, tam_actual, ancho_texto)
     if lineas <= 2:
         return tam, wrap, nombre_visible
     ancho = wrap or ancho_texto
-    fuente = tkfont.Font(family=E.FUENTE_TITULO, size=tam, weight="bold")
-    return tam, wrap, _recortar_a_dos_lineas(nombre_visible, fuente, ancho)
+    tam2, wrap2, lineas2 = _ajustar_texto_tarjeta(
+        nombre_visible, E.FUENTE_TITULO, min(tam, 7), ancho, 5, 2, "bold")
+    if lineas2 <= 2:
+        fuente2 = tkfont.Font(family=E.FUENTE_TITULO, size=tam2, weight="bold")
+        if all(fuente2.measure(l) <= (wrap2 or ancho_texto)
+               for l in _envolver_texto_por_ancho(nombre_visible, fuente2, wrap2 or ancho_texto)):
+            return tam2, wrap2, nombre_visible
+    ancho2 = wrap2 or ancho_texto
+    fuente = tkfont.Font(family=E.FUENTE_TITULO, size=tam2, weight="bold")
+    return tam2, wrap2, _recortar_a_dos_lineas(nombre_visible, fuente, ancho2)
 
 
 def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None):

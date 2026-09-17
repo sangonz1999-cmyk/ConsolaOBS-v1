@@ -709,7 +709,9 @@ def _imagen_emoji(texto, tam_px, color):
         bb = img.getbbox()
         if not bb:
             return None
-        pad = max(2, tam_px * S // 16)
+        # Margen generoso alrededor del glifo recortado: si el dibujo
+        # toca el borde del recorte, al reducir se ve "cortado".
+        pad = max(4, tam_px * S // 8)
         img = img.crop((max(0, bb[0] - pad), max(0, bb[1] - pad),
                         min(em, bb[2] + pad), min(em, bb[3] + pad)))
         w, h = img.size
