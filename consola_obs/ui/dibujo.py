@@ -664,7 +664,13 @@ def _rutas_fuentes_emoji():
     import os as _os
     if _os.name == "nt":
         base = _os.environ.get("WINDIR", r"C:\Windows") + r"\Fonts"
-        return [base + "\\" + f for f in ("seguisym.ttf", "segoeui.ttf", "arial.ttf")]
+        # Segoe UI Emoji primero: sus glifos de altavoz/auricular son
+        # gruesos y se leen bien en chico (las ondas finas de Segoe UI
+        # Symbol se rompen en puntitos a 18px y se ven "pixelados").
+        # Pillow los rasteriza planos (sin su color original), que es
+        # justo lo que se quiere acá: sólo la forma, teñida con el
+        # color de estado. El resto queda como respaldo.
+        return [base + "\\" + f for f in ("seguiemj.ttf", "seguisym.ttf", "segoeui.ttf", "arial.ttf")]
     return ["DejaVuSans.ttf"]
 
 
@@ -681,7 +687,7 @@ def _imagen_emoji(texto, tam_px, color):
         return _cache_emoji[clave]
     try:
         from PIL import ImageFont
-        S = 4
+        S = 8
         fuente = None
         for ruta in _rutas_fuentes_emoji():
             try:
@@ -729,9 +735,10 @@ def _repintar_icono_plano(etiqueta):
 
 
 def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
-    """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
-    clickeable cuyo color marca el estado. Dibuja el ícono en vectorial
-    (sin pixelado) o cae al emoji de texto sin Pillow. Compatible con
+    """Ícono solo (sin círculo detrás, sin fondo) para el tema Moderna:
+    una etiqueta clickeable cuyo color marca el estado. Rasteriza el
+    emoji en grande y lo reduce con LANCZOS (sin pixelado) o cae al
+    emoji de texto sin Pillow. Compatible con
     _actualizar_boton_circular (texto/color)."""
     etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
