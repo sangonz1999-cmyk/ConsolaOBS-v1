@@ -478,7 +478,6 @@ Todo se dibuja sobre tk.Canvas aleatoriamente con funciones propias:
 
 - _dibujar_rect_redondeado(canvas, x0,y0,x1,y1, radio, fill, outline...): rectángulo con esquinas redondeadas (Pillow si hay, sino con arcos).
 - _dibujar_boton_circular / _crear_boton_circular: botón circular de "vidrio" con anillo teal, icono central y hover (resalta). Se usa para mute/monitor y botones pequeños de los pads.
-- En el tema Moderna el mute/monitoreo van sin círculo (`_crear_icono_plano`): el mismo emoji de altavoz/auriculares rasterizado en grande desde Segoe UI Emoji y reducido con LANCZOS (sólo la forma, teñida con el color de estado, sin fondo ni pixelado).
 - _crear_boton_circular con gradiente y sombra difusa.
 - _dibujar_gradiente_vertical: sobre un Canvas con bandas de color.
 - _dibujar_engranaje: polígono de 10 dientes (para el botón ajustes).
