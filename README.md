@@ -277,7 +277,7 @@ Cabecera de la tarjeta:
 
 Cuerpo de la tarjeta:
 - Fader vertical (tk.Scale de -60..0 dB, resolución 0,5) que llama cambiar_volumen. Al arrastrar se congela/descongela el repintado para no parpadear y se espera a soltar.
-- En Moderna el fader es estilo OBS (`_FaderOBS`): recorrido más largo que el medidor, pista negra angosta prerenderizada con extremos redondos suaves, relleno azul opaco hasta el final, perilla pastilla blanca y marcas perpendiculares cada 10 dB (0 a -50).
+- En Moderna el fader es estilo OBS (`_FaderOBS`): recorrido más largo que el medidor, pista negra angosta prerenderizada con extremos redondos suaves, relleno azul opaco hasta el final, perilla pastilla blanca y marcas perpendiculares en las mismas posiciones que la escala dB.
 - Etiqueta de dB (solo cuando > UMBRAL).
 - Medidor VU (ver sección 6).
 - Alto con ajuste anti-recorte: si las métricas de fuente de la PC superan el alto fijo, la tarjeta crece lo justo (parejo en todas) para no cortar los iconos de abajo.
