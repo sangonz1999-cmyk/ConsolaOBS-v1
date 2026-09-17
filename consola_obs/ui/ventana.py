@@ -745,13 +745,91 @@ def aplicar_fuente_elegida(nombre, guardar=True):
         mod_configuracion.guardar_config_interfaz({"fuente_ui": E.fuente_elegida})
 
 
+def _familia_fuente_actual(widget):
+    """Familia de la fuente que un widget tiene configurada ahora. Los
+    specs de Tk vienen como '{Familia Con Espacios} tamaño estilos',
+    como tupla, o como nombre de fuente del sistema."""
+    try:
+        spec = widget.cget("font")
+    except Exception:
+        return None
+    if isinstance(spec, (tuple, list)):
+        return spec[0] if spec else None
+    if not isinstance(spec, str):
+        return None
+    spec = spec.strip()
+    if spec.startswith("{"):
+        fin = spec.find("}")
+        return spec[1:fin] if fin > 1 else None
+    return spec.split(" ", 1)[0] if spec else None
+
+
+def _reaplicar_fuentes_persistentes(fuente_ui_vieja, fuente_titulo_vieja):
+    """El cambio de tipografía reconstruye el cuerpo, pero el menú de
+    ajustes y la cabecera son persistentes y se quedarían con la letra
+    vieja. Se les cambia sólo la familia (tamaño y estilo intactos):
+    lo que estaba en la UI vieja pasa a la nueva, ídem títulos; lo
+    demás (íconos, emojis, fuentes del sistema) no se toca."""
+    def _visitar(w):
+        try:
+            hijos = w.winfo_children()
+        except Exception:
+            hijos = []
+        for h in hijos:
+            _visitar(h)
+        fam = _familia_fuente_actual(w)
+        if fam == fuente_ui_vieja:
+            nueva = E.FUENTE_UI
+        elif fam == fuente_titulo_vieja:
+            nueva = E.FUENTE_TITULO
+        else:
+            return
+        try:
+            actual = w.cget("font")
+        except Exception:
+            return
+        if isinstance(actual, (tuple, list)):
+            resto = tuple(actual[1:])
+        else:
+            partes = actual.strip()
+            if partes.startswith("{"):
+                partes = partes[partes.find("}") + 1:].strip()
+            else:
+                partes = partes.split(" ", 1)[1] if " " in partes else ""
+            resto = tuple(partes.split()) if partes else ()
+        try:
+            w.configure(font=(nueva,) + resto)
+        except Exception:
+            pass
+    for raiz in (getattr(E, "cabecera", None), getattr(E, "barra", None)):
+        if raiz is not None:
+            try:
+                _visitar(raiz)
+            except Exception:
+                pass
+    # Comboboxes (ttk: la fuente va por estilo, no por widget) y su
+    # lista desplegable (va por option_add, fijado una sola vez al
+    # arrancar): sin esto los selectores quedan con la letra vieja.
+    try:
+        E._estilo_scrollbar.configure("Discreta.TCombobox", font=(E.FUENTE_UI, 9))
+    except Exception:
+        pass
+    try:
+        E.ventana.option_add("*TCombobox*Listbox.font", (E.FUENTE_UI, 9))
+    except Exception:
+        pass
+
+
 def cambiar_fuente(nombre):
     """Se llama desde el combobox de tipografía del menú de ajustes:
     aplica la fuente elegida y reconstruye la interfaz para que el
     cambio se vea reflejado en todas las letras. La cabecera superior
-    (título, subtítulo y estado) no se reconstruye con el resto, así
-    que su fuente se actualiza acá en el acto."""
+    (título, subtítulo y estado) y el resto de widgets persistentes
+    (menú de ajustes) no se reconstruyen con el resto, así que su
+    fuente se actualiza acá en el acto."""
+    fuente_ui_vieja, fuente_titulo_vieja = E.FUENTE_UI, E.FUENTE_TITULO
     aplicar_fuente_elegida(nombre)
+    _reaplicar_fuentes_persistentes(fuente_ui_vieja, fuente_titulo_vieja)
     _reconstruir_interfaz_con_velo()
     try:
         E.titulo.configure(font=(E.FUENTE_TITULO, 19, "bold"))

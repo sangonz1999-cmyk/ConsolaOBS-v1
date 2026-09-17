@@ -409,7 +409,7 @@ Cabecera (ventana_cabecera):
 - Logo (marco_icono_cabecera): carga assets/iconos/logo_cabecera.png con Pillow (o dibuja un ecualizador a mano si no está → _dibujar_icono_ecualizador).
 - Título "CONSOLA OBS" + subtítulo.
 - Estado de conexión: etiqueta ● CONECTADO / ● DESCONECTADO (chips).
-- Botón engranaje (⚙) que abre un menú desplegable "Ajustes" (barra superpuesta con: Host, Puerto, Contraseña, botones CONECTAR/ DESCONECTAR/ACTUALIZAR, selector de diseño y orientación, selector de tamaño de íconos).
+- Botón engranaje (⚙) que abre un menú desplegable "Ajustes" (barra superpuesta con: Host, Puerto, Contraseña, botones CONECTAR/ DESCONECTAR/ACTUALIZAR, selector de diseño y orientación, selector de tamaño de íconos, tipografía). El cambio de tipografía se aplica en el acto a todo (cuerpo reconstruido + menú/cabecera re-fuenteados, sin reabrir).
 - Botón CONECTAR principal.
 - Selector de diseño de la vista (TAMANOS_ICONO): Chico/Mediano/Grande.
 
