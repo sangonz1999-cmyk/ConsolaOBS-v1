@@ -276,6 +276,7 @@ Cabecera de la tarjeta:
 - Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
 
 Cuerpo de la tarjeta:
+- Línea divisoria de acento bajo la cabecera (solo Moderna).
 - Fader vertical (tk.Scale de -60..0 dB, resolución 0,5) que llama cambiar_volumen. Al arrastrar se congela/descongela el repintado para no parpadear y se espera a soltar.
 - En Moderna el fader es estilo OBS (`_FaderOBS`): recorrido más largo que el medidor, pista negra angosta prerenderizada con extremos redondos suaves, relleno azul opaco hasta el final, perilla pastilla blanca y marcas perpendiculares cada 10 dB (0 a -50).
 - Etiqueta de dB (solo cuando > UMBRAL).

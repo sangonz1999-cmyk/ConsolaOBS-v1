@@ -578,9 +578,12 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     cabecera_canal.bind("<ButtonRelease-1>", lambda e: _soltar_arrastre_fuente(nombre, e))
     cabecera_canal.bind("<Button-3>", lambda e: _abrir_menu_contextual_fuente(nombre, e))
 
-    # Tira fina y puramente decorativa (ya no tiene botones encima: ver
-    # comentario más arriba, todo eso ahora vive en el menú contextual).
-    fila_meta = tk.Frame(contenedor, bg=color_meta, height=8)
+    # División entre el título y el resto: en Moderna es una línea fina
+    # de acento siempre visible; en Profesional, la tira meta de siempre.
+    fila_meta = tk.Frame(
+        contenedor,
+        bg=(E.color_acento() if E.es_moderna() else color_meta),
+        height=(2 if E.es_moderna() else 8))
     fila_meta.pack(fill="x")
     fila_meta.pack_propagate(False)
     fila_meta.bind("<Button-3>", lambda e: _abrir_menu_contextual_fuente(nombre, e))
@@ -917,7 +920,7 @@ def _actualizar_estado_gris(nombre):
         elif getattr(hijo, "es_plano", False):
             hijo.config(bg=color_cuerpo)
 
-    widgets["fila_meta"].config(bg=color_meta)
+    widgets["fila_meta"].config(bg=(E.color_acento() if E.es_moderna() else color_meta))
 
 
 def _abrir_menu_contextual_panel_fuentes(event):
