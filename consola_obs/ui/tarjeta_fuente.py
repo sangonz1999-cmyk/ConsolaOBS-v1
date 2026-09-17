@@ -160,9 +160,9 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
     """Recalcula el tamaño de letra del nombre de 'nombre' para el nuevo
     ancho disponible (se llama cuando la tarjeta cambia de tamaño), con
     la misma lógica de achicar-antes-que-cortar que usa crear_fader_fuente.
-    También ajusta el alto de la cabecera si el nombre pasa a necesitar
-    tres renglones o más (o deja de necesitarlos), para que el título
-    quede centrado verticalmente en vez de recortado."""
+    La cabecera mantiene su alto fijo (ver _titulo_en_caja_fija): los
+    títulos largos se achican y, si hace falta, se recortan con '…',
+    para que ninguna tarjeta se desaliñe del resto."""
     widgets = E.fuentes.get(nombre)
     if not widgets:
         return
@@ -176,19 +176,17 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
         nombre_visible, E.FUENTE_TITULO, tam_max, ancho_texto, tam_min
     )
     if lineas_nombre >= 3:
-        tam, ancho_wrap_texto, lineas_nombre = _ajustar_titulo_largo(
+        tam, ancho_wrap_texto, texto_mostrado = _titulo_en_caja_fija(
             nombre_visible, tam, ancho_texto)
+    else:
+        texto_mostrado = nombre_visible
 
     cabecera_canal = widgets["cabecera"]
     fuente_nueva = (E.FUENTE_TITULO, tam, "bold")
-    cabecera_canal.itemconfig(widgets["id_texto_nombre"], font=fuente_nueva, width=ancho_wrap_texto)
-    cabecera_canal.itemconfig(widgets["id_texto_sombra"], font=fuente_nueva, width=ancho_wrap_texto)
+    cabecera_canal.itemconfig(widgets["id_texto_nombre"], font=fuente_nueva, width=ancho_wrap_texto, text=texto_mostrado)
+    cabecera_canal.itemconfig(widgets["id_texto_sombra"], font=fuente_nueva, width=ancho_wrap_texto, text=texto_mostrado)
 
-    if lineas_nombre >= 3:
-        fuente_real = tkfont.Font(family=E.FUENTE_TITULO, size=tam, weight="bold")
-        alto_cabecera = max(alto_cabecera_base, fuente_real.metrics("linespace") * lineas_nombre + 20)
-    else:
-        alto_cabecera = alto_cabecera_base
+    alto_cabecera = alto_cabecera_base
     if int(cabecera_canal.cget("height")) != int(alto_cabecera):
         cabecera_canal.config(height=alto_cabecera)
         redibujar = widgets.get("redibujar_cabecera")
@@ -338,6 +336,51 @@ def _ajustar_titulo_largo(nombre_visible, tam_actual, ancho_texto):
         ancho_respirado, 6, 4, "bold")
 
 
+def _recortar_a_dos_lineas(texto, fuente, ancho_max):
+    """Recorta 'texto' a 2 renglones como máximo (con '…' al final si
+    se cortó algo), midiendo con 'fuente' para no superar 'ancho_max'.
+    Es el último recurso para que un título largo entre en la cabecera
+    de alto fijo sin agrandarla y desalinear el resto de la tarjeta."""
+    palabras = texto.split()
+    if not palabras:
+        return texto
+    # Renglón 1: todas las palabras que entren.
+    linea1 = palabras[0]
+    i = 1
+    while i < len(palabras) and fuente.measure(linea1 + " " + palabras[i]) <= ancho_max:
+        linea1 += " " + palabras[i]
+        i += 1
+    if fuente.measure(linea1) > ancho_max:
+        # Una sola palabra más ancha que la caja: se corta por letra.
+        while linea1 and fuente.measure(linea1 + "…") > ancho_max:
+            linea1 = linea1[:-1]
+        return (linea1 + "…") if linea1 else "…"
+    if i >= len(palabras):
+        return linea1
+    # Renglón 2: lo que entre + "…".
+    linea2 = palabras[i]
+    i += 1
+    while i < len(palabras) and fuente.measure(linea2 + " " + palabras[i] + "…") <= ancho_max:
+        linea2 += " " + palabras[i]
+        i += 1
+    while linea2 and fuente.measure(linea2 + "…") > ancho_max:
+        linea2 = linea2.rsplit(" ", 1)[0] if " " in linea2 else linea2[:-1]
+    return linea1 + "\n" + (linea2 + "…" if linea2 else "…")
+
+
+def _titulo_en_caja_fija(nombre_visible, tam_actual, ancho_texto):
+    """Título que entra SIEMPRE en la cabecera de alto fijo (2 renglones
+    como máximo): primero achica la letra (ver _ajustar_titulo_largo)
+    y, si ni así entra, recorta con '…' (ver _recortar_a_dos_lineas).
+    Devuelve (tamaño, ancho_de_envoltura, texto_mostrado)."""
+    tam, wrap, lineas = _ajustar_titulo_largo(nombre_visible, tam_actual, ancho_texto)
+    if lineas <= 2:
+        return tam, wrap, nombre_visible
+    ancho = wrap or ancho_texto
+    fuente = tkfont.Font(family=E.FUENTE_TITULO, size=tam, weight="bold")
+    return tam, wrap, _recortar_a_dos_lineas(nombre_visible, fuente, ancho)
+
+
 def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None):
 
     if nombre_visible is None:
@@ -409,36 +452,31 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         nombre_visible, E.FUENTE_TITULO, fuente_nombre_tam_max, ancho_texto, fuente_nombre_tam_min
     )
 
-    # La altura de la cabecera se calcula con el tamaño MÁXIMO y para 2
-    # renglones (aunque el texto termine dibujándose más chico), así
-    # todas las tarjetas quedan con la misma altura de cabecera sin
-    # importar cuán largo sea el nombre de cada una. La excepción es
-    # cuando el nombre necesita TRES renglones o más (nombres muy
-    # largos que ni achicados entran en dos): ahí la cabecera crece lo
-    # necesario para mostrarlos enteros, y como el texto sigue anclado
-    # al centro del canvas, queda centrado verticalmente en vez de
-    # recortado contra el alto fijo de siempre.
+    # La cabecera mide SIEMPRE lo mismo (lugar para 2 renglones al
+    # tamaño máximo): el título se adapta a la caja —achicándose y, si
+    # ni así entra en 2 renglones, recortándose con '…' (ver
+    # _titulo_en_caja_fija)—, nunca al revés. Así todas las tarjetas
+    # quedan alineadas sin importar cuán largo sea cada nombre.
     _fuente_medicion = tkfont.Font(family=E.FUENTE_TITULO, size=fuente_nombre_tam_max, weight="bold")
     alto_cabecera_base = max(26, _fuente_medicion.metrics("linespace") * 2 + 16)
     if lineas_nombre >= 3:
-        fuente_nombre_tam, ancho_wrap_texto, lineas_nombre = _ajustar_titulo_largo(
+        fuente_nombre_tam, ancho_wrap_texto, texto_mostrado = _titulo_en_caja_fija(
             nombre_visible, fuente_nombre_tam, ancho_texto)
-        _fuente_real = tkfont.Font(family=E.FUENTE_TITULO, size=fuente_nombre_tam, weight="bold")
-        alto_cabecera = max(alto_cabecera_base, _fuente_real.metrics("linespace") * lineas_nombre + 20)
     else:
-        alto_cabecera = alto_cabecera_base
+        texto_mostrado = nombre_visible
+    alto_cabecera = alto_cabecera_base
     cabecera_canal = tk.Canvas(contenedor, height=alto_cabecera, highlightthickness=0, bg=color_cabecera_base, cursor="fleur")
     cabecera_canal.pack(fill="x")
     cabecera_canal.pack_propagate(False)
     cabecera_canal.datos_color_actual = color_cabecera_base
 
     id_texto_sombra = cabecera_canal.create_text(
-        0, 0, text=nombre_visible, fill=mod_ui_dibujo._oscurecer_color(color_cabecera_base, 70),
+        0, 0, text=texto_mostrado, fill=mod_ui_dibujo._oscurecer_color(color_cabecera_base, 70),
         font=(E.FUENTE_TITULO, fuente_nombre_tam, "bold"),
         width=ancho_wrap_texto, justify="center", tags=("texto_sombra",)
     )
     id_texto_nombre = cabecera_canal.create_text(
-        0, 0, text=nombre_visible, fill="white",
+        0, 0, text=texto_mostrado, fill="white",
         font=(E.FUENTE_TITULO, fuente_nombre_tam, "bold"),
         width=ancho_wrap_texto, justify="center", tags=("texto_nombre",)
     )
@@ -616,7 +654,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         boton_mute = mod_ui_dibujo._crear_icono_plano(
             fila_iconos,
             "🔇" if muted else "🔊",
-            medida_icono["fuente_boton"] + 4,
+            medida_icono["fuente_boton"] + 1,
             mod_ui_dibujo._color_mute(muted),
             lambda: cambiar_mute(nombre)
         )

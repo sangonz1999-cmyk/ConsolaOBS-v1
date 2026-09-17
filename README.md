@@ -263,7 +263,7 @@ decaimiento suave.
 Por cada fuente de audio de OBS se crea una tarjeta con:
 
 Cabecera de la tarjeta:
-- Nombre (doble clic = renombrar).
+- Nombre (doble clic = renombrar), en cabecera de alto fijo: los títulos largos se achican y, si ni así entran en 2 renglones, se recortan con '…' para no desalinear el resto.
 - Botón circular de mute 🔊/🔇 (toggle).
 - Botón circular de monitoreo 🎧 (colores por tipo de monitoreo).
 - LED de estado (verde si está en escena activa / encendida, gris si atenuada).
