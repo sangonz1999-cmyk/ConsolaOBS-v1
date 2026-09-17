@@ -716,9 +716,15 @@ def _color_mute(muted):
 
 
 def _color_monitor(tipo):
-    """Color del auricular según monitoreo (más claro el apagado en Moderna)."""
-    if tipo == "OBS_MONITORING_TYPE_NONE" and E.es_moderna():
-        return C.MOD_ICONO_APAGADO
+    """Color del indicador de monitoreo: en Moderna es el CUADRADO que va
+    detrás del auricular (el auricular va siempre claro); en Profesional
+    sigue siendo el fondo del botón circular de siempre."""
+    if tipo == "OBS_MONITORING_TYPE_MONITOR_ONLY":
+        return C.COLORES_MONITOREO.get(tipo, "#4dabf7")
+    if tipo == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT":
+        return C.COLORES_MONITOREO.get(tipo, "#2fd693")
+    if E.es_moderna():
+        return "#333c4e"
     return C.COLORES_MONITOREO.get(tipo, "#394151")
 
 
@@ -733,22 +739,25 @@ def _rutas_fuentes_emoji():
     return ["DejaVuSans.ttf"]
 
 
-def _imagen_emoji(texto, tam_px, color):
+def _imagen_emoji(texto, tam_px, color, fuentes=None):
     """El mismo emoji de siempre, pero rasterizado en grande con Pillow
     y reducido con LANCZOS: mismo diseño, bordes suaves, teñido con el
-    color de estado. Cacheado. None sin Pillow (texto de respaldo)."""
+    color de estado. Cacheado. None sin Pillow (texto de respaldo).
+    Con 'fuentes' se puede forzar el orden de búsqueda (el auricular
+    de Moderna usa Segoe UI Emoji primero, de trazo más parecido al
+    de OBS)."""
     if not HAY_PILLOW:
         return None
     tam_px = max(12, int(tam_px))
     color = {"white": "#ffffff", "black": "#000000"}.get(color, color)
-    clave = (texto, tam_px, color)
+    clave = (texto, tam_px, color, tuple(fuentes) if fuentes else None)
     if clave in _cache_emoji:
         return _cache_emoji[clave]
     try:
         from PIL import ImageFont
         S = 4
         fuente = None
-        for ruta in _rutas_fuentes_emoji():
+        for ruta in (fuentes or _rutas_fuentes_emoji()):
             try:
                 candidata = ImageFont.truetype(ruta, tam_px * S)
                 if candidata.getmask(texto).getbbox():
@@ -785,24 +794,116 @@ def _imagen_emoji(texto, tam_px, color):
 
 
 def _repintar_icono_plano(etiqueta):
-    foto = _imagen_emoji(etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.color_icono)
+    if getattr(etiqueta, "tiene_cuadrado", False):
+        foto = _imagen_icono_con_cuadrado(
+            etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.cuadrado_color)
+    else:
+        foto = _imagen_emoji(etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.color_icono)
     if foto is not None:
         etiqueta.imagen_icono = foto
         etiqueta.config(image=foto)
     else:
         etiqueta.config(image="", text=etiqueta.texto_icono)
+        try:
+            etiqueta.config(fg=(etiqueta.cuadrado_color if getattr(
+                etiqueta, "tiene_cuadrado", False) else etiqueta.color_icono))
+        except Exception:
+            pass
 
 
-def _crear_icono_plano(parent, texto, fuente_tam, color, comando):
+# Auricular siempre claro sobre el cuadrado (como el blanco de OBS).
+COLOR_AURICULAR_FIJO = "#f2f5fa"
+_RUTAS_EMOJI_AURICULAR = None
+
+
+def _rutas_emoji_auricular():
+    """Segoe UI Emoji primero para el auricular de Moderna (trazo grueso
+    con las copas pegadas a la vincha, como el de OBS); el resto de
+    respaldo por si falta."""
+    global _RUTAS_EMOJI_AURICULAR
+    if _RUTAS_EMOJI_AURICULAR is None:
+        import os as _os
+        if _os.name == "nt":
+            base = _os.environ.get("WINDIR", r"C:\Windows") + r"\Fonts"
+            _RUTAS_EMOJI_AURICULAR = [base + "\\" + f for f in (
+                "seguiemj.ttf", "seguisym.ttf", "segoeui.ttf", "arial.ttf")]
+        else:
+            _RUTAS_EMOJI_AURICULAR = ["DejaVuSans.ttf"]
+    return _RUTAS_EMOJI_AURICULAR
+
+
+_cache_cuadrado_estado = {}
+_cache_icono_cuadrado = {}
+
+
+def _imagen_cuadrado_estado(lado, radio, color):
+    """Cuadrado redondeado del color de estado que va detrás del
+    auricular. Cacheado. None sin Pillow."""
+    if not HAY_PILLOW:
+        return None
+    lado = max(12, int(lado))
+    clave = (lado, radio, color)
+    if clave in _cache_cuadrado_estado:
+        return _cache_cuadrado_estado[clave]
+    try:
+        S = 4
+        w = lado * S
+        img = Image.new("RGBA", (w, w), (0, 0, 0, 0))
+        ImageDraw.Draw(img).rounded_rectangle(
+            [S, S, w - S - 1, w - S - 1], radius=int(radio * S),
+            fill=_hex_a_rgb(color) + (255,))
+        foto = ImageTk.PhotoImage(img.resize((lado, lado), Image.LANCZOS))
+        _cache_cuadrado_estado[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
+def _imagen_icono_con_cuadrado(texto, tam_px, color_cuadrado):
+    """Auricular claro centrado sobre su cuadrado de estado. Cacheado.
+    None sin Pillow."""
+    if not HAY_PILLOW:
+        return None
+    tam_px = max(12, int(tam_px))
+    clave = (texto, tam_px, color_cuadrado)
+    if clave in _cache_icono_cuadrado:
+        return _cache_icono_cuadrado[clave]
+    try:
+        lado = tam_px + 8
+        foto_cuadrado = _imagen_cuadrado_estado(lado, 6, color_cuadrado)
+        foto_glifo = _imagen_emoji(texto, tam_px, COLOR_AURICULAR_FIJO,
+                                   fuentes=_rutas_emoji_auricular())
+        if foto_cuadrado is None or foto_glifo is None:
+            return None
+        from PIL import ImageTk as _ImageTk
+        compuesta = _ImageTk.getimage(foto_cuadrado).copy()
+        glifo = _ImageTk.getimage(foto_glifo)
+        compuesta.alpha_composite(glifo, ((lado - tam_px) // 2, (lado - tam_px) // 2))
+        foto = _ImageTk.PhotoImage(compuesta)
+        _cache_icono_cuadrado[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
+def _crear_icono_plano(parent, texto, fuente_tam, color, comando, cuadrado=False):
     """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
     clickeable cuyo color marca el estado. Dibuja el ícono en vectorial
     (sin pixelado) o cae al emoji de texto sin Pillow. Compatible con
-    _actualizar_boton_circular (texto/color)."""
+    _actualizar_boton_circular (texto/color).
+    Con cuadrado=True (auricular) el glifo va siempre claro y el que
+    cambia de color con el estado es el cuadrado de detrás."""
     etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
     etiqueta.texto_icono = texto
     etiqueta.tam_icono = max(12, int(fuente_tam + 2))
-    etiqueta.color_icono = color
+    etiqueta.tiene_cuadrado = bool(cuadrado)
+    if cuadrado:
+        etiqueta.color_icono = COLOR_AURICULAR_FIJO
+        etiqueta.cuadrado_color = color
+    else:
+        etiqueta.color_icono = color
+        etiqueta.cuadrado_color = None
     etiqueta.bind("<Button-1>", lambda _e: comando())
     _repintar_icono_plano(etiqueta)
     if not HAY_PILLOW:
@@ -815,7 +916,10 @@ def _actualizar_boton_circular(canvas, texto_nuevo=None, color_nuevo=None):
         if texto_nuevo in ("🔇", "🔊", "🎧"):
             canvas.texto_icono = texto_nuevo
         if color_nuevo is not None:
-            canvas.color_icono = color_nuevo
+            if getattr(canvas, "tiene_cuadrado", False):
+                canvas.cuadrado_color = color_nuevo
+            else:
+                canvas.color_icono = color_nuevo
         _repintar_icono_plano(canvas)
         return
     datos = canvas.datos_boton

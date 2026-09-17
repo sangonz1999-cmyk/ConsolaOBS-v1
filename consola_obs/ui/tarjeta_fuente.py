@@ -726,7 +726,8 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             "🎧",
             medida_icono["fuente_boton"] + 4,
             mod_ui_dibujo._color_monitor(tipo_monitor),
-            lambda: cambiar_monitor(nombre)
+            lambda: cambiar_monitor(nombre),
+            cuadrado=True
         )
         boton_monitor.pack(side="left", padx=6)
     else:
