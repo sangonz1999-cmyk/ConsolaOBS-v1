@@ -340,6 +340,7 @@ Ventana "Propiedades" por fuente (`consola_obs/audio/propiedades.py`), agregada 
 - Cualquier tipo de fuente sin esquema fijo cae en un editor genérico (una fila por ajuste, adivinando el control por tipo de dato), igual criterio que un filtro sin esquema.
 - Botonera igual a la de OBS: "Por defecto" (get_input_default_settings), "Cancelar" (restaura los ajustes que tenía la fuente al abrir la ventana, incluida la "X") y "Aceptar".
 - SINCRONIZACIÓN BIDIRECCIONAL EN VIVO: los cambios se mandan con set_input_settings al instante, y se sondea cada ~500 ms para traer cambios hechos desde OBS, salteando el control que el usuario tiene agarrado — mismo mecanismo que el editor de filtros, porque OBS-WebSocket tampoco emite un evento de "ajustes de fuente cambiados".
+- Fuente de medios (ffmpeg_source) calcada exacto a la ventana de OBS: mismo orden y etiquetas (incluidos decodificación por hardware y velocidad), con el Buffer visible sólo en modo red como en OBS.
 
 
 ## 11. SOUNDBOARD (pads con efectos)

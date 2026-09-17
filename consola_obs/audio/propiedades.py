@@ -355,7 +355,7 @@ def abrir_propiedades(nombre):
                 aplicar()
 
         tk.Button(
-            marco_campo, text="Examinar…", command=_examinar,
+            marco_campo, text="Examinar", command=_examinar,
             bg="#3d4d66", fg="white", relief="flat", font=(E.FUENTE_UI, 8)
         ).pack(side="right", padx=(6, 0))
 
@@ -390,9 +390,9 @@ def abrir_propiedades(nombre):
                 )
 
         # Campos que sólo se muestran según el valor de OTRO campo del
-        # mismo esquema (ver 'visible_si'), por ejemplo "Ruta del
-        # archivo" sólo si "Archivo local" está tildado: mismo criterio
-        # que en el editor de filtros.
+        # mismo esquema (ver 'visible_si'), por ejemplo el archivo local
+        # sólo si "Archivo local" está tildado: mismo criterio que en
+        # el editor de filtros.
         def _campo_visible(campo_dep):
             condicion = campo_dep.get("visible_si")
             if not condicion:

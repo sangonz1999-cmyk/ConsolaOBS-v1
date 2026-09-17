@@ -517,14 +517,15 @@ ESQUEMA_PROPIEDADES_ENTRADA = {
         dict(clave="priority", etiqueta="Coincidir ventana usando", tipo="lista",
              opciones=[("Título", 0), ("Clase", 1), ("Ejecutable", 2)], defecto=2),
     ],
-    # Fuente de medios (ffmpeg_source): se cubren los campos que le
-    # sirven a un sonidista para reproducir un archivo o una URL de
-    # audio/video -"is_local_file" decide si se muestra el selector de
-    # archivo local o los campos de URL/formato de entrada, igual que
-    # hace la ventana real de OBS-.
+    # Fuente de medios (ffmpeg_source): calcado campo por campo contra
+    # la ventana real de OBS en español -mismo orden y mismas etiquetas-:
+    # Archivo local, archivo, Bucle, Reiniciar..., Decodificación por
+    # hardware, No mostrar nada..., Cerrar archivo..., Velocidad. El
+    # Buffer y los campos de red (URL/formato/retraso) sólo existen en
+    # OBS en modo red, así que se ocultan con archivo local.
     "ffmpeg_source": [
         dict(clave="is_local_file", etiqueta="Archivo local", tipo="bool", defecto=True),
-        dict(clave="local_file", etiqueta="Ruta del archivo", tipo="archivo", defecto="",
+        dict(clave="local_file", etiqueta="Archivo local", tipo="archivo", defecto="",
              visible_si=("is_local_file", True)),
         dict(clave="input", etiqueta="Entrada (URL)", tipo="texto", defecto="",
              visible_si=("is_local_file", False)),
@@ -534,15 +535,18 @@ ESQUEMA_PROPIEDADES_ENTRADA = {
              minimo=1, maximo=60, paso=1, sufijo=" s", defecto=10,
              visible_si=("is_local_file", False)),
         dict(clave="buffering_mb", etiqueta="Buffer", tipo="int",
-             minimo=0, maximo=16, paso=1, sufijo=" MB", defecto=2),
+             minimo=0, maximo=16, paso=1, sufijo=" MB", defecto=2,
+             visible_si=("is_local_file", False)),
         dict(clave="looping", etiqueta="Bucle", tipo="bool", defecto=False),
-        dict(clave="restart_on_activate", etiqueta="Reiniciar reproducción al activarse",
+        dict(clave="restart_on_activate", etiqueta="Reiniciar la reproducción cuando la fuente esté activa",
              tipo="bool", defecto=True),
-        dict(clave="close_when_inactive", etiqueta="Cerrar archivo cuando esté inactiva",
+        dict(clave="hw_decode", etiqueta="Utilizar la decodificación por hardware cuando esté disponible",
              tipo="bool", defecto=False),
-        dict(clave="clear_on_media_end", etiqueta="No mostrar nada al terminar",
+        dict(clave="clear_on_media_end", etiqueta="No mostrar nada al terminar la reproducción",
              tipo="bool", defecto=True),
-        dict(clave="speed_percent", etiqueta="Velocidad de reproducción", tipo="int",
+        dict(clave="close_when_inactive", etiqueta="Cerrar archivo cuando esté inactivo",
+             tipo="bool", defecto=False),
+        dict(clave="speed_percent", etiqueta="Velocidad", tipo="int",
              minimo=1, maximo=200, paso=1, sufijo="%", defecto=100),
     ],
     # Captura de ventana (win-capture/window-capture.c). Calcado contra
