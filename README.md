@@ -365,6 +365,7 @@ via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
 - Botones circulares pequeños: ■ DETENER (STOP), ↻ REINICIAR.
 - Botón de mute/escuchar ya cubierto por el fader de la fuente.
 - Doble clic o menú contextual (clic derecho) del pad: reproducir, detener, reiniciar, asignar/cambiar sonido, asignar imagen, color de etiqueta, renombrar, vaciar o eliminar (sección 11c).
+- Fuente en reposo siempre vacía: al terminar un sonido (fin natural, STOP, fundido o cierre de la app) se limpia `local_file` de `Soundboard_Efectos` (`_vaciar_fuente_efectos`), así al abrir OBS no se reproduce solo el último sonido aunque la consola esté cerrada.
 
 ### Arrastre de pads (reordenar):
 - Se puede arrastrar un pad para reordenarlos (mismo mecanismo que las tarjetas de fuente: _iniciar_arrastre_pad, _mover_arrastre_pad, _soltar_arrastre_pad). Al soltar sobre otro pad se intercambian.

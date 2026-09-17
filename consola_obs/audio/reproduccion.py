@@ -328,6 +328,11 @@ def _fundido_y_detener(indice, token, duracion=2.0, pasos=20):
     except Exception as e:
         print(f"No se pudo restaurar el volumen tras el fundido: {e}")
 
+    if E._sesion_reproduccion.get("token") == token:
+        # La fuente queda en reposo: se vacía para que OBS no
+        # reproduzca solo este archivo la próxima vez que se abra.
+        _vaciar_fuente_efectos()
+
     _detener_local(token)
     E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
 
@@ -353,6 +358,44 @@ def _esperar_a_que_se_detenga(token, tope_seg=1.0):
         time.sleep(0.05)
 
 
+def _vaciar_fuente_efectos():
+    """Deja la fuente de efectos sin archivo cargado (local_file="").
+    Cada pad deja su audio cargado en la fuente compartida
+    Soundboard_Efectos, y si no se vacía, al abrir OBS ese archivo se
+    reproduce solo al activarse la escena, aunque la consola ni esté
+    abierta. Se llama cada vez que la fuente queda en reposo (fin
+    natural, STOP manual, fundido o cierre de la app)."""
+    if not E.conectado:
+        return
+    try:
+        E.cliente_obs.set_input_settings(
+            C.NOMBRE_FUENTE_EFECTOS,
+            {
+                "local_file": "",
+                "restart_on_activate": False,
+                "close_when_inactive": False,
+            },
+            True
+        )
+    except Exception as e:
+        print(f"No se pudo vaciar la fuente de efectos: {e}")
+
+
+def detener_y_vaciar_efectos():
+    """STOP + vaciado best-effort para el cierre de la app: así no queda
+    ningún archivo cargado que OBS reproduzca solo al abrirse."""
+    _detener_local()
+    if not E.conectado:
+        return
+    try:
+        E.cliente_obs.trigger_media_input_action(
+            C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+        )
+    except Exception:
+        pass
+    _vaciar_fuente_efectos()
+
+
 def reproducir_sonido(indice):
     if E._sesion_reproduccion.get("indice") == indice:
         # Se volvió a apretar el mismo pad mientras sonaba: en vez de
@@ -375,12 +418,17 @@ def detener_sonido(indice):
         mod_ui_soundboard._fijar_pad_activo(None)
     if not E.conectado:
         return
+    token = E._sesion_reproduccion.get("token")
     try:
         E.cliente_obs.trigger_media_input_action(
             C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
         )
     except Exception as e:
         print(f"Error deteniendo el efecto: {e}")
+    if E._sesion_reproduccion.get("token") == token:
+        # Sin reproducción nueva en el medio: se vacía la fuente para
+        # que no quede cargado un archivo que OBS reproduciría solo.
+        _vaciar_fuente_efectos()
 
 
 def reiniciar_sonido(indice):
@@ -404,6 +452,10 @@ def _consultar_estado_reproduccion():
         print(f"No se pudo consultar el estado del efecto: {e}")
         return
     if estado in C.ESTADOS_MEDIA_DETENIDO:
+        if E._sesion_reproduccion.get("token") == token:
+            # Fin natural con la sesión todavía vigente: se vacía la
+            # fuente para que ese archivo no suene solo al abrir OBS.
+            _vaciar_fuente_efectos()
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
 
 

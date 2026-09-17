@@ -898,6 +898,14 @@ def _al_redimensionar_ventana(event):
 
 def al_cerrar():
     try:
+        # STOP + vaciado de la fuente de efectos antes de desconectar:
+        # si no, el último sonido queda cargado y OBS lo reproduce solo
+        # al abrirse (import lazy para no ciclar imports con audio).
+        from consola_obs.audio import reproduccion as mod_audio_reproduccion
+        mod_audio_reproduccion.detener_y_vaciar_efectos()
+    except Exception:
+        pass
+    try:
         mod_obs_cliente.desconectar_obs()
     except Exception:
         pass
