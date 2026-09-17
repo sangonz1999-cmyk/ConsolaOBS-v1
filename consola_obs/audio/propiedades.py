@@ -121,6 +121,11 @@ def abrir_propiedades(nombre):
     arrastrando = {}
     actualizadores = {}
     filas_por_clave = {}
+    # Etiqueta izquierda (o espaciador, en las filas de check) por
+    # clave: sirve para angostar la columna de etiquetas al ancho real
+    # de cada ventana en vez del fijo de siempre (ver
+    # _aplicar_ancho_etiquetas).
+    etiquetas_izq = {}
     # Orden en que se fueron creando las filas. Hace falta para que un
     # campo que estaba oculto vuelva a aparecer EN SU LUGAR y no al
     # final de la lista (por ejemplo, "Compatibilidad multiadaptador"
@@ -141,10 +146,12 @@ def abrir_propiedades(nombre):
         fila = tk.Frame(marco_campos, bg="#10141b")
         fila.pack(fill="x", pady=4)
         _registrar_fila(clave, fila)
-        tk.Label(
+        etiqueta_izq = tk.Label(
             fila, text=etiqueta_texto, bg="#10141b", fg="#8e9ab3",
             font=(E.FUENTE_UI, 9), width=ANCHO_ETIQUETA, anchor="e"
-        ).pack(side="left", padx=(0, 8))
+        )
+        etiqueta_izq.pack(side="left", padx=(0, 8))
+        etiquetas_izq[clave] = etiqueta_izq
         contenedor = tk.Frame(fila, bg="#10141b")
         contenedor.pack(side="left", fill="x", expand=True)
         return contenedor
@@ -236,9 +243,11 @@ def abrir_propiedades(nombre):
         # alineadas con la columna de los controles, debajo de los
         # desplegables. Se reserva el mismo ancho de la columna de
         # etiquetas para que queden en la misma línea vertical.
-        tk.Label(
+        espaciador = tk.Label(
             fila, text="", bg="#10141b", width=ANCHO_ETIQUETA
-        ).pack(side="left", padx=(0, 8))
+        )
+        espaciador.pack(side="left", padx=(0, 8))
+        etiquetas_izq[clave] = espaciador
 
         var_bool = tk.BooleanVar(value=bool(valor_inicial))
         tk.Checkbutton(
@@ -368,6 +377,17 @@ def abrir_propiedades(nombre):
 
     esquema = E.ESQUEMA_PROPIEDADES_ENTRADA.get(input_kind)
 
+    # Tipos de fila que muestran etiqueta a la izquierda (las barras
+    # llevan su propio encabezado y los checks sólo un espaciador).
+    _TIPOS_CON_ETIQUETA = ("lista_dinamica", "lista", "texto", "archivo")
+    if esquema:
+        # Ancho provisorio con todas las filas etiquetadas; después del
+        # primer reacomodo se ajusta a sólo las visibles (ver
+        # _actualizar_visibilidad_condicional).
+        ANCHO_ETIQUETA = max(
+            [len(c.get("etiqueta") or "") + 2 for c in esquema
+             if c.get("tipo") in _TIPOS_CON_ETIQUETA] or [12])
+
     if esquema:
         for campo in esquema:
             clave = campo["clave"]
@@ -442,6 +462,23 @@ def abrir_propiedades(nombre):
                 relleno = 2 if (campo_dep or {}).get("tipo") == "bool" else 4
                 fila_dep.pack(fill="x", pady=relleno)
 
+            # La columna de etiquetas se angosta a lo que muestran las
+            # filas visibles: con el ancho fijo de siempre quedaba un
+            # hueco vacío a la izquierda en las ventanas de pocas
+            # etiquetas cortas (Mic/Aux, medios en modo local).
+            try:
+                anchos = [len(c.get("etiqueta") or "") + 2 for c in esquema
+                          if c.get("tipo") in _TIPOS_CON_ETIQUETA and _campo_visible(c)]
+                ancho_nuevo = max(anchos) if anchos else 4
+            except Exception:
+                ancho_nuevo = None
+            if ancho_nuevo:
+                for etq in etiquetas_izq.values():
+                    try:
+                        etq.config(width=ancho_nuevo)
+                    except Exception:
+                        pass
+
         _actualizar_visibilidad_condicional()
 
         claves_conocidas = {c["clave"] for c in esquema}
@@ -469,6 +506,20 @@ def abrir_propiedades(nombre):
                 _crear_texto(clave, clave, valor)
             else:
                 claves_avanzadas[clave] = valor
+
+        # Igual que en el esquema fijo: la columna se angosta a las
+        # etiquetas reales (los espaciadores de checks no cuentan).
+        try:
+            anchos_gen = [len((etq.cget("text") or "")) + 2 for etq in etiquetas_izq.values()]
+            ancho_gen = max(anchos_gen) if anchos_gen else 12
+        except Exception:
+            ancho_gen = None
+        if ancho_gen:
+            for etq in etiquetas_izq.values():
+                try:
+                    etq.config(width=ancho_gen)
+                except Exception:
+                    pass
 
         if not ajustes_combinados:
             tk.Label(
