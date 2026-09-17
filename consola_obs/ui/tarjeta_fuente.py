@@ -725,7 +725,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             fila_iconos,
             "🎧",
             medida_icono["fuente_boton"] + 4,
-            mod_ui_dibujo._color_monitor(tipo_monitor),
+            mod_ui_dibujo._cuadrado_monitor(tipo_monitor),
             lambda: cambiar_monitor(nombre),
             cuadrado=True
         )
@@ -1161,7 +1161,7 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     widgets["tipo_monitor"] = tipo_monitor
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["monitor"],
-        color_nuevo=mod_ui_dibujo._color_monitor(tipo_monitor)
+        color_nuevo=mod_ui_dibujo._cuadrado_monitor(tipo_monitor)
     )
 
     _actualizar_estado_gris(nombre)
@@ -1198,7 +1198,7 @@ def _fijar_monitor(nombre, tipo):
         widgets = E.fuentes[nombre]
         widgets["tipo_monitor"] = tipo
         mod_ui_dibujo._actualizar_boton_circular(
-            widgets["monitor"], color_nuevo=mod_ui_dibujo._color_monitor(tipo))
+            widgets["monitor"], color_nuevo=mod_ui_dibujo._cuadrado_monitor(tipo))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
 

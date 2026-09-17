@@ -715,17 +715,15 @@ def _color_mute(muted):
     return C.MOD_ICONO_APAGADO if E.es_moderna() else "#394151"
 
 
-def _color_monitor(tipo):
-    """Color del indicador de monitoreo: en Moderna es el CUADRADO que va
-    detrás del auricular (el auricular va siempre claro); en Profesional
-    sigue siendo el fondo del botón circular de siempre."""
-    if tipo == "OBS_MONITORING_TYPE_MONITOR_ONLY":
-        return C.COLORES_MONITOREO.get(tipo, "#4dabf7")
+def _cuadrado_monitor(tipo):
+    """(fondo, borde) del cuadrado de monitoreo en Moderna; (None, None)
+    apagado (sin cuadrado). En Profesional no se usa (el botón circular
+    toma el color directo de COLORES_MONITOREO)."""
     if tipo == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT":
-        return C.COLORES_MONITOREO.get(tipo, "#2fd693")
-    if E.es_moderna():
-        return "#333c4e"
-    return C.COLORES_MONITOREO.get(tipo, "#394151")
+        return ("#1e8528", "#59d966")
+    if tipo == "OBS_MONITORING_TYPE_MONITOR_ONLY":
+        return ("#4dabf7", "#8fc8ff")
+    return (None, None)
 
 
 _cache_emoji = {}
@@ -795,92 +793,93 @@ def _imagen_emoji(texto, tam_px, color, fuentes=None):
 
 def _repintar_icono_plano(etiqueta):
     if getattr(etiqueta, "tiene_cuadrado", False):
-        foto = _imagen_icono_con_cuadrado(
-            etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.cuadrado_color)
+        foto = _imagen_monitor_moderna(etiqueta.tam_icono, etiqueta.cuadrado_color)
     else:
-        foto = _imagen_emoji(etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.color_icono)
+        foto = _imagen_emoji(etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.color_icono,
+                             fuentes=getattr(etiqueta, "fuentes_emoji", None))
     if foto is not None:
         etiqueta.imagen_icono = foto
         etiqueta.config(image=foto)
     else:
         etiqueta.config(image="", text=etiqueta.texto_icono)
         try:
-            etiqueta.config(fg=(etiqueta.cuadrado_color if getattr(
+            etiqueta.config(fg=("#b5b5b5" if getattr(
                 etiqueta, "tiene_cuadrado", False) else etiqueta.color_icono))
         except Exception:
             pass
 
 
-# Auricular siempre claro sobre el cuadrado (como el blanco de OBS).
-COLOR_AURICULAR_FIJO = "#f2f5fa"
-_RUTAS_EMOJI_AURICULAR = None
+_RUTAS_EMOJI_ALTAVOZ = None
 
 
-def _rutas_emoji_auricular():
-    """Segoe UI Emoji primero para el auricular de Moderna (trazo grueso
-    con las copas pegadas a la vincha, como el de OBS); el resto de
-    respaldo por si falta."""
-    global _RUTAS_EMOJI_AURICULAR
-    if _RUTAS_EMOJI_AURICULAR is None:
+def _rutas_emoji_altavoz():
+    """Segoe UI Emoji primero para el parlante (el muteado trae una X
+    en vez del círculo de prohibido); respaldo detrás."""
+    global _RUTAS_EMOJI_ALTAVOZ
+    if _RUTAS_EMOJI_ALTAVOZ is None:
         import os as _os
         if _os.name == "nt":
             base = _os.environ.get("WINDIR", r"C:\Windows") + r"\Fonts"
-            _RUTAS_EMOJI_AURICULAR = [base + "\\" + f for f in (
+            _RUTAS_EMOJI_ALTAVOZ = [base + "\\" + f for f in (
                 "seguiemj.ttf", "seguisym.ttf", "segoeui.ttf", "arial.ttf")]
         else:
-            _RUTAS_EMOJI_AURICULAR = ["DejaVuSans.ttf"]
-    return _RUTAS_EMOJI_AURICULAR
+            _RUTAS_EMOJI_ALTAVOZ = ["DejaVuSans.ttf"]
+    return _RUTAS_EMOJI_ALTAVOZ
 
 
-_cache_cuadrado_estado = {}
-_cache_icono_cuadrado = {}
+_cache_monitor_moderna = {}
 
 
-def _imagen_cuadrado_estado(lado, radio, color):
-    """Cuadrado redondeado del color de estado que va detrás del
-    auricular. Cacheado. None sin Pillow."""
-    if not HAY_PILLOW:
-        return None
-    lado = max(12, int(lado))
-    clave = (lado, radio, color)
-    if clave in _cache_cuadrado_estado:
-        return _cache_cuadrado_estado[clave]
-    try:
-        S = 4
-        w = lado * S
-        img = Image.new("RGBA", (w, w), (0, 0, 0, 0))
-        ImageDraw.Draw(img).rounded_rectangle(
-            [S, S, w - S - 1, w - S - 1], radius=int(radio * S),
-            fill=_hex_a_rgb(color) + (255,))
-        foto = ImageTk.PhotoImage(img.resize((lado, lado), Image.LANCZOS))
-        _cache_cuadrado_estado[clave] = foto
-        return foto
-    except Exception:
-        return None
-
-
-def _imagen_icono_con_cuadrado(texto, tam_px, color_cuadrado):
-    """Auricular claro centrado sobre su cuadrado de estado. Cacheado.
-    None sin Pillow."""
+def _imagen_monitor_moderna(tam_px, color_cuadrado):
+    """Icono de monitoreo Moderna dibujado a mano: auricular minimalista
+    (vincha + dos copas pegadas a la estructura, sin detalles) centrado
+    exacto sobre su cuadrado de estado. color_cuadrado es (fondo, borde)
+    o None cuando está apagado (sin cuadrado: glifo gris sobre
+    transparente). Cacheado. None sin Pillow."""
     if not HAY_PILLOW:
         return None
     tam_px = max(12, int(tam_px))
-    clave = (texto, tam_px, color_cuadrado)
-    if clave in _cache_icono_cuadrado:
-        return _cache_icono_cuadrado[clave]
+    fondo = borde = None
+    if color_cuadrado:
+        fondo, borde = color_cuadrado
+    clave = (tam_px, fondo, borde)
+    if clave in _cache_monitor_moderna:
+        return _cache_monitor_moderna[clave]
     try:
+        S = 8
         lado = tam_px + 8
-        foto_cuadrado = _imagen_cuadrado_estado(lado, 6, color_cuadrado)
-        foto_glifo = _imagen_emoji(texto, tam_px, COLOR_AURICULAR_FIJO,
-                                   fuentes=_rutas_emoji_auricular())
-        if foto_cuadrado is None or foto_glifo is None:
-            return None
-        from PIL import ImageTk as _ImageTk
-        compuesta = _ImageTk.getimage(foto_cuadrado).copy()
-        glifo = _ImageTk.getimage(foto_glifo)
-        compuesta.alpha_composite(glifo, ((lado - tam_px) // 2, (lado - tam_px) // 2))
-        foto = _ImageTk.PhotoImage(compuesta)
-        _cache_icono_cuadrado[clave] = foto
+        w = lado * S
+        img = Image.new("RGBA", (w, w), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        if fondo is not None:
+            if borde is None:
+                borde = fondo
+            d.rounded_rectangle(
+                [S, S, w - S - 1, w - S - 1], radius=6 * S,
+                fill=_hex_a_rgb(borde) + (255,))
+            d.rounded_rectangle(
+                [3 * S, 3 * S, w - 3 * S - 1, w - 3 * S - 1], radius=4 * S,
+                fill=_hex_a_rgb(fondo) + (255,))
+            gris = (242, 245, 250, 255)
+        else:
+            gris = (181, 181, 181, 255)
+        # Caja del glifo centrada.
+        gx0 = 4 * S
+        g = tam_px * S
+        # Vincha: arco superior grueso.
+        t = max(2 * S, round(tam_px * S * 0.13))
+        d.arc([gx0 + g * 0.10, gx0 + g * 0.02, gx0 + g * 0.90, gx0 + g * 0.66],
+              start=180, end=360, fill=gris, width=t)
+        # Copas pegadas a los extremos de la vincha (se montan sobre el
+        # final de la banda para que no se vean sueltas).
+        pw = int(t * 2.0)
+        ph = int(g * 0.40)
+        for cx in (gx0 + g * 0.10, gx0 + g * 0.90):
+            cy0 = gx0 + int(g * 0.34) - int(t * 0.45)
+            d.rounded_rectangle([cx - pw // 2, cy0, cx + pw // 2, cy0 + ph],
+                                radius=pw // 2, fill=gris)
+        foto = ImageTk.PhotoImage(img.resize((lado, lado), Image.LANCZOS))
+        _cache_monitor_moderna[clave] = foto
         return foto
     except Exception:
         return None
@@ -898,8 +897,10 @@ def _crear_icono_plano(parent, texto, fuente_tam, color, comando, cuadrado=False
     etiqueta.texto_icono = texto
     etiqueta.tam_icono = max(12, int(fuente_tam + 2))
     etiqueta.tiene_cuadrado = bool(cuadrado)
+    # El parlante se rasteriza desde Segoe UI Emoji (mute con X).
+    etiqueta.fuentes_emoji = _rutas_emoji_altavoz() if texto in ("🔇", "🔊") else None
     if cuadrado:
-        etiqueta.color_icono = COLOR_AURICULAR_FIJO
+        etiqueta.color_icono = color
         etiqueta.cuadrado_color = color
     else:
         etiqueta.color_icono = color

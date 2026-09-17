@@ -270,7 +270,7 @@ Por cada fuente de audio de OBS se crea una tarjeta con:
 Cabecera de la tarjeta:
 - Nombre (doble clic = renombrar), en cabecera de alto fijo: los títulos largos se achican (hasta 5) y, si ni así entran en 2 renglones, se recortan con '…' para no desalinear el resto.
 - Botón circular de mute 🔊/🔇 (toggle).
-- Botón de monitoreo 🎧 (en Moderna, auricular claro sobre cuadrado de estado: verde salida, azul solo-yo).
+- Botón de monitoreo 🎧 (en Moderna, auricular minimalista dibujado sobre cuadrado de estado: verde con borde en salida, azul en solo-yo, sin cuadrado apagado; mute con X).
 - LED de estado (verde si está en escena activa / encendida, gris si atenuada).
 - Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", "Propiedades…", color de etiqueta, "Quitar de todas las escenas…" y "Eliminar fuente…".
 - Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
