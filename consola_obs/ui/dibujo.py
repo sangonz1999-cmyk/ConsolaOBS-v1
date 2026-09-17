@@ -672,6 +672,42 @@ def _imagen_pildora_blanca(ancho, alto):
         return None
 
 
+_cache_pista_fader = {}
+
+
+def _imagen_pista_fader(alto, color_pista="#0a0a0a", color_punta="#4365cb"):
+    """Pista del fader con extremos redondos y punta inferior azul, todo
+    en una sola imagen con bordes suaves (supersampling + LANCZOS): los
+    óvalos de 4px dibujados directo en canvas salen deformes porque Tk
+    no suaviza nada. La imagen cubre el tramo de la pista (8px de ancho
+    con la barra de 4px al centro); el relleno azul del nivel se dibuja
+    aparte encima hasta donde empieza la punta. Cacheada por alto. None
+    sin Pillow (se cae al dibujo de canvas)."""
+    if not HAY_PILLOW:
+        return None
+    alto = max(12, int(alto))
+    clave = (alto, color_pista, color_punta)
+    if clave in _cache_pista_fader:
+        return _cache_pista_fader[clave]
+    try:
+        S = 4
+        ancho = 8
+        w, h = ancho * S, alto * S
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle(
+            [2 * S, 0, w - 2 * S - 1, h - 1], radius=2 * S,
+            fill=_hex_a_rgb(color_pista) + (255,))
+        d.ellipse(
+            [2 * S, h - 4 * S - 1, w - 2 * S - 1, h - 1],
+            fill=_hex_a_rgb(color_punta) + (255,))
+        foto = ImageTk.PhotoImage(img.resize((ancho, alto), Image.LANCZOS))
+        _cache_pista_fader[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
 def _color_mute(muted):
     """Color del altavoz: rojo si muteado, o gris (más claro en Moderna)."""
     if muted:
