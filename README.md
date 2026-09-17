@@ -549,7 +549,7 @@ Reglas de oro implementadas:
 Doble clic en `compilar.bat` (usa PyInstaller, Windows):
 
 ```
-py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --icon "assets\iconos\app_icon.ico" main.py
+py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --version-file "version_info.txt" --icon "assets\iconos\app_icon.ico" main.py
 ```
 
 - --onefile: un solo .exe (queda en la misma carpeta, junto a `main.py`).
