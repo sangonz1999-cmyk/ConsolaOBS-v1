@@ -120,7 +120,7 @@ def abrir_propiedades(nombre):
     ANCHO_BARRA_PROPIEDADES = 12
     # Sangría lateral del contenido: las filas no se pegan ni al borde
     # izquierdo ni a la barra flotante de la derecha.
-    SANGRIA_CONTENIDO = 12
+    SANGRIA_CONTENIDO = 20
 
     canvas_ajustes = tk.Canvas(marco_scroll, bg="#10141b", highlightthickness=0)
     scrollbar_ajustes = ttk.Scrollbar(
@@ -195,11 +195,13 @@ def abrir_propiedades(nombre):
             _ocultar_barra()
 
     def _al_configurar_canvas(evento):
+        # Contenido insetado 20px de cada lado; la barra flotante (12px)
+        # va superpuesta sobre la sangría derecha.
         try:
             canvas_ajustes.coords(id_ventana_campos, SANGRIA_CONTENIDO, 0)
             canvas_ajustes.itemconfig(
                 id_ventana_campos,
-                width=max(1, evento.width - SANGRIA_CONTENIDO - ANCHO_BARRA_PROPIEDADES))
+                width=max(1, evento.width - SANGRIA_CONTENIDO * 2))
         except Exception:
             pass
 
