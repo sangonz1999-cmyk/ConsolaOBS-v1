@@ -33,7 +33,7 @@ class _FaderOBS:
     COLOR_PISTA = "#0a0a0a"
     COLOR_MARCA_FADER = "#565c6c"
     COLOR_LLENO_FADER = "#4365cb"
-    MARCAS_FADER_DB = (-10, -20, -30, -40, -50, -60)
+    MARCAS_FADER_DB = (0, -10, -20, -30, -40, -50)
 
     def __init__(self, parent, alto, bg, al_cambiar):
         self.alto = max(60, int(alto) + self.FADER_EXTRA_PX)
@@ -591,6 +591,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     _fuente_marcas_db = tkfont.Font(family=E.FUENTE_UI, size=6)
     margen_marcas_db = math.ceil(_fuente_marcas_db.metrics("linespace") / 2) + 1
 
+    # En Moderna el medidor mide lo mismo que la barra de volumen (que
+    # es más larga que el alto del canal); en Profesional coinciden.
+    alto_medidor = alto_canal + (_FaderOBS.FADER_EXTRA_PX if E.es_moderna() else 0)
+
     tam_marcas_db = 6
     if E.es_moderna():
         # Números dB más grandes: se mide el ancho real que necesitan y
@@ -606,12 +610,12 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         margen_marcas_db = math.ceil(_f_marcas.metrics("linespace") / 2) + 1
         vu_canvas = tk.Canvas(
             fila_vertical, width=ancho_barra_vu + ancho_marcas,
-            height=alto_canal + margen_marcas_db * 2,
+            height=alto_medidor + margen_marcas_db * 2,
             bg=color_cuerpo, highlightthickness=0
         )
         vu_canvas.pack(side="left", anchor="n")
         vu_obs = mod_ui_medidores._dibujar_barra_obs(
-            vu_canvas, ancho_barra_vu, alto_canal, bg=color_cuerpo, offset_y=margen_marcas_db)
+            vu_canvas, ancho_barra_vu, alto_medidor, bg=color_cuerpo, offset_y=margen_marcas_db)
         vu_segmentos = []
         marcas_db = mod_ui_medidores.MARCAS_DB_OBS
         color_marcas = C.MOD_MARCA_DB
@@ -627,7 +631,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         color_marcas = "#79859f"
 
     for marca in marcas_db:
-        y = mod_ui_medidores._y_para_db(marca, alto_canal) + margen_marcas_db
+        y = mod_ui_medidores._y_para_db(marca, alto_medidor) + margen_marcas_db
         vu_canvas.create_text(
             ancho_barra_vu + 5, y, text=str(marca),
             fill=color_marcas, font=(E.FUENTE_UI, tam_marcas_db if E.es_moderna() else 6),
@@ -637,7 +641,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         # Línea divisora gris pegada a la barra, con los dB al lado.
         vu_canvas.create_line(
             ancho_barra_vu + 2, margen_marcas_db,
-            ancho_barra_vu + 2, margen_marcas_db + alto_canal,
+            ancho_barra_vu + 2, margen_marcas_db + alto_medidor,
             fill=C.MOD_MARCA_DB, width=1)
 
     def cambiar_volumen(valor):
@@ -746,7 +750,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         "vu_canvas": vu_canvas,
         "vu_segmentos": vu_segmentos,
         "vu_obs": vu_obs,
-        "vu_alto": alto_canal,
+        "vu_alto": alto_medidor,
         "vu_visual_db": -60.0,                                                              
         "muted": muted,
         "tipo_monitor": tipo_monitor,
@@ -872,14 +876,14 @@ def _actualizar_estado_gris(nombre):
             fader.config(bg=color_cuerpo)
     except Exception:
         pass
-    # El medidor también sigue al fondo actual (misma propiedad que el
-    # fader): fondo y máscara se tiñen con el color del cuerpo.
+    # El medidor también sigue al fondo actual: canvas y divisora se
+    # tiñen con el color del cuerpo.
     try:
         dib = widgets.get("vu_obs")
         if dib:
             widgets["vu_canvas"].config(bg=color_cuerpo)
-            widgets["vu_canvas"].itemconfig(dib["id_fondo"], fill=color_cuerpo)
-            widgets["vu_canvas"].itemconfig(dib["id_mascara"], fill=color_cuerpo)
+            if dib.get("id_divisora") is not None:
+                widgets["vu_canvas"].itemconfig(dib["id_divisora"], fill=color_cuerpo)
             dib["bg"] = color_cuerpo
     except Exception:
         pass

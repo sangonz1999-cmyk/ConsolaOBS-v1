@@ -104,11 +104,10 @@ MARCAS_DB_OBS = [0, -6, -12, -18, -24, -30, -36, -48, -60]
 _cache_barra_obs = {}
 
 
-# Geometría del medidor Moderna: dos canales (L/R) con divisora negra
-# en el medio, como en OBS. El ancho total es apenas mayor que la
-# barra única anterior.
-ANCHO_BARRA_MODERNA_TOTAL = 24
-ANCHO_DIVISORA_MODERNA = 4
+# Geometría del medidor Moderna: dos canales (L/R) con divisora fina
+# del color del fondo en el medio, como en OBS.
+ANCHO_BARRA_MODERNA_TOTAL = 20
+ANCHO_DIVISORA_MODERNA = 2
 
 
 def _mezclar_rgb(c1, c2, t):
@@ -195,10 +194,9 @@ def _color_zona_barra(db, paleta, mezcla=(1.5, 2.0)):
 
 def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
     """Tira vertical de la GUÍA de fondo (colores oscuros, editables en
-    constantes.py), con la divisora negra del medio ya pintada, cacheada
-    por tamaño. None sin Pillow."""
+    constantes.py), cacheada por tamaño. None sin Pillow."""
     try:
-        from consola_obs.compat import HAY_PILLOW, Image, ImageDraw, ImageTk
+        from consola_obs.compat import HAY_PILLOW, Image, ImageTk
     except Exception:
         return None
     if not HAY_PILLOW:
@@ -215,13 +213,7 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
         for y in range(alto):
             db = -(y / max(1, alto - 1)) * 60.0
             px[0, y] = _color_zona_barra(db, paleta)
-        foto = tira.resize((ancho, alto))
-        # Divisora negra entre canales, en la misma posición que el hueco
-        # que dejan las filas del frente (ver _dibujar_barra_obs).
-        _div = ANCHO_DIVISORA_MODERNA
-        _x0 = (ancho - _div) // 2
-        ImageDraw.Draw(foto).rectangle([_x0, 0, _x0 + _div - 1, alto - 1], fill=(0, 0, 0))
-        foto = ImageTk.PhotoImage(foto)
+        foto = ImageTk.PhotoImage(tira.resize((ancho, alto)))
         _cache_barra_obs[clave] = foto
         return foto
     except Exception:
@@ -246,6 +238,9 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     if foto_tenue is not None:
         canvas.imagen_barra_obs_tenue = foto_tenue
         id_img_tenue = canvas.create_image(x0, y0, anchor="nw", image=foto_tenue)
+    # Divisora del color del fondo entre los canales (tapa la guía en
+    # la franja del medio; las filas del frente ya dejan ese hueco).
+    id_divisora = canvas.create_rectangle(x_div0, y0, x_div1, y1, fill=bg, outline="")
     colores = []
     colores_gris = []
     esquema = _esquema_barra_actual()
@@ -271,6 +266,7 @@ def _dibujar_barra_obs(canvas, ancho_barra, alto, bg="#080b10", offset_y=0):
     id_borde = canvas.create_rectangle(x0, y0, x1, y1, fill="", outline="#0a1830", width=1)
     return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "alto": alto,
             "bg": bg, "id_img": id_img, "id_img_tenue": id_img_tenue,
+            "id_divisora": id_divisora,
             "id_barra": id_barra, "id_filas": id_filas,
             "colores": colores, "colores_gris": colores_gris,
             "id_clip": id_clip, "id_pico": id_pico, "id_borde": id_borde,
