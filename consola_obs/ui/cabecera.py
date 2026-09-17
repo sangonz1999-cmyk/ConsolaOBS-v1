@@ -166,9 +166,11 @@ def _redibujar_icono_engranaje(event=None):
     lado = E.marco_engranaje.winfo_width() or 46
     E.marco_engranaje.config(bg=E.color_cabecera_arriba())
     if HAY_PILLOW:
-        color = "#0c111b" if E._estado_engranaje["abierto"] else (
+        # Con el menú abierto el ícono va en acento claro (no en negro
+        # como antes): en negro se perdía contra el fondo oscuro.
+        color = (E.color_acento_claro() if E._estado_engranaje["abierto"] else (
             "#d7e6ff" if E._estado_engranaje["hover"] else "#aebbd8"
-        )
+        ))
         try:
             foto = _imagen_boton_engranaje(
                 lado, color, E._estado_engranaje["hover"], E._estado_engranaje["abierto"]
