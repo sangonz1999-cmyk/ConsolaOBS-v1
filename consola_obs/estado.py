@@ -128,13 +128,13 @@ def color_barra_titulo():
 
 
 def color_cabecera_arriba():
-    """Fondo superior de la barra principal (gris oscuro en Moderna)."""
-    return "#2b2b2b" if es_moderna() else "#1c2637"
+    """Fondo superior de la barra principal (gris azulado en Moderna)."""
+    return "#2f3a4e" if es_moderna() else "#1c2637"
 
 
 def color_cabecera_abajo():
-    """Fondo inferior de la barra principal (gris oscuro en Moderna)."""
-    return "#1c1c1c" if es_moderna() else "#0c111b"
+    """Fondo inferior de la barra principal (gris azulado en Moderna)."""
+    return "#222b3a" if es_moderna() else "#0c111b"
 
 
 def color_acento():

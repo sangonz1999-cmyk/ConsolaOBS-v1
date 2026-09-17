@@ -470,14 +470,14 @@ def _placa_moderna_tk(ancho, alto, acento=None, encendido=False, hover=False, pr
         grosor = max(2 * S, round(lado * 0.016))
         if reproduciendo:
             borde = _mezclar_hex(acento or color_marco or "#2f7cf6", "#ffffff", 0.3)
-            cuerpo = _mezclar_hex("#2b2b2b", acento or color_marco or "#2f7cf6", 0.30)
+            cuerpo = _mezclar_hex("#2c3646", acento or color_marco or "#2f7cf6", 0.30)
         elif encendido:
             borde = color_marco or acento or "#2f7cf6"
-            base = "#2b2b2b"
+            base = "#2c3646"
             cuerpo = _mezclar_hex(base, acento, 0.22) if acento else base
         else:
-            borde = color_marco or "#4a4a4a"
-            cuerpo = "#1c1c1c"
+            borde = color_marco or "#4d5b78"
+            cuerpo = "#232c3b"
         if hover:
             cuerpo = _mezclar_hex(cuerpo, "#ffffff", 0.08)
         if presionado:

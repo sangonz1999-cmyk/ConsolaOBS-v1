@@ -867,9 +867,9 @@ def construir_soundboard():
     marco_detectar.pack(fill="x")
     boton_detectar = tk.Button(
         marco_detectar, text="🔍 DETECTAR SONIDOS DE LA CARPETA",
-        bg="#242d3d" if not E.es_moderna() else "#232323",
+        bg="#242d3d" if not E.es_moderna() else "#2e3a4f",
         fg="#4fe3ae" if not E.es_moderna() else C.MOD_ACENTO_CLARO,
-        activebackground="#2e3a4f" if not E.es_moderna() else "#2e2e2e",
+        activebackground="#2e3a4f" if not E.es_moderna() else "#3c4a63",
         activeforeground="#4fe3ae" if not E.es_moderna() else C.MOD_ACENTO_CLARO,
         relief="flat", bd=0, pady=6,
         font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
