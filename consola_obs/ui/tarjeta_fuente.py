@@ -580,7 +580,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
     # Tira fina y puramente decorativa (ya no tiene botones encima: ver
     # comentario más arriba, todo eso ahora vive en el menú contextual).
-    fila_meta = tk.Frame(contenedor, bg=color_meta, height=10)
+    fila_meta = tk.Frame(contenedor, bg=color_meta, height=8)
     fila_meta.pack(fill="x")
     fila_meta.pack_propagate(False)
     fila_meta.bind("<Button-3>", lambda e: _abrir_menu_contextual_fuente(nombre, e))
@@ -597,9 +597,9 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         text="SILENCIO" if vol_db <= E.UMBRAL_SILENCIO else f"{vol_db:.1f} dB",
         bg=color_cuerpo,
         fg=col_db_silencio if vol_db <= E.UMBRAL_SILENCIO else col_db_activo,
-        font=(E.FUENTE_UI, 10, "bold")
+        font=(E.FUENTE_UI, 10)
     )
-    etiqueta_db.pack(pady=(5, 2))
+    etiqueta_db.pack(pady=(3, 1))
 
 
     fila_vertical = tk.Frame(contenedor, bg=color_cuerpo)
@@ -709,7 +709,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
 
     fila_iconos = tk.Frame(contenedor, bg=color_cuerpo)
-    fila_iconos.pack(pady=(5, 5))
+    fila_iconos.pack(pady=(3, 4))
 
     if E.es_moderna():
         boton_mute = mod_ui_dibujo._crear_icono_plano(
