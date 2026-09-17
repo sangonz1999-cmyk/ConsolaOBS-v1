@@ -643,6 +643,35 @@ def _imagen_circulo_blanco(radio):
         return None
 
 
+_cache_pildora_blanca = {}
+
+
+def _imagen_pildora_blanca(ancho, alto):
+    """Perilla pastilla (círculo alargado) estilo OBS, con bordes suaves
+    (supersampling + LANCZOS), cacheada por medida. None sin Pillow (se
+    usa óvalo de respaldo)."""
+    if not HAY_PILLOW:
+        return None
+    ancho = max(6, int(ancho))
+    alto = max(ancho, int(alto))
+    clave = (ancho, alto)
+    if clave in _cache_pildora_blanca:
+        return _cache_pildora_blanca[clave]
+    try:
+        S = 4
+        w, h = ancho * S, alto * S
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle(
+            [S, S, w - S - 1, h - S - 1], radius=(w - 2 * S) // 2,
+            fill=(242, 245, 250, 255), outline=(154, 164, 178, 255), width=S)
+        foto = ImageTk.PhotoImage(img.resize((ancho, alto), Image.LANCZOS))
+        _cache_pildora_blanca[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
 def _color_mute(muted):
     """Color del altavoz: rojo si muteado, o gris (más claro en Moderna)."""
     if muted:

@@ -24,33 +24,44 @@ class _FaderOBS:
     tk.Scale que reemplaza (get/set/pack/bind), para que el resto del
     programa no cambie."""
     ANCHO = 30
-    RADIO_PERILLA = 9
+    PILDORA_ANCHO = 14
+    PILDORA_ALTO = 28
+    # Pista en gris neutro como la de OBS (no azulada) y líneas
+    # laterales finas a los costados, también como en OBS.
+    COLOR_PISTA = "#3a3f47"
+    COLOR_GUIA_LATERAL = "#4e545e"
 
     def __init__(self, parent, alto, bg, al_cambiar):
         self.alto = max(60, int(alto))
         self.al_cambiar = al_cambiar
         self._db = -60.0
-        # Margen para que la perilla nunca se corte en los extremos.
-        self._margen = self.RADIO_PERILLA + 3
+        # Margen para que la pastilla nunca se corte en los extremos.
+        self._margen = self.PILDORA_ALTO // 2 + 3
         self.canvas = tk.Canvas(parent, width=self.ANCHO, height=self.alto,
                                 bg=bg, highlightthickness=0, cursor="hand2")
         cx = self.ANCHO / 2
         self._cx = cx
         m = self._margen
-        self.canvas.create_rectangle(cx - 3, m, cx + 3, self.alto - m,
-                                     fill="#2a3342", outline="")
+        for _dx in (-9, 9):
+            self.canvas.create_line(
+                cx + _dx, m, cx + _dx, self.alto - m,
+                fill=self.COLOR_GUIA_LATERAL, width=2)
+        self.canvas.create_rectangle(cx - 2, m, cx + 2, self.alto - m,
+                                     fill=self.COLOR_PISTA, outline="")
         self.id_fill = self.canvas.create_rectangle(
-            cx - 3, self.alto - m, cx + 3, self.alto - m,
+            cx - 2, self.alto - m, cx + 2, self.alto - m,
             fill="#2f7cf6", outline="")
-        r = self.RADIO_PERILLA
-        foto = mod_ui_dibujo._imagen_circulo_blanco(r)
+        foto = mod_ui_dibujo._imagen_pildora_blanca(self.PILDORA_ANCHO, self.PILDORA_ALTO)
         if foto is not None:
             self.canvas.imagen_perilla = foto
             self.id_handle = self.canvas.create_image(cx, self.alto - m, image=foto)
             self._handle_es_foto = True
         else:
+            # Sin Pillow: un óvalo en caja alargada ya es una pastilla
+            # (con los bordes de siempre, pero la forma correcta).
             self.id_handle = self.canvas.create_oval(
-                cx - r, self.alto - m - r, cx + r, self.alto - m + r,
+                cx - self.PILDORA_ANCHO / 2, self.alto - m - self.PILDORA_ALTO / 2,
+                cx + self.PILDORA_ANCHO / 2, self.alto - m + self.PILDORA_ALTO / 2,
                 fill="#f2f5fa", outline="#9aa4b2")
             self._handle_es_foto = False
         self.canvas.bind("<ButtonPress-1>", self._al_arrastrar)
@@ -85,12 +96,12 @@ class _FaderOBS:
 
     def _repintar(self):
         y = self._y_de_db(self._db)
-        r = self.RADIO_PERILLA
-        self.canvas.coords(self.id_fill, self._cx - 3, y, self._cx + 3, self.alto - self._margen)
+        pw, ph = self.PILDORA_ANCHO, self.PILDORA_ALTO
+        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - self._margen)
         if self._handle_es_foto:
             self.canvas.coords(self.id_handle, self._cx, y)
         else:
-            self.canvas.coords(self.id_handle, self._cx - r, y - r, self._cx + r, y + r)
+            self.canvas.coords(self.id_handle, self._cx - pw / 2, y - ph / 2, self._cx + pw / 2, y + ph / 2)
 
     def _al_arrastrar(self, event):
         self.set(self._db_de_y(event.y))
