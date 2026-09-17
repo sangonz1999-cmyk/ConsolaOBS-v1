@@ -880,19 +880,31 @@ def _imagen_svg(nombre_archivo, lado):
 def _imagen_monitor_svg(tam_px, color_cuadrado):
     """Auricular SVG original sobre su cuadrado de estado (azul/verde);
     apagado usa headphones-off.svg tal cual (ya trae su X y su diadema
-    atenuada). Cacheado. None si no se pudo (cae al emoji)."""
+    atenuada). El label mide SIEMPRE lo mismo (lado = tam + 8) con el
+    glifo centrado: el fondo aparece detrás sin mover al resto.
+    Cacheado. None si no se pudo (cae al emoji)."""
     fondo = borde = None
     if color_cuadrado:
         fondo, borde = color_cuadrado
-    if fondo is None:
-        return _imagen_svg("headphones-off.svg", tam_px)
     tam_px = max(12, int(tam_px))
     lado = tam_px + 8
+    tam_glifo = max(8, tam_px - 2)
     clave = ("monitor", tam_px, fondo, borde)
     if clave in _cache_svg:
         return _cache_svg[clave]
     try:
         from PIL import ImageDraw as _Draw, ImageTk as _ImageTk
+        if fondo is None:
+            foto_glifo = _imagen_svg("headphones-off.svg", tam_glifo)
+            if foto_glifo is None:
+                return None
+            base = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
+            base.alpha_composite(
+                _ImageTk.getimage(foto_glifo),
+                ((lado - tam_glifo) // 2, (lado - tam_glifo) // 2))
+            foto = _ImageTk.PhotoImage(base)
+            _cache_svg[clave] = foto
+            return foto
         S = 4
         base = Image.new("RGBA", (lado * S, lado * S), (0, 0, 0, 0))
         dw = _Draw.Draw(base)
@@ -903,11 +915,12 @@ def _imagen_monitor_svg(tam_px, color_cuadrado):
             [3 * S, 3 * S, lado * S - 3 * S - 1, lado * S - 3 * S - 1], radius=4 * S,
             fill=_hex_a_rgb(fondo) + (255,))
         base = base.resize((lado, lado), Image.LANCZOS)
-        foto_glifo = _imagen_svg("headphones.svg", tam_px)
+        foto_glifo = _imagen_svg("headphones.svg", tam_glifo)
         if foto_glifo is None:
             return None
         base.alpha_composite(
-            _ImageTk.getimage(foto_glifo), ((lado - tam_px) // 2, (lado - tam_px) // 2))
+            _ImageTk.getimage(foto_glifo),
+            ((lado - tam_glifo) // 2, (lado - tam_glifo) // 2))
         foto = _ImageTk.PhotoImage(base)
         _cache_svg[clave] = foto
         return foto
