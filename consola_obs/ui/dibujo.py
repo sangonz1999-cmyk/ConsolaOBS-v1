@@ -4,6 +4,7 @@ import tkinter as tk
 from consola_obs.compat import HAY_PILLOW, Image, ImageChops, ImageDraw, ImageFilter, ImageTk
 from consola_obs import estado as E
 from consola_obs import constantes as C
+from consola_obs import rutas as R
 
 
 def _ajustar_color(color_hex, cantidad):
@@ -792,9 +793,14 @@ def _imagen_emoji(texto, tam_px, color, fuentes=None):
 
 
 def _repintar_icono_plano(etiqueta):
+    foto = None
     if getattr(etiqueta, "tiene_cuadrado", False):
-        foto = _imagen_monitor_moderna(etiqueta.tam_icono, etiqueta.cuadrado_color)
+        foto = _imagen_monitor_svg(etiqueta.tam_icono, etiqueta.cuadrado_color)
     else:
+        nombre = _SVG_POR_TEXTO.get(etiqueta.texto_icono)
+        if nombre is not None:
+            foto = _imagen_svg(nombre, etiqueta.tam_icono)
+    if foto is None:
         foto = _imagen_emoji(etiqueta.texto_icono, etiqueta.tam_icono, etiqueta.color_icono,
                              fuentes=getattr(etiqueta, "fuentes_emoji", None))
     if foto is not None:
@@ -827,59 +833,83 @@ def _rutas_emoji_altavoz():
     return _RUTAS_EMOJI_ALTAVOZ
 
 
-_cache_monitor_moderna = {}
+_cache_svg = {}
+
+# SVG originales (sin modificar) para los iconos planos de Moderna.
+_SVG_POR_TEXTO = {"🔊": "audio.svg", "🔇": "mute.svg", "🎧": "headphones.svg"}
 
 
-def _imagen_monitor_moderna(tam_px, color_cuadrado):
-    """Icono de monitoreo Moderna dibujado a mano: auricular minimalista
-    (vincha + dos copas pegadas a la estructura, sin detalles) centrado
-    exacto sobre su cuadrado de estado. color_cuadrado es (fondo, borde)
-    o None cuando está apagado (sin cuadrado: glifo gris sobre
-    transparente). Cacheado. None sin Pillow."""
+def _imagen_svg(nombre_archivo, lado):
+    """Renderiza un SVG original con pymupdf a 256px y lo baja a `lado`
+    con LANCZOS (fondo transparente, centrado sin recortar). Cacheado.
+    None si falta pymupdf/Pillow o el archivo (se cae al emoji)."""
     if not HAY_PILLOW:
         return None
-    tam_px = max(12, int(tam_px))
+    try:
+        import pymupdf
+    except Exception:
+        return None
+    lado = max(8, int(lado))
+    clave = (nombre_archivo, lado)
+    if clave in _cache_svg:
+        return _cache_svg[clave]
+    try:
+        import os as _os
+        ruta = _os.path.join(R.CARPETA_ICONOS, nombre_archivo)
+        if not _os.path.isfile(ruta):
+            print(f"No se encontró el icono SVG: {ruta}")
+            return None
+        doc = pymupdf.open(ruta)
+        page = doc[0]
+        zoom = 256 / max(page.rect.width, page.rect.height)
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=True)
+        img = Image.frombytes("RGBA", (pix.width, pix.height), pix.samples)
+        try:
+            doc.close()
+        except Exception:
+            pass
+        lienzo = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+        lienzo.alpha_composite(img, ((256 - img.width) // 2, (256 - img.height) // 2))
+        foto = ImageTk.PhotoImage(lienzo.resize((lado, lado), Image.LANCZOS))
+        _cache_svg[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
+def _imagen_monitor_svg(tam_px, color_cuadrado):
+    """Auricular SVG original sobre su cuadrado de estado (azul/verde);
+    apagado usa headphones-off.svg tal cual (ya trae su X y su diadema
+    atenuada). Cacheado. None si no se pudo (cae al emoji)."""
     fondo = borde = None
     if color_cuadrado:
         fondo, borde = color_cuadrado
-    clave = (tam_px, fondo, borde)
-    if clave in _cache_monitor_moderna:
-        return _cache_monitor_moderna[clave]
+    if fondo is None:
+        return _imagen_svg("headphones-off.svg", tam_px)
+    tam_px = max(12, int(tam_px))
+    lado = tam_px + 8
+    clave = ("monitor", tam_px, fondo, borde)
+    if clave in _cache_svg:
+        return _cache_svg[clave]
     try:
-        S = 8
-        lado = tam_px + 8
-        w = lado * S
-        img = Image.new("RGBA", (w, w), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        if fondo is not None:
-            if borde is None:
-                borde = fondo
-            d.rounded_rectangle(
-                [S, S, w - S - 1, w - S - 1], radius=6 * S,
-                fill=_hex_a_rgb(borde) + (255,))
-            d.rounded_rectangle(
-                [3 * S, 3 * S, w - 3 * S - 1, w - 3 * S - 1], radius=4 * S,
-                fill=_hex_a_rgb(fondo) + (255,))
-            gris = (242, 245, 250, 255)
-        else:
-            gris = (181, 181, 181, 255)
-        # Caja del glifo centrada.
-        gx0 = 4 * S
-        g = tam_px * S
-        # Vincha: arco superior grueso.
-        t = max(2 * S, round(tam_px * S * 0.13))
-        d.arc([gx0 + g * 0.10, gx0 + g * 0.02, gx0 + g * 0.90, gx0 + g * 0.66],
-              start=180, end=360, fill=gris, width=t)
-        # Copas pegadas a los extremos de la vincha (se montan sobre el
-        # final de la banda para que no se vean sueltas).
-        pw = int(t * 2.0)
-        ph = int(g * 0.40)
-        for cx in (gx0 + g * 0.10, gx0 + g * 0.90):
-            cy0 = gx0 + int(g * 0.34) - int(t * 0.45)
-            d.rounded_rectangle([cx - pw // 2, cy0, cx + pw // 2, cy0 + ph],
-                                radius=pw // 2, fill=gris)
-        foto = ImageTk.PhotoImage(img.resize((lado, lado), Image.LANCZOS))
-        _cache_monitor_moderna[clave] = foto
+        from PIL import ImageDraw as _Draw, ImageTk as _ImageTk
+        S = 4
+        base = Image.new("RGBA", (lado * S, lado * S), (0, 0, 0, 0))
+        dw = _Draw.Draw(base)
+        dw.rounded_rectangle(
+            [S, S, lado * S - S - 1, lado * S - S - 1], radius=6 * S,
+            fill=_hex_a_rgb(borde or fondo) + (255,))
+        dw.rounded_rectangle(
+            [3 * S, 3 * S, lado * S - 3 * S - 1, lado * S - 3 * S - 1], radius=4 * S,
+            fill=_hex_a_rgb(fondo) + (255,))
+        base = base.resize((lado, lado), Image.LANCZOS)
+        foto_glifo = _imagen_svg("headphones.svg", tam_px)
+        if foto_glifo is None:
+            return None
+        base.alpha_composite(
+            _ImageTk.getimage(foto_glifo), ((lado - tam_px) // 2, (lado - tam_px) // 2))
+        foto = _ImageTk.PhotoImage(base)
+        _cache_svg[clave] = foto
         return foto
     except Exception:
         return None
@@ -887,11 +917,11 @@ def _imagen_monitor_moderna(tam_px, color_cuadrado):
 
 def _crear_icono_plano(parent, texto, fuente_tam, color, comando, cuadrado=False):
     """Ícono solo (sin círculo detrás) para el tema Moderna: una etiqueta
-    clickeable cuyo color marca el estado. Dibuja el ícono en vectorial
-    (sin pixelado) o cae al emoji de texto sin Pillow. Compatible con
-    _actualizar_boton_circular (texto/color).
-    Con cuadrado=True (auricular) el glifo va siempre claro y el que
-    cambia de color con el estado es el cuadrado de detrás."""
+    clickeable cuyo color marca el estado. Usa los SVG originales
+    (audio/mute/headphones vía pymupdf) o cae al emoji sin ellos.
+    Compatible con _actualizar_boton_circular (texto/color).
+    Con cuadrado=True (auricular) el cuadrado de detrás marca el estado
+    y apagado usa headphones-off.svg tal cual."""
     etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
     etiqueta.texto_icono = texto

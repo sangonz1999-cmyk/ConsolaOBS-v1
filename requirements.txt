@@ -1,3 +1,4 @@
 obsws-python>=1.8
 Pillow>=10
 miniaudio>=1.71
+pymupdf>=1.23

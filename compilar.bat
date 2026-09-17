@@ -59,7 +59,7 @@ REM barra invertida, "...\" escaparia la comilla de cierre y PyInstaller
 REM recibiria mal los argumentos (diria que falta el script).
 REM --hidden-import cffi: miniaudio lo necesita a nivel C (_miniaudio.pyd)
 REM y PyInstaller no lo detecta solo; sin esto el .exe no tiene audio local.
-py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --hidden-import cffi --version-file "%~dp0version_info.txt" --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD%" main.py
+py -m PyInstaller --onefile --windowed --name ConsolaOBS %OPCION_ICONO% --hidden-import cffi --collect-all pymupdf --version-file "%~dp0version_info.txt" --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD%" main.py
 
 if not exist "%CARPETA_DESTINO%\ConsolaOBS.exe" (
     echo.
