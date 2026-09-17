@@ -288,9 +288,9 @@ SALTO_MINIMO_REDIBUJO_PX = 32
 
 
 # Tema "Moderna" (estilo OBS): grises oscuros con acento azul.
-MOD_FONDO = "#272a33"
-MOD_TARJETA = "#272a33"
-MOD_CABECERA = "#272a33"
+MOD_FONDO = "#2b3442"
+MOD_TARJETA = "#2b3442"
+MOD_CABECERA = "#2b3442"
 MOD_TEXTO = "#ededed"
 MOD_APAGADO = "#8a8a8a"
 MOD_MARCA_DB = "#7a7a7a"
