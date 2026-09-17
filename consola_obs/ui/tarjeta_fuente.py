@@ -26,13 +26,16 @@ class _FaderOBS:
     ANCHO = 30
     PILDORA_ANCHO = 14
     PILDORA_ALTO = 28
-    # Pista en gris neutro como la de OBS (no azulada) y líneas
-    # laterales finas a los costados, también como en OBS.
-    COLOR_PISTA = "#3a3f47"
-    COLOR_GUIA_LATERAL = "#4e545e"
+    # Recorrido más largo que la barra de nivel (como en OBS).
+    FADER_EXTRA_PX = 40
+    # Pista negra (no gris) y marcas perpendiculares grises cada 10 dB
+    # de -10 a -60, como la escala del fader de OBS.
+    COLOR_PISTA = "#0a0a0a"
+    COLOR_MARCA_FADER = "#4e545e"
+    MARCAS_FADER_DB = (-10, -20, -30, -40, -50, -60)
 
     def __init__(self, parent, alto, bg, al_cambiar):
-        self.alto = max(60, int(alto))
+        self.alto = max(60, int(alto) + self.FADER_EXTRA_PX)
         self.al_cambiar = al_cambiar
         self._db = -60.0
         # Margen para que la pastilla nunca se corte en los extremos.
@@ -42,15 +45,17 @@ class _FaderOBS:
         cx = self.ANCHO / 2
         self._cx = cx
         m = self._margen
-        for _dx in (-9, 9):
-            self.canvas.create_line(
-                cx + _dx, m, cx + _dx, self.alto - m,
-                fill=self.COLOR_GUIA_LATERAL, width=2)
         self.canvas.create_rectangle(cx - 2, m, cx + 2, self.alto - m,
                                      fill=self.COLOR_PISTA, outline="")
         self.id_fill = self.canvas.create_rectangle(
             cx - 2, self.alto - m, cx + 2, self.alto - m,
-            fill="#2f7cf6", outline="")
+            fill=C.MOD_ACENTO_OSCURO, outline="")
+        for _db_marca in self.MARCAS_FADER_DB:
+            _y = self._y_de_db(_db_marca)
+            for _lado in (-1, 1):
+                self.canvas.create_line(
+                    cx + _lado * 3, _y, cx + _lado * 8, _y,
+                    fill=self.COLOR_MARCA_FADER, width=2)
         foto = mod_ui_dibujo._imagen_pildora_blanca(self.PILDORA_ANCHO, self.PILDORA_ALTO)
         if foto is not None:
             self.canvas.imagen_perilla = foto
