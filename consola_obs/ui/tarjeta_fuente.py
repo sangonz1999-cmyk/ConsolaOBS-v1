@@ -662,7 +662,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         boton_mute = mod_ui_dibujo._crear_icono_plano(
             fila_iconos,
             "🔇" if muted else "🔊",
-            medida_icono["fuente_boton"] - 2,
+            medida_icono["fuente_boton"] + 1,
             mod_ui_dibujo._color_mute(muted),
             lambda: cambiar_mute(nombre)
         )
@@ -671,7 +671,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         boton_monitor = mod_ui_dibujo._crear_icono_plano(
             fila_iconos,
             "🎧",
-            medida_icono["fuente_boton"] + 1,
+            medida_icono["fuente_boton"] + 4,
             mod_ui_dibujo._color_monitor(tipo_monitor),
             lambda: cambiar_monitor(nombre)
         )
@@ -733,6 +733,30 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     }
 
     _actualizar_estado_gris(nombre)
+
+    # Ajuste final anti-recorte: la tarjeta mide un alto fijo de
+    # catálogo, pero según las métricas de fuente de cada PC el
+    # contenido puede pasarse unos píxeles (y lo primero que se corta
+    # son los iconos, lo último en apilarse). Si el contenido supera
+    # el alto fijo, la tarjeta crece lo justo para entrar entera: como
+    # la cabecera es de alto fijo, TODAS crecen lo mismo en esa PC y
+    # siguen alineadas entre sí.
+    try:
+        contenedor.update_idletasks()
+        contenido = (cabecera_canal.winfo_reqheight() + fila_meta.winfo_reqheight()
+                     + etiqueta_db.winfo_reqheight() + 7
+                     + fila_vertical.winfo_reqheight() + 2
+                     + fila_iconos.winfo_reqheight() + 10)
+        if contenido > alto_contenedor:
+            alto_contenedor = contenido
+            contenedor.config(height=alto_contenedor)
+            tarjeta_sombra.config(height=alto_contenedor + 18)
+            tarjeta_sombra.delete("sombra_difusa")
+            mod_ui_dibujo._dibujar_sombra_difusa(
+                tarjeta_sombra, 6, 6, ancho_contenedor + 4, alto_contenedor + 4,
+                radio=10, capas=3, color_fondo_panel="#131825")
+    except Exception:
+        pass
 
     # Recién ahora, con la tarjeta completa, se la ubica en la grilla y
     # se fuerza su pintado: el primer cuadro visible ya es la versión
