@@ -212,7 +212,8 @@ def _imagen_barra_obs(ancho, alto, gris=False, tenue=False):
         px = tira.load()
         for y in range(alto):
             db = -(y / max(1, alto - 1)) * 60.0
-            px[0, y] = _color_zona_barra(db, paleta)
+            # Cortes duros también en la guía (sin difuminado).
+            px[0, y] = _color_zona_barra(db, paleta, (0.0, 0.0))
         foto = ImageTk.PhotoImage(tira.resize((ancho, alto)))
         _cache_barra_obs[clave] = foto
         return foto

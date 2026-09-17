@@ -48,8 +48,20 @@ class _FaderOBS:
         m = self._margen
         self.canvas.create_rectangle(cx - 2, m, cx + 2, self.alto - m,
                                      fill=self.COLOR_PISTA, outline="")
+        # Terminaciones redondas de la pista (semicírculos del mismo color).
+        self.canvas.create_oval(cx - 2, m - 2, cx + 2, m + 2,
+                                fill=self.COLOR_PISTA, outline="")
+        self.canvas.create_oval(cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
+                                fill=self.COLOR_PISTA, outline="")
         self.id_fill = self.canvas.create_rectangle(
             cx - 2, self.alto - m, cx + 2, self.alto - m,
+            fill=self.COLOR_LLENO_FADER, outline="")
+        # El relleno llega hasta el final con terminación redonda: punta
+        # fija abajo y punta móvil que sigue al nivel.
+        self.canvas.create_oval(cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
+                                fill=self.COLOR_LLENO_FADER, outline="")
+        self.id_fill_cap = self.canvas.create_oval(
+            cx - 2, self.alto - m - 2, cx + 2, self.alto - m + 2,
             fill=self.COLOR_LLENO_FADER, outline="")
         for _db_marca in self.MARCAS_FADER_DB:
             _y = self._y_de_db(_db_marca)
@@ -104,6 +116,7 @@ class _FaderOBS:
         y = self._y_de_db(self._db)
         pw, ph = self.PILDORA_ANCHO, self.PILDORA_ALTO
         self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - self._margen)
+        self.canvas.coords(self.id_fill_cap, self._cx - 2, y - 2, self._cx + 2, y + 2)
         if self._handle_es_foto:
             self.canvas.coords(self.id_handle, self._cx, y)
         else:
@@ -632,17 +645,16 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
 
     for marca in marcas_db:
         y = mod_ui_medidores._y_para_db(marca, alto_medidor) + margen_marcas_db
+        if E.es_moderna():
+            # Marcas perpendiculares pegadas a la barra, con el dB al lado.
+            vu_canvas.create_line(
+                ancho_barra_vu, y, ancho_barra_vu + 4, y,
+                fill=C.MOD_MARCA_DB, width=1)
         vu_canvas.create_text(
-            ancho_barra_vu + 5, y, text=str(marca),
+            ancho_barra_vu + (6 if E.es_moderna() else 3), y, text=str(marca),
             fill=color_marcas, font=(E.FUENTE_UI, tam_marcas_db if E.es_moderna() else 6),
             anchor="w"
         )
-    if E.es_moderna():
-        # Línea divisora gris pegada a la barra, con los dB al lado.
-        vu_canvas.create_line(
-            ancho_barra_vu + 2, margen_marcas_db,
-            ancho_barra_vu + 2, margen_marcas_db + alto_medidor,
-            fill=C.MOD_MARCA_DB, width=1)
 
     def cambiar_volumen(valor):
         if not E.conectado:

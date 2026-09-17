@@ -217,8 +217,8 @@ Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
 Cada tarjeta de fuente tiene un medidor de dos canales (barra LED
 vertical, NUM_SEGMENTOS_VU=24 segmentos) que imita el medidor de OBS.
 En Moderna es barra continua de dos canales con divisora fina del color del fondo
-(`_dibujar_barra_obs`): mismo largo que el fader, cortes duros de color, línea gris de escala dB
-pegada a la barra y línea de pico.
+(`_dibujar_barra_obs`): mismo largo que el fader, cortes duros de color sin difuminado,
+marcas perpendiculares de escala dB pegadas a la barra y línea de pico.
 
 ### Mecánica:
 - Los niveles vienen de on_input_volume_meters (datos de OBS en tiempo real, no reconstruidos a mano excepto en el caso mute, ver abajo).
@@ -277,7 +277,7 @@ Cabecera de la tarjeta:
 
 Cuerpo de la tarjeta:
 - Fader vertical (tk.Scale de -60..0 dB, resolución 0,5) que llama cambiar_volumen. Al arrastrar se congela/descongela el repintado para no parpadear y se espera a soltar.
-- En Moderna el fader es estilo OBS (`_FaderOBS`): recorrido más largo que el medidor, pista negra angosta con relleno azul opaco, perilla pastilla blanca y marcas perpendiculares cada 10 dB (-10 a -60).
+- En Moderna el fader es estilo OBS (`_FaderOBS`): recorrido más largo que el medidor, pista negra angosta con relleno azul opaco de terminación redonda, perilla pastilla blanca y marcas perpendiculares cada 10 dB (0 a -50).
 - Etiqueta de dB (solo cuando > UMBRAL).
 - Medidor VU (ver sección 6).
 - Alto con ajuste anti-recorte: si las métricas de fuente de la PC superan el alto fijo, la tarjeta crece lo justo (parejo en todas) para no cortar los iconos de abajo.
