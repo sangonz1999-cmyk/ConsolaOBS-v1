@@ -5,20 +5,20 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 ## Características
 
 - **Mixer en tiempo real**: faders en dB, medidores VU LED, mute, monitoreo, renombrado, colores, fuentes principales y drag & drop.
-- **Soundboard**: pads con sonido e imagen; clic reproduce, clic de nuevo detiene con fundido; botones ■/↻ por pad, menú contextual y drag & drop.
+- **Soundboard**: pads con sonido e imagen; clic reproduce, clic de nuevo detiene con fundido; menú contextual y drag & drop.
 - **Detección de carpetas**: los audios nuevos de `assets/Sondidos_pad/` se convierten solos en pads (entran primeros en la fila) con su imagen gemela de `assets/Imagenes_pad/`.
 - **Audio local**: cada efecto suena en OBS y a la vez en los parlantes de la PC (miniaudio), con on/off en Ajustes → Audio.
-- **Tipografías**: selector en Ajustes → Apariencia (Predeterminada + las de `assets/fuentes/`), se aplica a toda la interfaz.
+- **Tipografías**: selector en Ajustes → Apariencia ("Tipografia de obs" = Open Sans por defecto, Predeterminada + las de `assets/fuentes/`), se aplica a toda la interfaz.
 - **Editor de filtros** de audio de OBS en vivo (compresor, EQ, etc.).
 - **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.
-- **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS y sincronización con fuentes creadas/borradas desde OBS.
+- **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS, sus iconos SVG originales y sincronización con fuentes creadas/borradas desde OBS.
 - **Eliminar fuente** desde la consola (clic derecho > Eliminar fuente…), borra la fuente de OBS con confirmación y protección de fuentes globales e internas.
 - **Quitar de todas las escenas** (clic derecho), saca la fuente de todas las escenas sin borrarla de OBS.
 - **Vaciar vs Eliminar pad**: el soundboard distingue entre vaciar el sonido (deja el botón vacío) y eliminar el pad de la grilla (corre los siguientes para cerrar el hueco).
 
 ## Requisitos
 
-- Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`).
+- Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`, `pymupdf`).
 - OBS Studio con el servidor WebSocket v5 activado (puerto 4455).
 
 ## Uso
@@ -549,7 +549,7 @@ Reglas de oro implementadas:
 Doble clic en `compilar.bat` (usa PyInstaller, Windows):
 
 ```
-py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --version-file "version_info.txt" --icon "assets\iconos\app_icon.ico" main.py
+py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --collect-all pymupdf --version-file "version_info.txt" --icon "assets\iconos\app_icon.ico" main.py
 ```
 
 - --onefile: un solo .exe (queda en la misma carpeta, junto a `main.py`).

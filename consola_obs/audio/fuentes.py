@@ -16,6 +16,7 @@ from consola_obs import estado as E
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import filtros as mod_audio_filtros
 from consola_obs.audio import propiedades as mod_audio_propiedades
+from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 
 
@@ -23,7 +24,7 @@ def _tipos_de_entrada_disponibles(kinds_que_ofrece_obs, incluir_todos=False):
     """Cruza el catálogo fijo (ENTRADAS_DE_AUDIO_PERMITIDAS) con lo que
     esta instancia de OBS informa en GetInputKindList, para no ofrecer
     un tipo de fuente que esta versión/plataforma de OBS no trae.
-    Devuelve una lista de (nombre_amigable, icono, kind_real).
+    Devuelve una lista de (nombre_amigable, archivo_svg, kind_real).
 
     Con incluir_todos=True se agregan además, al final y en orden
     alfabético, todos los demás kinds que informó OBS: son los tipos
@@ -42,7 +43,7 @@ def _tipos_de_entrada_disponibles(kinds_que_ofrece_obs, incluir_todos=False):
 
     if incluir_todos:
         for kind in sorted(k for k in conjunto if k not in kinds_usados):
-            opciones.append((kind, E.ICONO_ENTRADA_DESCONOCIDA, kind))
+            opciones.append((kind, E.SVG_POR_INPUT_KIND.get(kind, E.ICONO_ENTRADA_DESCONOCIDA), kind))
 
     return opciones
 
@@ -91,7 +92,7 @@ def _nombres_de_fuentes_existentes():
 def tipos_de_audio_para_menu():
     """Los tipos de entrada de AUDIO que esta instancia de OBS tiene
     registrados, listos para armar el submenú de "Agregar fuente" del
-    clic derecho. Devuelve (nombre_amigable, icono, kind).
+    clic derecho. Devuelve (nombre_amigable, archivo_svg, kind).
 
     Si por lo que sea no se puede preguntar (justo se cayó la conexión),
     se devuelve el catálogo entero con su primer kind: el menú se puede
@@ -227,6 +228,9 @@ def abrir_selector_nueva_fuente():
     var_mostrar_todos = tk.BooleanVar(value=False)
     nombre_por_kind = {}
     _ultimo_sugerido = {"texto": ""}
+    # Referencias vivas de los SVG del listado (sin esto Tk los
+    # recolecta y las filas quedan sin icono).
+    selector._imagenes_tipos = []
 
     def _al_cambiar_tipo(*_ignorar):
         # Si el usuario todavía no tocó el nombre a mano, se le sugiere
@@ -242,6 +246,7 @@ def abrir_selector_nueva_fuente():
     def _reconstruir_lista():
         for hijo in marco_lista_tipos.winfo_children():
             hijo.destroy()
+        selector._imagenes_tipos.clear()
 
         opciones = _tipos_de_entrada_disponibles(kinds, var_mostrar_todos.get())
         nombre_por_kind.clear()
@@ -258,13 +263,25 @@ def abrir_selector_nueva_fuente():
             return
 
         for nombre_amigable, icono, kind in opciones:
-            tk.Radiobutton(
-                marco_lista_tipos, text=f"{icono}  {nombre_amigable}", value=kind,
-                variable=var_tipo_elegido, bg="#10141b", fg="white",
-                activebackground="#1c2331", activeforeground="white",
-                selectcolor="#1a202b", font=(E.FUENTE_UI, 10), anchor="w",
-                justify="left", indicatoron=True, padx=6, pady=5, wraplength=340,
-            ).pack(fill="x")
+            foto = mod_ui_dibujo._imagen_svg(icono, 16)
+            if foto is not None:
+                selector._imagenes_tipos.append(foto)
+                tk.Radiobutton(
+                    marco_lista_tipos, text=nombre_amigable, image=foto, compound="left",
+                    value=kind,
+                    variable=var_tipo_elegido, bg="#10141b", fg="white",
+                    activebackground="#1c2331", activeforeground="white",
+                    selectcolor="#1a202b", font=(E.FUENTE_UI, 10), anchor="w",
+                    justify="left", indicatoron=True, padx=6, pady=5, wraplength=340,
+                ).pack(fill="x")
+            else:
+                tk.Radiobutton(
+                    marco_lista_tipos, text=nombre_amigable, value=kind,
+                    variable=var_tipo_elegido, bg="#10141b", fg="white",
+                    activebackground="#1c2331", activeforeground="white",
+                    selectcolor="#1a202b", font=(E.FUENTE_UI, 10), anchor="w",
+                    justify="left", indicatoron=True, padx=6, pady=5, wraplength=340,
+                ).pack(fill="x")
 
         # Si el tipo que estaba elegido desapareció al destildar
         # "mostrar todos", se vuelve al primero de la lista.

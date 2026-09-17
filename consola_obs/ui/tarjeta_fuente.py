@@ -950,13 +950,24 @@ def _abrir_menu_contextual_panel_fuentes(event):
         )
         tipos = mod_audio_fuentes.tipos_de_audio_para_menu()
         if tipos:
+            submenu_tipos._imagenes = []
             for nombre_amigable, icono, kind in tipos:
-                submenu_tipos.add_command(
-                    label=f"{icono}  {nombre_amigable}",
-                    command=lambda k=kind, n=nombre_amigable: (
-                        mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
+                foto = mod_ui_dibujo._imagen_svg(icono, 16)
+                if foto is None:
+                    submenu_tipos.add_command(
+                        label=nombre_amigable,
+                        command=lambda k=kind, n=nombre_amigable: (
+                            mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
+                        )
                     )
-                )
+                else:
+                    submenu_tipos._imagenes.append(foto)
+                    submenu_tipos.add_command(
+                        label=nombre_amigable, image=foto, compound="left",
+                        command=lambda k=kind, n=nombre_amigable: (
+                            mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
+                        )
+                    )
             submenu_tipos.add_separator()
         submenu_tipos.add_command(
             label="⋯  Otros tipos de fuente…",

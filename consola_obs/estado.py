@@ -249,13 +249,13 @@ FILTROS_DE_SONIDO_PERMITIDOS = [
 # texto, imagen, etc.) igual se pueden crear desde el selector completo,
 # tildando "Mostrar todos los tipos que informa OBS".
 ENTRADAS_DE_AUDIO_PERMITIDAS = [
-    ("Captura de audio de aplicación (BETA)", "🪟",
+    ("Captura de audio de aplicación (BETA)", "windowaudio.svg",
      ["wasapi_process_output_capture"]),
-    ("Captura de entrada audio", "🎤",
+    ("Captura de entrada audio", "microphone.svg",
      ["wasapi_input_capture", "coreaudio_input_capture", "pulse_input_capture"]),
-    ("Captura de salida de audio", "🔊",
+    ("Captura de salida de audio", "windowaudio.svg",
      ["wasapi_output_capture", "coreaudio_output_capture", "pulse_output_capture"]),
-    ("Multimedia", "▶",
+    ("Multimedia", "media.svg",
      ["ffmpeg_source"]),
 ]
 
@@ -263,7 +263,36 @@ ENTRADAS_DE_AUDIO_PERMITIDAS = [
 # es el mismo texto amigable del catálogo, así que no hace falta una
 # tabla aparte. Para un kind que NO esté en el catálogo (modo "mostrar
 # todos"), se sugiere el propio kind.
-ICONO_ENTRADA_DESCONOCIDA = "📦"
+ICONO_ENTRADA_DESCONOCIDA = "default.svg"
+
+# SVG original de OBS por input kind (pack obs_pack/imagenes): se usan
+# en el submenú "Agregar fuente" y en el selector completo. Lo que no
+# está acá cae en default.svg.
+SVG_POR_INPUT_KIND = {
+    "wasapi_input_capture": "microphone.svg",
+    "coreaudio_input_capture": "microphone.svg",
+    "pulse_input_capture": "microphone.svg",
+    "wasapi_output_capture": "windowaudio.svg",
+    "coreaudio_output_capture": "windowaudio.svg",
+    "pulse_output_capture": "windowaudio.svg",
+    "wasapi_process_output_capture": "windowaudio.svg",
+    "ffmpeg_source": "media.svg",
+    "window_capture": "window.svg",
+    "game_capture": "gamepad.svg",
+    "dshow_input": "camera.svg",
+    "v4l2_input": "camera.svg",
+    "browser_source": "globe.svg",
+    "text_ft2_source": "text.svg",
+    "text_gdiplus": "text.svg",
+    "text_gdiplus_v2": "text.svg",
+    "image_source": "image.svg",
+    "slideshow": "slideshow.svg",
+    "color_source": "brush.svg",
+    "color_source_v2": "brush.svg",
+    "color_source_v3": "brush.svg",
+    "scene": "scene.svg",
+    "group": "group.svg",
+}
 
 
 # ESQUEMA de los filtros de sonido "importantes" (los mismos que

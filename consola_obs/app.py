@@ -167,8 +167,13 @@ def main():
     E.FUENTE_ICONOS = next((f for f in ("Segoe UI Symbol", "Noto Sans Symbols 2", "Arial Unicode MS", E.FUENTE_UI) if f in E._familias_disponibles), E.FUENTE_UI)
     E.FUENTE_EMOJI = next((f for f in ("Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", E.FUENTE_UI) if f in E._familias_disponibles), E.FUENTE_UI)
     # Si el usuario ya había elegido una tipografía en el menú de
-    # ajustes, se aplica por encima de la detección automática.
-    mod_ui_ventana.aplicar_fuente_elegida(E.config_interfaz_previa.get("fuente_ui", ""), guardar=False)
+    # ajustes, se aplica por encima de la detección automática. Sin
+    # elección guardada se usa "Tipografia de obs" (Open Sans, la de
+    # OBS) si está disponible.
+    _fuente_guardada = E.config_interfaz_previa.get("fuente_ui", "")
+    if not _fuente_guardada and mod_ui_ventana._resolver_familia_tipografia("Tipografia de obs"):
+        _fuente_guardada = "Tipografia de obs"
+    mod_ui_ventana.aplicar_fuente_elegida(_fuente_guardada, guardar=False)
     # Salida de audio local (parlantes de la PC) en paralelo a OBS.
     E.escuchar_en_pc = E.config_interfaz_previa.get("escuchar_en_pc", True)
     if not isinstance(E.escuchar_en_pc, bool):

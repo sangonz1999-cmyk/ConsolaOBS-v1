@@ -836,7 +836,7 @@ def _rutas_emoji_altavoz():
 _cache_svg = {}
 
 # SVG originales (sin modificar) para los iconos planos de Moderna.
-_SVG_POR_TEXTO = {"🔊": "audio.svg", "🔇": "mute.svg", "🎧": "headphones.svg"}
+_SVG_POR_TEXTO = {"🔊": "mixer-audio.svg", "🔇": "mixer-mute.svg", "🎧": "mixer-headphones.svg"}
 
 
 def _imagen_svg(nombre_archivo, lado):
@@ -879,7 +879,7 @@ def _imagen_svg(nombre_archivo, lado):
 
 def _imagen_monitor_svg(tam_px, color_cuadrado):
     """Auricular SVG original sobre su cuadrado de estado (azul/verde);
-    apagado usa headphones-off.svg tal cual (ya trae su X y su diadema
+    apagado usa mixer-headphones-off.svg tal cual (ya trae su X y su diadema
     atenuada). El label mide SIEMPRE lo mismo (lado = tam + 8) con el
     glifo centrado: el fondo aparece detrás sin mover al resto.
     Cacheado. None si no se pudo (cae al emoji)."""
@@ -895,7 +895,7 @@ def _imagen_monitor_svg(tam_px, color_cuadrado):
     try:
         from PIL import ImageDraw as _Draw, ImageTk as _ImageTk
         if fondo is None:
-            foto_glifo = _imagen_svg("headphones-off.svg", tam_glifo)
+            foto_glifo = _imagen_svg("mixer-headphones-off.svg", tam_glifo)
             if foto_glifo is None:
                 return None
             base = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
@@ -915,7 +915,7 @@ def _imagen_monitor_svg(tam_px, color_cuadrado):
             [3 * S, 3 * S, lado * S - 3 * S - 1, lado * S - 3 * S - 1], radius=4 * S,
             fill=_hex_a_rgb(fondo) + (255,))
         base = base.resize((lado, lado), Image.LANCZOS)
-        foto_glifo = _imagen_svg("headphones.svg", tam_glifo)
+        foto_glifo = _imagen_svg("mixer-headphones.svg", tam_glifo)
         if foto_glifo is None:
             return None
         base.alpha_composite(
@@ -934,7 +934,7 @@ def _crear_icono_plano(parent, texto, fuente_tam, color, comando, cuadrado=False
     (audio/mute/headphones vía pymupdf) o cae al emoji sin ellos.
     Compatible con _actualizar_boton_circular (texto/color).
     Con cuadrado=True (auricular) el cuadrado de detrás marca el estado
-    y apagado usa headphones-off.svg tal cual."""
+    y apagado usa mixer-headphones-off.svg tal cual."""
     etiqueta = tk.Label(parent, bg=parent["bg"], cursor="hand2")
     etiqueta.es_plano = True
     etiqueta.texto_icono = texto

@@ -715,13 +715,31 @@ def cambiar_diseno(nombre_diseno):
 
 FUENTE_PREDETERMINADA = "Predeterminada"
 
+# Alias de tipografía (pack obs_pack): nombre visible -> familias reales
+# en orden de preferencia. "Tipografia de obs" es Open Sans (la de OBS).
+ALIAS_TIPOGRAFIAS = {"Tipografia de obs": ("Open Sans", "Helvetica", "Arial")}
+
+
+def _resolver_familia_tipografia(nombre):
+    """Familia real para un nombre del selector (alias o directa).
+    None si no hay ninguna disponible."""
+    for familia in ALIAS_TIPOGRAFIAS.get(nombre, (nombre,)):
+        if familia in E._familias_disponibles:
+            return familia
+    return None
+
 
 def _fuentes_tipografia_disponibles():
-    """Opciones del selector de tipografía: la predeterminada (la que
-    el programa elige sola) más las tipografías propias registradas
-    desde la carpeta assets/fuentes que estén disponibles."""
+    """Opciones del selector de tipografía: primero el alias de OBS,
+    después la predeterminada (la que el programa elige sola) más las
+    tipografías propias registradas desde la carpeta assets/fuentes
+    que estén disponibles."""
     propias = sorted({f for f in E._NOMBRES_FUENTES_PERSONALIZADAS
                       if f in E._familias_disponibles})
+    if "Tipografia de obs" not in propias and _resolver_familia_tipografia("Tipografia de obs"):
+        propias = ["Tipografia de obs"] + propias
+    if propias and propias[0] == "Tipografia de obs":
+        return ["Tipografia de obs", FUENTE_PREDETERMINADA] + propias[1:]
     return [FUENTE_PREDETERMINADA] + propias
 
 
@@ -730,16 +748,18 @@ def aplicar_fuente_elegida(nombre, guardar=True):
     (textos generales y títulos, que son los que usan FUENTE_UI y
     FUENTE_TITULO). Las fuentes de íconos y emojis (■ ↻ 🔊 🎧) se dejan
     como están a propósito: las tipografías decorativas no traen esos
-    símbolos y quedarían en blanco."""
+    símbolos y quedarían en blanco.
+    Acepta el alias "Tipografia de obs" (Open Sans, con fallback)."""
     if not nombre or nombre == FUENTE_PREDETERMINADA:
         E.FUENTE_UI = next((f for f in E._PREFERENCIAS_FUENTE_UI if f in E._familias_disponibles), "TkDefaultFont")
         E.FUENTE_TITULO = next((f for f in E._PREFERENCIAS_FUENTE_TITULO if f in E._familias_disponibles), E.FUENTE_UI)
         E.fuente_elegida = ""
     else:
-        if nombre not in E._familias_disponibles:
+        familia = _resolver_familia_tipografia(nombre)
+        if familia is None:
             return
-        E.FUENTE_UI = nombre
-        E.FUENTE_TITULO = nombre
+        E.FUENTE_UI = familia
+        E.FUENTE_TITULO = familia
         E.fuente_elegida = nombre
     if guardar:
         mod_configuracion.guardar_config_interfaz({"fuente_ui": E.fuente_elegida})
