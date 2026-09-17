@@ -106,7 +106,7 @@ _cache_barra_obs = {}
 
 # Geometría del medidor Moderna: dos canales (L/R) con divisora fina
 # del color del fondo en el medio, como en OBS.
-ANCHO_BARRA_MODERNA_TOTAL = 20
+ANCHO_BARRA_MODERNA_TOTAL = 16
 ANCHO_DIVISORA_MODERNA = 2
 
 
