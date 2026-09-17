@@ -31,7 +31,8 @@ class _FaderOBS:
     # Pista negra (no gris) y marcas perpendiculares grises cada 10 dB
     # de -10 a -60, como la escala del fader de OBS.
     COLOR_PISTA = "#0a0a0a"
-    COLOR_MARCA_FADER = "#4e545e"
+    COLOR_MARCA_FADER = "#565c6c"
+    COLOR_LLENO_FADER = "#4365cb"
     MARCAS_FADER_DB = (-10, -20, -30, -40, -50, -60)
 
     def __init__(self, parent, alto, bg, al_cambiar):
@@ -49,12 +50,12 @@ class _FaderOBS:
                                      fill=self.COLOR_PISTA, outline="")
         self.id_fill = self.canvas.create_rectangle(
             cx - 2, self.alto - m, cx + 2, self.alto - m,
-            fill=C.MOD_ACENTO_OSCURO, outline="")
+            fill=self.COLOR_LLENO_FADER, outline="")
         for _db_marca in self.MARCAS_FADER_DB:
             _y = self._y_de_db(_db_marca)
             for _lado in (-1, 1):
                 self.canvas.create_line(
-                    cx + _lado * 3, _y, cx + _lado * 8, _y,
+                    cx + _lado * 3, _y, cx + _lado * 7, _y,
                     fill=self.COLOR_MARCA_FADER, width=2)
         foto = mod_ui_dibujo._imagen_pildora_blanca(self.PILDORA_ANCHO, self.PILDORA_ALTO)
         if foto is not None:
