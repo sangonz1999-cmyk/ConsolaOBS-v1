@@ -100,20 +100,122 @@ def abrir_propiedades(nombre):
     marco_scroll = tk.Frame(editor, bg="#10141b")
     marco_scroll.pack(fill="both", expand=True, padx=12)
 
+    # Barra de scroll fina y oscura, flotante sobre el contenido (no le
+    # roba ancho como la clara de antes) y visible sólo cuando hace
+    # falta y el mouse está encima.
+    try:
+        _estilo = getattr(E, "_estilo_scrollbar", None) or ttk.Style()
+        _estilo.configure(
+            "Propiedades.Vertical.TScrollbar",
+            background="#2b3547", troughcolor="#10141b", bordercolor="#10141b",
+            arrowcolor="#3d4a61", relief="flat", arrowsize=0,
+        )
+        _estilo.map(
+            "Propiedades.Vertical.TScrollbar",
+            background=[("active", "#3d4a61")],
+        )
+    except Exception:
+        pass
+
+    ANCHO_BARRA_PROPIEDADES = 12
+    # Sangría lateral del contenido: las filas no se pegan ni al borde
+    # izquierdo ni a la barra flotante de la derecha.
+    SANGRIA_CONTENIDO = 12
+
     canvas_ajustes = tk.Canvas(marco_scroll, bg="#10141b", highlightthickness=0)
-    scrollbar_ajustes = ttk.Scrollbar(marco_scroll, orient="vertical", command=canvas_ajustes.yview)
+    scrollbar_ajustes = ttk.Scrollbar(
+        marco_scroll, orient="vertical", command=canvas_ajustes.yview,
+        style="Propiedades.Vertical.TScrollbar",
+    )
+    scrollbar_ajustes.place_forget()
     marco_campos = tk.Frame(canvas_ajustes, bg="#10141b")
-    marco_campos.bind(
-        "<Configure>", lambda e: canvas_ajustes.configure(scrollregion=canvas_ajustes.bbox("all"))
-    )
-    id_ventana_campos = canvas_ajustes.create_window((0, 0), window=marco_campos, anchor="nw")
-    canvas_ajustes.bind(
-        "<Configure>", lambda e: canvas_ajustes.itemconfig(id_ventana_campos, width=e.width)
-    )
+
+    def _hace_falta_scroll():
+        try:
+            return marco_campos.winfo_reqheight() > canvas_ajustes.winfo_height()
+        except Exception:
+            return False
+
+    def _mostrar_barra():
+        try:
+            if _hace_falta_scroll():
+                scrollbar_ajustes.place(
+                    in_=marco_scroll, relx=1.0, rely=0, relheight=1.0,
+                    anchor="ne", width=ANCHO_BARRA_PROPIEDADES)
+        except Exception:
+            pass
+
+    def _ocultar_barra():
+        try:
+            scrollbar_ajustes.place_forget()
+        except Exception:
+            pass
+
+    trabajo_barra = {"id": None}
+
+    def _ocultar_barra_si_fuera():
+        trabajo_barra["id"] = None
+        try:
+            if not editor.winfo_exists():
+                return
+            x, y = editor.winfo_pointerxy()
+            encima = (scrollbar_ajustes.winfo_containing(x, y) is not None
+                      or canvas_ajustes.winfo_containing(x, y) is not None)
+        except Exception:
+            return
+        if not encima:
+            _ocultar_barra()
+
+    def _programar_ocultado():
+        try:
+            if trabajo_barra["id"] is not None:
+                canvas_ajustes.after_cancel(trabajo_barra["id"])
+                trabajo_barra["id"] = None
+        except Exception:
+            pass
+        try:
+            trabajo_barra["id"] = canvas_ajustes.after(250, _ocultar_barra_si_fuera)
+        except Exception:
+            pass
+
+    def _cancelar_ocultado():
+        try:
+            if trabajo_barra["id"] is not None:
+                canvas_ajustes.after_cancel(trabajo_barra["id"])
+                trabajo_barra["id"] = None
+        except Exception:
+            pass
+
+    def _al_configurar_campos(_evento=None):
+        try:
+            canvas_ajustes.configure(scrollregion=canvas_ajustes.bbox("all"))
+        except Exception:
+            pass
+        if not _hace_falta_scroll():
+            _ocultar_barra()
+
+    def _al_configurar_canvas(evento):
+        try:
+            canvas_ajustes.coords(id_ventana_campos, SANGRIA_CONTENIDO, 0)
+            canvas_ajustes.itemconfig(
+                id_ventana_campos,
+                width=max(1, evento.width - SANGRIA_CONTENIDO - ANCHO_BARRA_PROPIEDADES))
+        except Exception:
+            pass
+
+    marco_campos.bind("<Configure>", _al_configurar_campos)
+    id_ventana_campos = canvas_ajustes.create_window(
+        (SANGRIA_CONTENIDO, 0), window=marco_campos, anchor="nw")
+    canvas_ajustes.bind("<Configure>", _al_configurar_canvas)
     canvas_ajustes.configure(yscrollcommand=scrollbar_ajustes.set)
     canvas_ajustes.pack(side="left", fill="both", expand=True)
-    scrollbar_ajustes.pack(side="right", fill="y")
     mod_audio_filtros._habilitar_scroll_con_rueda(canvas_ajustes)
+    # Estos van con add="+" para no pisar el <Enter>/<Leave> que usa la
+    # rueda del mouse de arriba.
+    canvas_ajustes.bind("<Enter>", lambda _e: (_cancelar_ocultado(), _mostrar_barra()), add="+")
+    canvas_ajustes.bind("<Leave>", lambda _e: _programar_ocultado(), add="+")
+    scrollbar_ajustes.bind("<Enter>", lambda _e: (_cancelar_ocultado(), _mostrar_barra()), add="+")
+    scrollbar_ajustes.bind("<Leave>", lambda _e: _programar_ocultado(), add="+")
 
     controles = {}
     claves_avanzadas = {}
@@ -542,6 +644,7 @@ def abrir_propiedades(nombre):
             except Exception:
                 pass
             trabajo_sondeo["id"] = None
+        _cancelar_ocultado()
         if E._dialogo_propiedades_abierto.get("nombre") == nombre:
             E._dialogo_propiedades_abierto["nombre"] = None
             E._dialogo_propiedades_abierto["ventana"] = None
