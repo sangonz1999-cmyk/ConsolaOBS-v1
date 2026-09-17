@@ -536,6 +536,9 @@ def _fijar_pad_activo(indice):
     principal -si el aviso viene de un hilo de fondo, primero hay que
     pasarlo por ventana.after(0, ...)."""
     anterior = E._sesion_reproduccion.get("indice")
+    # Sesión asentada (pad nuevo activo o todo apagado): se levanta el
+    # bloqueo anti-spam del segundo clic (ver reproducir_sonido).
+    E._sesion_reproduccion["deteniendo"] = False
     if anterior == indice:
         return
     E._sesion_reproduccion["indice"] = indice

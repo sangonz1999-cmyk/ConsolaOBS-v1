@@ -619,7 +619,7 @@ _arrastre_pad = {
 # fundido en curso se fija en qué token nació: si ese token dejó de
 # ser el vigente (porque se disparó otra reproducción mientras
 # fundía), el fundido se cancela solo sin frenar el sonido nuevo.
-_sesion_reproduccion = {"indice": None, "token": 0, "inicio": 0.0}
+_sesion_reproduccion = {"indice": None, "token": 0, "inicio": 0.0, "deteniendo": False}
 
 
 _trabajo_redimension_soundboard = {"id": None}

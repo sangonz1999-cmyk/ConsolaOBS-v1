@@ -82,6 +82,20 @@ def _detener_local(token=None, fundido=False, db_inicial=0.0):
     return False
 
 
+def _apagar_pad_si_desconectado(token):
+    """Apaga el pad cuando NO hay OBS que maneje la luz (sin conexión la
+    maneja este hilo local): si la sesión ya cambió, no toca nada."""
+    if E.conectado:
+        return
+    try:
+        indice = E._sesion_reproduccion.get("indice")
+        E.ventana.after(
+            0,
+            lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+    except Exception:
+        pass
+
+
 def _reproducir_local(ruta, token):
     """Reproduce el archivo por la salida de audio de la PC (parlantes /
     auriculares) con miniaudio, en paralelo a OBS. Corre en su propio
@@ -104,17 +118,20 @@ def _reproducir_local(ruta, token):
                 )
             except Exception:
                 pass
+        _apagar_pad_si_desconectado(token)
         return
     _detener_local()
     try:
         flujo = miniaudio.stream_file(ruta)
     except Exception as e:
         print(f"No se pudo abrir el audio local {ruta}: {e}")
+        _apagar_pad_si_desconectado(token)
         return
     try:
         dispositivo = miniaudio.PlaybackDevice()
     except Exception as e:
         print(f"No se pudo abrir la salida de audio de la PC: {e}")
+        _apagar_pad_si_desconectado(token)
         return
     terminado = threading.Event()
     cancelado = threading.Event()
@@ -166,12 +183,24 @@ def _reproducir_local(ruta, token):
             dispositivo.close()
         except Exception:
             pass
+        _apagar_pad_si_desconectado(token)
         return
     _reproduccion_local["dispositivo"] = dispositivo
     _reproduccion_local["token"] = token
     _reproduccion_local["cancelar"] = cancelado
     _reproduccion_local.pop("fundido_inicio", None)
     _reproduccion_local.pop("fundido_db", None)
+    if E._sesion_reproduccion.get("token") != token:
+        # La sesión se canceló mientras se abría el archivo (clic rapidísimo
+        # + fundido inmediato): no se arranca para no dejar un sonido huérfano.
+        _reproduccion_local.pop("dispositivo", None)
+        _reproduccion_local["token"] = None
+        _reproduccion_local.pop("cancelar", None)
+        try:
+            dispositivo.close()
+        except Exception:
+            pass
+        return
     try:
         dispositivo.start(generador)
         while not terminado.wait(timeout=0.1):
@@ -190,6 +219,9 @@ def _reproducir_local(ruta, token):
             dispositivo.close()
         except Exception:
             pass
+        # Fin del audio local (natural, fundido o cancelado): sin OBS
+        # nadie más va a apagar la luz del pad.
+        _apagar_pad_si_desconectado(token)
 
 
 def cambiar_escuchar_en_pc(valor):
@@ -216,9 +248,11 @@ def _cargar_y_disparar(indice, accion, token):
         ).start()
 
     if not E.conectado:
+        # Sin OBS la sesión queda activa y la luz la maneja el hilo
+        # local (se apaga al terminar o con el fundido del 2do clic).
         if not suena_local:
             messagebox.showwarning("Sin conexión", "Conectate a OBS para poder reproducir los efectos.")
-        E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
 
     try:
@@ -247,6 +281,7 @@ def _iniciar_reproduccion(indice):
     E._sesion_reproduccion["token"] += 1
     token = E._sesion_reproduccion["token"]
     E._sesion_reproduccion["inicio"] = time.time()
+    E._sesion_reproduccion["deteniendo"] = False
     mod_ui_soundboard._fijar_pad_activo(indice)
     threading.Thread(
         target=_cargar_y_disparar,
@@ -397,10 +432,16 @@ def detener_y_vaciar_efectos():
 
 
 def reproducir_sonido(indice):
-    if E._sesion_reproduccion.get("indice") == indice:
-        # Se volvió a apretar el mismo pad mientras sonaba: en vez de
-        # reiniciarlo, se apaga con un fundido de volumen de 2 segundos.
-        token = E._sesion_reproduccion["token"]
+    sesion = E._sesion_reproduccion
+    if sesion.get("indice") == indice:
+        # Segundo clic sobre el pad que suena: fundido de 2 segundos.
+        # Mientras se está apagando se ignoran más clics, hasta que el
+        # sonido termine: si no, el spam de clics re-dispara sesiones y
+        # el audio se buguea. Vale conectado a OBS o no.
+        if sesion.get("deteniendo"):
+            return
+        sesion["deteniendo"] = True
+        token = sesion["token"]
         threading.Thread(
             target=_fundido_y_detener,
             args=(indice, token),

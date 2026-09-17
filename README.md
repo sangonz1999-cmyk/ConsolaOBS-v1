@@ -370,7 +370,7 @@ via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
 
 ### Acciones del pad:
 - Clic = REPRODUCIR. La fuente de efectos se configura con el archivo (set_input_settings {local_file, ...}) y se lanza con trigger_media_input_action(RESTART) en un hilo. En paralelo, el mismo efecto sale por los parlantes de la PC (miniaudio, `audio/reproduccion.py`), con on/off en Ajustes → Audio.
-- Clic de nuevo sobre el pad que suena = DETENER con fundido de 2 s. Detener/reiniciar también están en el menú contextual del pad.
+- Clic de nuevo sobre el pad que suena = DETENER con fundido de 2 s (igual con o sin OBS: sin conexión el fundido lo hace el audio local). Mientras se apaga se ignoran más clics hasta que termina, para que el spam no buguee el sonido; la luz se apaga sola al terminar el audio.
 - Botón de mute/escuchar ya cubierto por el fader de la fuente.
 - Doble clic o menú contextual (clic derecho) del pad: reproducir, detener, reiniciar, asignar/cambiar sonido, asignar imagen, color de etiqueta, renombrar, vaciar o eliminar (sección 11c).
 - Fuente en reposo siempre vacía: al terminar un sonido (fin natural, STOP, fundido o cierre de la app) se limpia `local_file` de `Soundboard_Efectos` (`_vaciar_fuente_efectos`), así al abrir OBS no se reproduce solo el último sonido aunque la consola esté cerrada.
