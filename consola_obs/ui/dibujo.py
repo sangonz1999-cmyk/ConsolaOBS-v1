@@ -970,14 +970,19 @@ def _actualizar_boton_circular(canvas, texto_nuevo=None, color_nuevo=None):
     if texto_nuevo is not None and datos.get("texto") is not None:
         canvas.itemconfig(datos["texto"], text=texto_nuevo)
     if color_nuevo is not None:
+        # Por las dudas: si llega una tupla (fondo, borde) del modo
+        # cuadrado, se usa el fondo (gris apagado si es None).
+        _relleno = color_nuevo[0] if isinstance(color_nuevo, tuple) else color_nuevo
+        if _relleno is None:
+            _relleno = "#394151"
         if datos.get("usa_pillow"):
-            imagen_tk = _renderizar_circulo_boton(datos["lado"], color_nuevo)
+            imagen_tk = _renderizar_circulo_boton(datos["lado"], _relleno)
             canvas.itemconfig(datos["circulo"], image=imagen_tk)
             canvas.imagen_circulo_actual = imagen_tk
         else:
-            canvas.itemconfig(datos["circulo"], fill=color_nuevo)
-            claro = _aclarar_color(color_nuevo)
-            oscuro = _oscurecer_color(color_nuevo)
+            canvas.itemconfig(datos["circulo"], fill=_relleno)
+            claro = _aclarar_color(_relleno)
+            oscuro = _oscurecer_color(_relleno)
             for iid in datos["bisel_claro"]:
                 canvas.itemconfig(iid, fill=claro)
             for iid in datos["bisel_oscuro"]:
@@ -988,4 +993,4 @@ def _actualizar_boton_circular(canvas, texto_nuevo=None, color_nuevo=None):
         # modo de escucha), hay que actualizar también esa ranura o
         # queda con el color viejo pegado encima.
         for iid in datos.get("ranuras", []):
-            canvas.itemconfig(iid, fill=color_nuevo)
+            canvas.itemconfig(iid, fill=_relleno)

@@ -1192,7 +1192,8 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     widgets["tipo_monitor"] = tipo_monitor
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["monitor"],
-        color_nuevo=mod_ui_dibujo._cuadrado_monitor(tipo_monitor)
+        color_nuevo=(mod_ui_dibujo._cuadrado_monitor(tipo_monitor) if E.es_moderna()
+                     else C.COLORES_MONITOREO.get(tipo_monitor, "#394151"))
     )
 
     _actualizar_estado_gris(nombre)
@@ -1229,7 +1230,9 @@ def _fijar_monitor(nombre, tipo):
         widgets = E.fuentes[nombre]
         widgets["tipo_monitor"] = tipo
         mod_ui_dibujo._actualizar_boton_circular(
-            widgets["monitor"], color_nuevo=mod_ui_dibujo._cuadrado_monitor(tipo))
+            widgets["monitor"], color_nuevo=(
+                mod_ui_dibujo._cuadrado_monitor(tipo) if E.es_moderna()
+                else C.COLORES_MONITOREO.get(tipo, "#394151")))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
 
