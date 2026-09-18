@@ -279,7 +279,7 @@ Cuerpo de la tarjeta:
 - Línea divisoria de acento bajo la cabecera (solo Moderna).
 - Alto regulable en Ajustes → Apariencia → "Alto" (Compacto/Normal/Alto/Muy alto): el canal se estira y el alto total lo acompaña; combina con Chico/Mediano/Grande.
 - Fader vertical (tk.Scale de -60..0 dB, resolución 0,5) que llama cambiar_volumen. Al arrastrar se congela/descongela el repintado para no parpadear y se espera a soltar.
-- En Moderna el fader es estilo OBS (`_FaderOBS`): pista negra angosta prerenderizada con extremos redondos suaves del mismo largo que el medidor, relleno azul opaco hasta el final, pastilla que viaja de extremo a extremo sin cortarse y marcas perpendiculares cada 10 dB (0 a -50).
+- En Moderna el fader es estilo OBS (`_FaderOBS`): pista negra angosta prerenderizada con extremos redondos suaves del mismo largo que el medidor, relleno azul opaco hasta el final, pastilla contenida entre los extremos sin sobrepasarlos y marcas perpendiculares cada 10 dB (0 a -50).
 - Etiqueta de dB (solo cuando > UMBRAL).
 - Medidor VU (ver sección 6).
 - Alto con ajuste anti-recorte: si las métricas de fuente de la PC superan el alto fijo, la tarjeta crece lo justo (parejo en todas) para no cortar los iconos de abajo.

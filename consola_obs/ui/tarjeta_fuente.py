@@ -40,8 +40,9 @@ class _FaderOBS:
         self.alto = max(60, int(alto) + self.FADER_EXTRA_PX + self.PILDORA_ALTO)
         self.al_cambiar = al_cambiar
         self._db = -60.0
-        # La pastilla viaja de extremo a extremo de la pista.
-        self._margen = self.PILDORA_ALTO // 2
+        # La pastilla viaja contenida entre los extremos de la pista:
+        # toca los bordes sin sobrepasarlos.
+        self._margen = self.PILDORA_ALTO
         self.canvas = tk.Canvas(parent, width=self.ANCHO, height=self.alto,
                                 bg=bg, highlightthickness=0, cursor="hand2")
         cx = self.ANCHO / 2
