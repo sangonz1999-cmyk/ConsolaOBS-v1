@@ -390,7 +390,7 @@ Colores de etiqueta de pads: paleta PALETA_ETIQUETAS (con color del
 pad de borde y del LED).
 
 ### Miniaturas (Pillow):
-- `_obtener_imagen_decodificada`/`_cargar_miniatura`: carga y cachea la imagen decodificada por ruta, y genera miniaturas por (indice, tamaño). Redimensiona la imagen para que entre completa en el pad sin recortarla (contain) o la escala con LANCZOS.
+- `_obtener_imagen_decodificada`/`_cargar_miniatura`: carga y cachea la imagen decodificada por ruta, y genera miniaturas por (indice, ruta, tamaño). La ruta va en la clave a propósito: si los pads se corren (detectar mete nuevos al principio), el índice solo mostraría la imagen vieja. Redimensiona la imagen para que entre completa en el pad sin recortarla (contain) o la escala con LANCZOS.
 - Cache `_imagenes_decodificadas` y `_miniaturas_cargadas` por (ruta, tamaño), para no reabrir/redecodificar archivos pesados al reconstruir el soundboard (muy importante para no tildar).
 
 ### Grilla responsive del soundboard (_columnas_disponibles):

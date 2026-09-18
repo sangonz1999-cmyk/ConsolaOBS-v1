@@ -495,9 +495,11 @@ def cargar_miniatura(indice, ruta_imagen, tamano, radio=None):
 
     La apertura y decodificación del archivo (lo caro) está separada
     en _obtener_imagen_decodificada y cacheada por ruta; acá sólo se
-    cachea, por (indice, tamano), el PhotoImage final ya al tamaño del
-    pad, que es una operación barata de repetir."""
-    clave_cache = (indice, tamano, radio)
+    cachea, por (indice, ruta, tamano), el PhotoImage final ya al tamaño
+    del pad, que es una operación barata de repetir. La ruta va en la
+    clave a propósito: si los pads se corren de lugar (detectar mete
+    nuevos al principio), el índice solo mostraría la imagen vieja."""
+    clave_cache = (indice, ruta_imagen, tamano, radio)
     if clave_cache in E.miniaturas_cargadas:
         return E.miniaturas_cargadas[clave_cache]
 
@@ -1115,6 +1117,11 @@ def _insertar_pad_al_principio(datos_nuevos):
         else:
             E.config_soundboard[str(i)] = anterior
     E.config_soundboard["0"] = datos_nuevos
+    # Todo lo que estaba desde la posición 0 cambió de índice: las
+    # miniaturas cacheadas por índice ya no corresponden y hay que
+    # tirarlas (se regeneran solas al reconstruir, barato porque lo
+    # decodificado sigue cacheado por ruta).
+    E.miniaturas_cargadas.clear()
 
 
 def detectar_sonidos_carpeta(avisar=True):
