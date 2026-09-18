@@ -72,55 +72,55 @@ consola_obs/
 Funcionamiento, mecánicas y arquitectura en detalle:
 
 ## Índice
-[0. ¿Qué es?](#sec-0)
+[🔗](#sec-0) **0. ¿Qué es?**
 ---
-[1. Requisitos y dependencias](#sec-1)
+[🔗](#sec-1) **1. Requisitos y dependencias**
 ---
-[2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)](#sec-2)
+[🔗](#sec-2) **2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)**
 ---
-[3. Conexión a OBS (config, estado, formato de datos)](#sec-3)
+[🔗](#sec-3) **3. Conexión a OBS (config, estado, formato de datos)**
 ---
-[4. Modelo de datos / estado global](#sec-4)
+[🔗](#sec-4) **4. Modelo de datos / estado global**
 ---
-[5. Eventos de OBS en tiempo real (bidireccional)](#sec-5)
+[🔗](#sec-5) **5. Eventos de OBS en tiempo real (bidireccional)**
 ---
-[6. Medidores VU tipo LED + medidores de niveles (VU meters)](#sec-6)
+[🔗](#sec-6) **6. Medidores VU tipo LED + medidores de niveles (VU meters)**
 ---
-[7. Saturación / "rojo" en el medidor](#sec-7)
+[🔗](#sec-7) **7. Saturación / "rojo" en el medidor**
 ---
-[8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)](#sec-8)
+[🔗](#sec-8) **8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)**
 ---
-[8b. Eliminar fuente (clic derecho > Eliminar fuente…)](#sec-8b)
+[🔗](#sec-8b) **8b. Eliminar fuente (clic derecho > Eliminar fuente…)**
 ---
-[8c. Quitar de todas las escenas (clic derecho)](#sec-8c)
+[🔗](#sec-8c) **8c. Quitar de todas las escenas (clic derecho)**
 ---
-[9. Fuentes "principales" (favoritos que se generan siempre)](#sec-9)
+[🔗](#sec-9) **9. Fuentes "principales" (favoritos que se generan siempre)**
 ---
-[10. Filtros de audio (crear, editar, ajustes en tiempo real)](#sec-10)
+[🔗](#sec-10) **10. Filtros de audio (crear, editar, ajustes en tiempo real)**
 ---
-[10b. Propiedades de fuente (clic derecho > Propiedades)](#sec-10b)
+[🔗](#sec-10b) **10b. Propiedades de fuente (clic derecho > Propiedades)**
 ---
-[11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)](#sec-11)
+[🔗](#sec-11) **11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)**
 ---
-[11b. Agregar fuente (clic derecho en el panel > Agregar fuente)](#sec-11b)
+[🔗](#sec-11b) **11b. Agregar fuente (clic derecho en el panel > Agregar fuente)**
 ---
-[11c. Vaciar pad vs Eliminar pad](#sec-11c)
+[🔗](#sec-11c) **11c. Vaciar pad vs Eliminar pad**
 ---
-[12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable](#sec-12)
+[🔗](#sec-12) **12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable**
 ---
-[13. Redimensionado responsive (factor de escala, velo, supersampling)](#sec-13)
+[🔗](#sec-13) **13. Redimensionado responsive (factor de escala, velo, supersampling)**
 ---
-[14. Persistencia (config JSON)](#sec-14)
+[🔗](#sec-14) **14. Persistencia (config JSON)**
 ---
-[15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)](#sec-15)
+[🔗](#sec-15) **15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)**
 ---
-[16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)](#sec-16)
+[🔗](#sec-16) **16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)**
 ---
-[17. Flux de arranque / cierre](#sec-17)
+[🔗](#sec-17) **17. Flux de arranque / cierre**
 ---
-[18. Consideraciones de hilos y concurrencia](#sec-18)
+[🔗](#sec-18) **18. Consideraciones de hilos y concurrencia**
 ---
-[19. Cómo compilar el .exe](#sec-19)
+[🔗](#sec-19) **19. Cómo compilar el .exe**
 ---
 <a id="sec-0"></a>
 ## 0. ¿QUÉ ES?
