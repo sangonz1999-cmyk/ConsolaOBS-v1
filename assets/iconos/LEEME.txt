@@ -1,8 +1,21 @@
 ICONOS DE LA INTERFAZ
 ======================
-Poné acá:
-  - app_icon.ico   -> ícono de la ventana/barra de tareas (Windows).
-  - app_icon.png   -> ícono de la ventana en Mac/Linux.
-  - logo_cabecera.png -> reemplaza el ícono dibujado de la cabecera.
-Ninguno es obligatorio: si faltan, el programa usa sus íconos
-dibujados por defecto y funciona exactamente igual.
+Pone aca:
+  - app_icon.ico   -> icono de la ventana/barra de tareas (Windows).
+  - app_icon.png   -> icono de la ventana en Mac/Linux.
+  - logo_cabecera.png -> reemplaza el icono dibujado de la cabecera.
+Ninguno de esos tres es obligatorio: si faltan, el programa usa sus
+iconos dibujados por defecto y funciona exactamente igual.
+
+SVG ORIGINALES DE OBS (no borrar ni renombrar):
+  - mixer-audio.svg / mixer-mute.svg -> parlante y mute del mixer.
+  - mixer-headphones.svg / mixer-headphones-off.svg -> auriculares.
+  - microphone.svg, windowaudio.svg, media.svg, window.svg,
+    gamepad.svg, camera.svg, globe.svg, text.svg, image.svg,
+    slideshow.svg, brush.svg, group.svg, scene.svg, default.svg
+    -> icono de cada tipo de fuente en "Agregar fuente".
+Se renderizan tal cual con pymupdf (requiere `pip install pymupdf`);
+sin el alguno, ese icono cae al emoji de texto.
+
+IMPORTANTE: esta carpeta tiene que viajar junto al ConsolaOBS.exe
+(si falta, faltan los iconos en el programa compilado).
