@@ -121,6 +121,7 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 **18. Consideraciones de hilos y concurrencia** [🔗](#sec-18)
 ---
 **19. Cómo compilar el .exe** [🔗](#sec-19)
+---
 <a id="sec-0"></a>
 ## 0. ¿QUÉ ES?
 Programa de escritorio (Tkinter) que
