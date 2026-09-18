@@ -106,6 +106,7 @@ miniaturas_cargadas = {}
 _imagenes_decodificadas_cache = {}
 
 tamano_icono_actual = C.TAMANO_ICONO_POR_DEFECTO
+alto_tarjeta_actual = C.ALTO_TARJETA_POR_DEFECTO
 
 # Interfaz visual: "Profesional" (la de siempre) o "Moderna" (estilo
 # OBS). Sólo cambia lo visual; la funcionalidad es la misma.

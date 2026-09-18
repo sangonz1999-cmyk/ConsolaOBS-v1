@@ -97,6 +97,10 @@ def main():
     if E.tamano_icono_actual not in C.TAMANOS_ICONO:
         E.tamano_icono_actual = C.TAMANO_ICONO_POR_DEFECTO
 
+    E.alto_tarjeta_actual = E.config_interfaz_previa.get("alto_tarjeta", C.ALTO_TARJETA_POR_DEFECTO)
+    if E.alto_tarjeta_actual not in C.ALTOS_TARJETA:
+        E.alto_tarjeta_actual = C.ALTO_TARJETA_POR_DEFECTO
+
     E.tema_interfaz = E.config_interfaz_previa.get("tema_interfaz", "Profesional")
     if E.tema_interfaz not in E.TEMAS_INTERFAZ:
         E.tema_interfaz = "Profesional"
@@ -456,6 +460,20 @@ def main():
     E.selector_tamano_icono.bind(
         "<<ComboboxSelected>>",
         lambda e: mod_ui_ventana.cambiar_tamano_icono(E.variable_tamano_icono.get())
+    )
+
+    E.variable_alto_tarjeta = tk.StringVar(value=E.alto_tarjeta_actual)
+    E.selector_alto_tarjeta = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Alto"),
+        textvariable=E.variable_alto_tarjeta,
+        values=list(C.ALTOS_TARJETA.keys()),
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_alto_tarjeta.pack(side="left", fill="x", expand=True)
+    E.selector_alto_tarjeta.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_ui_ventana.cambiar_alto_tarjeta(E.variable_alto_tarjeta.get())
     )
 
     E.variable_diseno = tk.StringVar(value=mod_ui_ventana._nombre_diseno_actual())

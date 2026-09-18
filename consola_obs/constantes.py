@@ -26,6 +26,17 @@ TAMANOS_ICONO = {
 }
 TAMANO_ICONO_POR_DEFECTO = "Mediano"
 
+# Alto de las tarjetas de fuente (multiplica fuente_alto_canal y suma
+# el delta a fuente_alto): pasos discretos para no reconstruir a cada
+# píxel. Combina con Chico/Mediano/Grande.
+ALTOS_TARJETA = {
+    "Compacto": 0.8,
+    "Normal": 1.0,
+    "Alto": 1.25,
+    "Muy alto": 1.5,
+}
+ALTO_TARJETA_POR_DEFECTO = "Normal"
+
 ANCHO_VENTANA_REFERENCIA = 1300
 ALTO_VENTANA_REFERENCIA = 760
 ESCALA_MINIMA = 0.40

@@ -54,6 +54,18 @@ def cambiar_tamano_icono(nuevo_tamano):
     mod_configuracion.guardar_config_interfaz({"tamano_icono": nuevo_tamano})
 
 
+def cambiar_alto_tarjeta(nuevo_alto):
+    """Se llama desde el combobox "Alto" de Ajustes → Apariencia: cambia
+    la altura de las tarjetas de fuente (el canal se estira y el alto
+    total lo acompaña) reconstruyendo todo, igual que el tamaño de
+    íconos."""
+    if nuevo_alto not in C.ALTOS_TARJETA:
+        return
+    E.alto_tarjeta_actual = nuevo_alto
+    _reconstruir_interfaz_con_velo()
+    mod_configuracion.guardar_config_interfaz({"alto_tarjeta": nuevo_alto})
+
+
 def _iniciar_arrastre_panel(nombre):
     E._panel_en_arrastre["origen"] = nombre
 
