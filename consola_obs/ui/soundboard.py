@@ -576,19 +576,24 @@ def _limpiar_overlay_progreso():
 
 
 def _imagen_barra_progreso(ancho_total, alto, radio, color_rgb, progreso):
-    """Foto RGBA de la barra de progreso: relleno semitransparente con
-    las mismas esquinas redondeadas que la cara del pad (un rectángulo
-    común se saldría por las puntas redondeadas y se vería cortado).
+    """Foto RGBA de la barra de progreso SIEMPRE del tamaño de la cara:
+    relleno semitransparente con sus esquinas redondeadas, visible sólo
+    hasta el avance (el resto transparente). Así nunca se sale por las
+    puntas redondeadas ni se ve como una línea suelta al arrancar.
     None sin Pillow."""
     try:
         if not HAY_PILLOW:
             return None
-        w = max(1, int(round(ancho_total * max(0.0, min(1.0, progreso)))))
-        h = max(1, int(round(alto)))
-        r = max(1, min(int(radio), w // 2, h // 2))
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        ImageDraw.Draw(img).rounded_rectangle(
-            [0, 0, w - 1, h - 1], radius=r, fill=tuple(color_rgb) + (130,))
+        W = max(1, int(round(ancho_total)))
+        H = max(1, int(round(alto)))
+        r = max(1, min(int(radio), H // 2))
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        w = int(round(W * max(0.0, min(1.0, progreso))))
+        if w >= 2:
+            d = ImageDraw.Draw(img)
+            d.rounded_rectangle([0, 0, W - 1, H - 1], radius=r, fill=tuple(color_rgb) + (130,))
+            if w < W:
+                d.rectangle([w, 0, W - 1, H - 1], fill=(0, 0, 0, 0))
         return ImageTk.PhotoImage(img)
     except Exception:
         return None
