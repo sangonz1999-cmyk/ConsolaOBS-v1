@@ -28,28 +28,26 @@ class _FaderOBS:
     PILDORA_ALTO = 28
     # Recorrido más largo que la barra de nivel (como en OBS).
     FADER_EXTRA_PX = 40
-    # La pista ocupa casi todo el canvas (mismo largo visual que el
-    # medidor); la pastilla viaja con margen adentro.
-    PISTA_BORDE = 2
-    # Pista negra (no gris) y marcas perpendiculares grises cada 10 dB
-    # de -10 a -60, como la escala del fader de OBS.
+    # La pista deja arriba y abajo justo la mitad de la pastilla: la
+    # pastilla llega hasta los extremos sin cortarse.
+    # Pista negra (no gris) y marcas perpendiculares grises.
     COLOR_PISTA = "#0a0a0a"
     COLOR_MARCA_FADER = "#565c6c"
     COLOR_LLENO_FADER = "#4365cb"
     MARCAS_FADER_DB = (0, -10, -20, -30, -40, -50)
 
     def __init__(self, parent, alto, bg, al_cambiar):
-        self.alto = max(60, int(alto) + self.FADER_EXTRA_PX)
+        self.alto = max(60, int(alto) + self.FADER_EXTRA_PX + self.PILDORA_ALTO)
         self.al_cambiar = al_cambiar
         self._db = -60.0
-        # Margen para que la pastilla nunca se corte en los extremos.
-        self._margen = self.PILDORA_ALTO // 2 + 3
+        # La pastilla viaja de extremo a extremo de la pista.
+        self._margen = self.PILDORA_ALTO // 2
         self.canvas = tk.Canvas(parent, width=self.ANCHO, height=self.alto,
                                 bg=bg, highlightthickness=0, cursor="hand2")
         cx = self.ANCHO / 2
         self._cx = cx
         m = self._margen
-        pb = self.PISTA_BORDE
+        pb = m
         foto_pista = mod_ui_dibujo._imagen_pista_fader(
             self.alto - pb * 2, self.COLOR_PISTA, self.COLOR_LLENO_FADER)
         if foto_pista is not None:
@@ -124,8 +122,8 @@ class _FaderOBS:
     def _repintar(self):
         y = self._y_de_db(self._db)
         pw, ph = self.PILDORA_ANCHO, self.PILDORA_ALTO
-        pb = self.PISTA_BORDE
-        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - pb)
+        m = self._margen
+        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - m)
         if self.id_fill_cap is not None:
             self.canvas.coords(self.id_fill_cap, self._cx - 2, y - 2, self._cx + 2, y + 2)
         if self._handle_es_foto:
@@ -635,14 +633,18 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             _f_marcas = tkfont.Font(family=E.FUENTE_UI, size=tam_marcas_db)
             ancho_marcas = max(_f_marcas.measure(str(m)) for m in mod_ui_medidores.MARCAS_DB_OBS) + 5
         margen_marcas_db = math.ceil(_f_marcas.metrics("linespace") / 2) + 1
+        # Desplazamiento superior del medidor: lugar para la etiqueta
+        # "0" más 7px para que la barra arranque a la misma altura que
+        # la pista del fader (ver el pack con pady calculado abajo).
+        off_nivel = margen_marcas_db + 7
         vu_canvas = tk.Canvas(
             fila_vertical, width=ancho_barra_vu + ancho_marcas,
-            height=alto_medidor + margen_marcas_db * 2,
+            height=alto_medidor + off_nivel + margen_marcas_db,
             bg=color_cuerpo, highlightthickness=0
         )
         vu_canvas.pack(side="left", anchor="n")
         vu_obs = mod_ui_medidores._dibujar_barra_obs(
-            vu_canvas, ancho_barra_vu, alto_medidor, bg=color_cuerpo, offset_y=margen_marcas_db)
+            vu_canvas, ancho_barra_vu, alto_medidor, bg=color_cuerpo, offset_y=off_nivel)
         vu_segmentos = []
         marcas_db = mod_ui_medidores.MARCAS_DB_OBS
         color_marcas = C.MOD_MARCA_DB
@@ -656,9 +658,10 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         vu_segmentos = mod_ui_medidores._dibujar_segmentos_led(vu_canvas, ancho_barra_vu, alto_canal, offset_y=margen_marcas_db)
         marcas_db = E.MARCAS_DB
         color_marcas = "#79859f"
+        off_nivel = margen_marcas_db
 
     for marca in marcas_db:
-        y = mod_ui_medidores._y_para_db(marca, alto_medidor) + margen_marcas_db
+        y = mod_ui_medidores._y_para_db(marca, alto_medidor) + off_nivel
         if E.es_moderna():
             # Marcas perpendiculares pegadas a la barra, con el dB al lado.
             vu_canvas.create_line(
@@ -705,7 +708,12 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         )
         escala.config(command=cambiar_volumen)
     escala.set(vol_db)
-    escala.pack(side="left", padx=(4, 0), pady=(margen_marcas_db, 0), anchor="n")
+    # En Moderna el canvas arranca a la altura que deja la pista del
+    # fader alineada con la barra de nivel (ver off_nivel).
+    if E.es_moderna():
+        escala.pack(side="left", padx=(4, 0), pady=(max(0, off_nivel - 14), 0), anchor="n")
+    else:
+        escala.pack(side="left", padx=(4, 0), pady=(margen_marcas_db, 0), anchor="n")
 
     escala.bind("<ButtonPress-1>", lambda e: E.fuentes[nombre].__setitem__("arrastrando", True))
     escala.bind("<ButtonRelease-1>", lambda e: E.fuentes[nombre].__setitem__("arrastrando", False))
