@@ -35,6 +35,18 @@ python main.py
 
 Con doble clic en `compilar.bat` se genera `ConsolaOBS.exe` en la misma carpeta (con el icono de `assets/iconos/`).
 
+## Instalar Git y clonar el repo (Windows)
+
+1. Descargá Git de https://git-scm.com/download/win e instalalo con las opciones por defecto.
+2. Verificá en PowerShell: `git --version` (debe mostrar la versión).
+3. Cloná el proyecto donde quieras:
+```powershell
+git clone https://github.com/sangonz1999-cmyk/ConsolaOBS-v1.git
+```
+4. Entrá a la carpeta y seguí los pasos de [Uso](#uso) (venv, requirements, `python main.py`).
+
+Con eso ya podés traer cambios con `git pull` y ver el historial con `git log --oneline`.
+
 ## Estructura
 
 ```text
