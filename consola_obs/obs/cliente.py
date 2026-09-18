@@ -4,6 +4,7 @@ import obsws_python as obs
 from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
+from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 
@@ -105,6 +106,15 @@ def conectar_obs():
         messagebox.showerror("Puerto inválido", "El puerto debe ser un número.")
         return
 
+    # Firewall automático (mejor esfuerzo, sin frenar la conexión):
+    # en la PC del OBS el puerto tiene que estar permitido inbound.
+    # Si ya existe la regla no hace nada; si falta y no hay admin,
+    # solo queda registrado para avisar en el error.
+    try:
+        mod_red.asegurar_regla_firewall(puerto)
+    except Exception:
+        pass
+
     try:
         nuevo_cliente = obs.ReqClient(host=host, port=puerto, password=password, timeout=5)
         nuevo_cliente.get_version()                                                 
@@ -136,8 +146,12 @@ def conectar_obs():
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_name_changed)
 
     except Exception as e:
-        conectado = False
-        messagebox.showerror("Error de conexión", f"No se pudo conectar a OBS.\n\n{e}")
+        E.conectado = False
+        try:
+            texto = mod_red.mensaje_error_conexion(e, host, puerto)
+        except Exception:
+            texto = f"No se pudo conectar a OBS.\n\n{e}"
+        messagebox.showerror("Error de conexión", texto)
         return
 
     E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
@@ -176,6 +190,57 @@ def desconectar_obs():
     E.escena_actual_obtenida = False
 
     actualizar_estado_conexion()
+
+
+def copiar_ip_local():
+    """Copia 'mi IP LAN' al portapapeles: es la que hay que poner como
+    Host en LA OTRA PC."""
+    try:
+        ip = mod_red.obtener_ip_local()
+    except Exception:
+        ip = ""
+    if not ip:
+        messagebox.showwarning(
+            "Sin IP local",
+            "No pude detectar una IP de red local.\n"
+            "Conectate a la misma WiFi/red y probá de nuevo,\n"
+            "o ejecutá 'ipconfig' para ver tu IPv4.",
+        )
+        return
+    try:
+        E.ventana.clipboard_clear()
+        E.ventana.clipboard_append(ip)
+    except Exception:
+        pass
+    messagebox.showinfo(
+        "IP copiada",
+        f"Tu IP en esta red es {ip} (copiada).\n\n"
+        "En LA OTRA PC poné esa IP en Ajustes → Host.\n"
+        "Acá dejá localhost si el OBS está en esta misma PC.",
+    )
+
+
+def abrir_firewall_ahora():
+    """Botón '🛡 Firewall': crea la regla inbound para el puerto actual."""
+    try:
+        texto_puerto = E.entrada_puerto.get().strip() or "4455"
+        puerto = int(texto_puerto)
+    except ValueError:
+        messagebox.showerror("Puerto inválido", "El puerto debe ser un número.")
+        return
+    ok, necesita_admin, mensaje = mod_red.asegurar_regla_firewall(puerto)
+    if ok:
+        messagebox.showinfo("Firewall", mensaje)
+    elif necesita_admin:
+        messagebox.showwarning(
+            "Hace falta administrador",
+            f"{mensaje}\n\n"
+            "Cerrá el programa y abrilo con 'Ejecutar como administrador',\n"
+            f"apretá CONECTAR o el botón Firewall una vez, y listo.\n"
+            f"(Puerto {puerto} TCP entrante).",
+        )
+    else:
+        messagebox.showerror("Firewall", mensaje)
 
 
 def actualizar_estado_conexion():

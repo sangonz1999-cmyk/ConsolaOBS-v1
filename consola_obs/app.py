@@ -11,6 +11,7 @@ from consola_obs import constantes as C
 from consola_obs import plataforma as P
 from consola_obs import rutas as R
 from consola_obs import configuracion as mod_configuracion
+from consola_obs import red as mod_red
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
@@ -417,6 +418,39 @@ def main():
 
     E.entrada_password = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Contraseña"), show="•")
     E.entrada_password.insert(0, E.config_previa.get("password", ""))
+
+    # IP LAN automática: para que otra PC se conecte A ESTA, tiene que
+    # poner ESTA ip como Host. Se detecta sola, sin tener que hacer
+    # ipconfig a mano. No cambia la conexión actual: solo informa.
+    try:
+        _ip_auto = mod_red.obtener_ip_local()
+    except Exception:
+        _ip_auto = ""
+    E._etiqueta_ip_local = tk.Label(
+        E.barra,
+        text=(f"IP de esta PC: {_ip_auto}  (la otra PC pone esto en Host)" if _ip_auto
+              else "IP de esta PC: no detectada (revisá tu WiFi/red)"),
+        bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
+        wraplength=300, justify="left",
+    )
+    E._etiqueta_ip_local.pack(fill="x", padx=16, pady=(6, 0))
+
+    E._fila_red = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
+    E._fila_red.pack(fill="x", padx=16, pady=(6, 0))
+    E.boton_ip_local = tk.Button(
+        E._fila_red, text="📋 COPIAR MI IP", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        activebackground="#2f3a4d", activeforeground="white",
+        relief="flat", bd=0, pady=5, font=(E.FUENTE_UI, 8, "bold"), cursor="hand2",
+        command=mod_obs_cliente.copiar_ip_local
+    )
+    E.boton_ip_local.pack(side="left", fill="x", expand=True, padx=(0, 4))
+    E.boton_firewall = tk.Button(
+        E._fila_red, text="🛡 FIREWALL", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        activebackground="#2f3a4d", activeforeground="white",
+        relief="flat", bd=0, pady=5, font=(E.FUENTE_UI, 8, "bold"), cursor="hand2",
+        command=mod_obs_cliente.abrir_firewall_ahora
+    )
+    E.boton_firewall.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
     E._fila_acciones = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
     E._fila_acciones.pack(fill="x", padx=16, pady=(12, 4))
