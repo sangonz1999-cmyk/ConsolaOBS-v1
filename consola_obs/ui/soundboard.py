@@ -106,7 +106,8 @@ def _abrir_menu_contextual_pad(indice, event):
 
     menu.add_separator()
     if tiene_sonido:
-        menu.add_command(label="🗑  Vaciar pad", command=lambda: _quitar_pad(indice))
+        _item("menu/menu_eliminar.svg", "Vaciar pad", "🗑  Vaciar pad",
+              lambda: _quitar_pad(indice))
     _item("menu/menu_eliminar.svg", "Eliminar pad", "🗑  Eliminar pad",
           lambda: _eliminar_pad(indice))
 

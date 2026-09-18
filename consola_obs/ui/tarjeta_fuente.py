@@ -1063,7 +1063,8 @@ def _abrir_menu_contextual_fuente(nombre, event):
     _cascada("menu/menu_etiqueta.svg", "Color de etiqueta", "🏷  Color de etiqueta", submenu_color)
 
     menu.add_separator()
-    menu.add_command(label="Quitar de todas las escenas…", command=lambda: _quitar_fuente_de_escenas(nombre))
+    _item("menu/menu_eliminar.svg", "Quitar de todas las escenas…", "Quitar de todas las escenas…",
+          lambda: _quitar_fuente_de_escenas(nombre))
     _item("menu/menu_eliminar.svg", "Eliminar fuente…", "🗑  Eliminar fuente…",
           lambda: _eliminar_fuente(nombre))
 
