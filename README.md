@@ -73,55 +73,103 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 
 ## Índice
 [🔗](#sec-0) **0. ¿Qué es?**
+
 ---
+
 [🔗](#sec-1) **1. Requisitos y dependencias**
+
 ---
+
 [🔗](#sec-2) **2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)**
+
 ---
+
 [🔗](#sec-3) **3. Conexión a OBS (config, estado, formato de datos)**
+
 ---
+
 [🔗](#sec-4) **4. Modelo de datos / estado global**
+
 ---
+
 [🔗](#sec-5) **5. Eventos de OBS en tiempo real (bidireccional)**
+
 ---
+
 [🔗](#sec-6) **6. Medidores VU tipo LED + medidores de niveles (VU meters)**
+
 ---
+
 [🔗](#sec-7) **7. Saturación / "rojo" en el medidor**
+
 ---
+
 [🔗](#sec-8) **8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)**
+
 ---
+
 [🔗](#sec-8b) **8b. Eliminar fuente (clic derecho > Eliminar fuente…)**
+
 ---
+
 [🔗](#sec-8c) **8c. Quitar de todas las escenas (clic derecho)**
+
 ---
+
 [🔗](#sec-9) **9. Fuentes "principales" (favoritos que se generan siempre)**
+
 ---
+
 [🔗](#sec-10) **10. Filtros de audio (crear, editar, ajustes en tiempo real)**
+
 ---
+
 [🔗](#sec-10b) **10b. Propiedades de fuente (clic derecho > Propiedades)**
+
 ---
+
 [🔗](#sec-11) **11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)**
+
 ---
+
 [🔗](#sec-11b) **11b. Agregar fuente (clic derecho en el panel > Agregar fuente)**
+
 ---
+
 [🔗](#sec-11c) **11c. Vaciar pad vs Eliminar pad**
+
 ---
+
 [🔗](#sec-12) **12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable**
+
 ---
+
 [🔗](#sec-13) **13. Redimensionado responsive (factor de escala, velo, supersampling)**
+
 ---
+
 [🔗](#sec-14) **14. Persistencia (config JSON)**
+
 ---
+
 [🔗](#sec-15) **15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)**
+
 ---
+
 [🔗](#sec-16) **16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)**
+
 ---
+
 [🔗](#sec-17) **17. Flux de arranque / cierre**
+
 ---
+
 [🔗](#sec-18) **18. Consideraciones de hilos y concurrencia**
+
 ---
+
 [🔗](#sec-19) **19. Cómo compilar el .exe**
----
+
 <a id="sec-0"></a>
 ## 0. ¿QUÉ ES?
 Programa de escritorio (Tkinter) que
