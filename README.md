@@ -47,6 +47,19 @@ git clone https://github.com/sangonz1999-cmyk/ConsolaOBS-v1.git
 
 Con eso ya podés traer cambios con `git pull` y ver el historial con `git log --oneline`.
 
+Git no pide cuenta para nada de esto: clonar y descargar un repo público es anónimo
+(solo haría falta iniciar sesión para *subir* cambios propios a GitHub).
+
+En una compu ajena (colegio, trabajo) conviene el **Git portable**, que no se
+instala ni pide permisos de administrador:
+1. Descargá `PortableGit-*.7z.exe` de https://git-scm.com/download/win.
+2. Ejecutalo y extraelo en una carpeta tuya (o un pendrive), por ejemplo `GitPortable/`.
+3. Abrí `GitPortable/git-bash.exe` y cloná desde ahí:
+```bash
+git clone https://github.com/sangonz1999-cmyk/ConsolaOBS-v1.git
+```
+Al terminar borrás la carpeta y no queda nada instalado.
+
 ## Estructura
 
 ```text
