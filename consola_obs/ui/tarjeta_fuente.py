@@ -48,7 +48,9 @@ class _FaderOBS:
         cx = self.ANCHO / 2
         self._cx = cx
         m = self._margen
-        pb = m
+        # La pista va de mitad de pastilla a mitad de pastilla (el viaje
+        # es más corto: la pastilla queda contenida).
+        pb = self.PILDORA_ALTO // 2
         foto_pista = mod_ui_dibujo._imagen_pista_fader(
             self.alto - pb * 2, self.COLOR_PISTA, self.COLOR_LLENO_FADER)
         if foto_pista is not None:
@@ -71,8 +73,11 @@ class _FaderOBS:
         self.id_fill = self.canvas.create_rectangle(
             cx - 2, self.alto - pb, cx + 2, self.alto - pb,
             fill=self.COLOR_LLENO_FADER, outline="")
+        # Marcas sobre el largo total de la pista (el 0 arriba del todo),
+        # independientes del recorrido de la pastilla.
+        _span_pista = self.alto - self.PILDORA_ALTO
         for _db_marca in self.MARCAS_FADER_DB:
-            _y = self._y_de_db(_db_marca)
+            _y = self.PILDORA_ALTO // 2 + (-_db_marca / 60.0) * _span_pista
             for _lado in (-1, 1):
                 self.canvas.create_line(
                     cx + _lado * 3, _y, cx + _lado * 7, _y,
@@ -124,9 +129,12 @@ class _FaderOBS:
         y = self._y_de_db(self._db)
         pw, ph = self.PILDORA_ANCHO, self.PILDORA_ALTO
         m = self._margen
-        self.canvas.coords(self.id_fill, self._cx - 2, y, self._cx + 2, self.alto - m)
+        # El relleno arranca en el borde superior de la pastilla: a 0 dB
+        # llega hasta arriba del todo sin que la pastilla se pase.
+        arriba = max(m - ph // 2, y - ph // 2)
+        self.canvas.coords(self.id_fill, self._cx - 2, arriba, self._cx + 2, self.alto - self.PILDORA_ALTO // 2)
         if self.id_fill_cap is not None:
-            self.canvas.coords(self.id_fill_cap, self._cx - 2, y - 2, self._cx + 2, y + 2)
+            self.canvas.coords(self.id_fill_cap, self._cx - 2, arriba - 2, self._cx + 2, arriba + 2)
         if self._handle_es_foto:
             self.canvas.coords(self.id_handle, self._cx, y)
         else:
