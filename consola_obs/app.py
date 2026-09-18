@@ -556,6 +556,7 @@ def main():
     mod_ui_medidores.actualizar_vu_meters_ui()
     mod_obs_eventos._programar_refresco_ganancia()
     mod_audio_reproduccion._programar_refresco_reproduccion()
+    E.ventana.after(500, mod_ui_soundboard._refrescar_barra_progreso)
     if not P._ES_WINDOWS:
         # Foto inicial de la interfaz recién armada (sólo hace falta en el
         # respaldo de Mac/Linux; en Windows el congelado nativo no usa

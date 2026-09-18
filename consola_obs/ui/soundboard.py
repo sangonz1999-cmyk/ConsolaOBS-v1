@@ -1,4 +1,5 @@
 import os
+import time
 import tkinter as tk
 
 from tkinter import filedialog, messagebox, simpledialog
@@ -541,6 +542,7 @@ def _fijar_pad_activo(indice):
     E._sesion_reproduccion["deteniendo"] = False
     if anterior == indice:
         return
+    _limpiar_overlay_progreso()
     E._sesion_reproduccion["indice"] = indice
     if anterior is not None:
         _refrescar_iluminacion_pad(anterior)
@@ -555,6 +557,73 @@ def _apagar_pad_si_token_vigente(indice, token):
     nueva es la que manda ahora."""
     if E._sesion_reproduccion.get("token") == token:
         _fijar_pad_activo(None)
+
+
+def _limpiar_overlay_progreso():
+    """Borra la barra de progreso del pad (si hay) donde sea que esté."""
+    ov = E._overlay_progreso
+    E._overlay_progreso = None
+    if not ov:
+        return
+    try:
+        cv = ov.get("canvas")
+        if cv is not None and cv.winfo_exists():
+            cv.delete(ov.get("id"))
+    except Exception:
+        pass
+
+
+def _refrescar_barra_progreso():
+    """Loop cada ~40 ms: pinta sobre la cara del pad que suena una barra
+    semitransparente del color de su etiqueta, barriendo de izquierda a
+    derecha al ritmo real del audio (inicio + duración de la sesión).
+    Vale en Profesional y Moderna (ambas usan pad_canvas + caja_cara).
+    Sin duración conocida no se muestra nada."""
+    try:
+        ses = E._sesion_reproduccion
+        indice = ses.get("indice")
+        duracion = ses.get("duracion") or 0
+        if indice is None or duracion <= 0:
+            _limpiar_overlay_progreso()
+        else:
+            progreso = (time.time() - (ses.get("inicio") or 0)) / duracion
+            if progreso >= 1.0:
+                _limpiar_overlay_progreso()
+            else:
+                info = (E._canvas_pads or {}).get(indice)
+                datos_pad = E.config_soundboard.get(str(indice)) or {}
+                if info is None:
+                    _limpiar_overlay_progreso()
+                else:
+                    cv, (x0, y0, x1, y1) = info
+                    try:
+                        viva = cv.winfo_exists()
+                    except Exception:
+                        viva = False
+                    if not viva:
+                        _limpiar_overlay_progreso()
+                    else:
+                        color = datos_pad.get("color") or E.color_acento()
+                        xx = x0 + (x1 - x0) * max(0.0, min(1.0, progreso))
+                        ov = E._overlay_progreso
+                        if ov is None or ov.get("indice") != indice:
+                            _limpiar_overlay_progreso()
+                            iid = cv.create_rectangle(
+                                x0, y0, xx, y1, fill=color, outline="",
+                                stipple="gray50")
+                            E._overlay_progreso = {"indice": indice, "id": iid, "canvas": cv}
+                        else:
+                            try:
+                                cv.coords(ov["id"], x0, y0, xx, y1)
+                                cv.itemconfig(ov["id"], fill=color)
+                            except Exception:
+                                E._overlay_progreso = None
+    except Exception:
+        pass
+    try:
+        E.ventana.after(40, _refrescar_barra_progreso)
+    except Exception:
+        pass
 
 
 
@@ -683,6 +752,7 @@ def construir_soundboard():
     _repartir_columnas_grilla(columnas)
 
     E._celdas_pads.clear()
+    E._canvas_pads.clear()
     E._refrescos_pads.clear()
 
     for i in range(E.num_pads_soundboard):
@@ -794,6 +864,7 @@ def construir_soundboard():
             caja_cara_img, radio_cara_img = _geometria_cara_placa(ancho_imagen_pad, alto_pad_principal)
         ancho_cara_img = max(1, round(caja_cara_img[2] - caja_cara_img[0]))
         alto_cara_img = max(1, round(caja_cara_img[3] - caja_cara_img[1]))
+        E._canvas_pads[i] = (pad_canvas, tuple(caja_cara_img))
         miniatura = (
             cargar_miniatura(i, ruta_imagen, (ancho_cara_img, alto_cara_img), radio_cara_img)
             if ruta_imagen else None

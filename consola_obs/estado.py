@@ -625,6 +625,11 @@ ESQUEMA_PROPIEDADES_ENTRADA = {
 
 
 _celdas_pads = {}
+# Por cada pad, (canvas, caja_cara) para pintar el overlay de progreso
+# de reproducción (ver _refrescar_barra_progreso en soundboard.py).
+_canvas_pads = {}
+# Overlay vigente de la barra de progreso (None si no hay).
+_overlay_progreso = None
 # Por cada pad, una función sin argumentos que vuelve a pintar su
 # placa con el estado actual (mouse encima, presionado, y si está
 # sonando de verdad). construir_soundboard() la llena de nuevo cada
@@ -649,7 +654,7 @@ _arrastre_pad = {
 # fundido en curso se fija en qué token nació: si ese token dejó de
 # ser el vigente (porque se disparó otra reproducción mientras
 # fundía), el fundido se cancela solo sin frenar el sonido nuevo.
-_sesion_reproduccion = {"indice": None, "token": 0, "inicio": 0.0, "deteniendo": False}
+_sesion_reproduccion = {"indice": None, "token": 0, "inicio": 0.0, "deteniendo": False, "duracion": None}
 
 
 _trabajo_redimension_soundboard = {"id": None}

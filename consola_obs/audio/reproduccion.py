@@ -272,6 +272,33 @@ def _cargar_y_disparar(indice, accion, token):
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
 
 
+_cache_duracion = {}
+
+
+def _cargar_duracion(indice, token, ruta):
+    """Lee la duración del audio en un hilo (decodifica el archivo, que
+    para efectos cortos tarda milisegundos) y la guarda en la sesión si
+    sigue vigente: con eso la barra de progreso del pad avanza al ritmo
+    real del sonido, haya o no conexión a OBS."""
+    if not ruta:
+        return
+    try:
+        if ruta in _cache_duracion:
+            duracion = _cache_duracion[ruta]
+        else:
+            import miniaudio
+            decodificado = miniaudio.decode_file(ruta)
+            duracion = len(decodificado.samples) / max(1, decodificado.nchannels) / max(1, decodificado.sample_rate)
+            if duracion > 0:
+                if len(_cache_duracion) > 200:
+                    _cache_duracion.clear()
+                _cache_duracion[ruta] = duracion
+    except Exception:
+        return
+    if duracion > 0 and E._sesion_reproduccion.get("token") == token:
+        E._sesion_reproduccion["duracion"] = duracion
+
+
 def _iniciar_reproduccion(indice):
     """Arranca (o reinicia) la reproducción de un pad. Esto SIEMPRE crea
     una sesión nueva, así que si había un fundido en curso de una
@@ -282,7 +309,17 @@ def _iniciar_reproduccion(indice):
     token = E._sesion_reproduccion["token"]
     E._sesion_reproduccion["inicio"] = time.time()
     E._sesion_reproduccion["deteniendo"] = False
+    E._sesion_reproduccion["duracion"] = None
     mod_ui_soundboard._fijar_pad_activo(indice)
+    try:
+        ruta = (E.config_soundboard.get(str(indice)) or {}).get("archivo")
+    except Exception:
+        ruta = None
+    threading.Thread(
+        target=_cargar_duracion,
+        args=(indice, token, ruta),
+        daemon=True
+    ).start()
     threading.Thread(
         target=_cargar_y_disparar,
         args=(indice, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART", token),
@@ -486,12 +523,21 @@ def _consultar_estado_reproduccion():
     inicio = E._sesion_reproduccion.get("inicio") or 0
     if time.time() - inicio < C.GRACIA_INICIO_REPRODUCCION_SEG:
         return
-    try:
-        respuesta = E.cliente_obs.get_media_input_status(C.NOMBRE_FUENTE_EFECTOS)
-        estado = mod_obs_eventos._valor(respuesta, "media_state", "mediaState")
-    except Exception as e:
-        print(f"No se pudo consultar el estado del efecto: {e}")
-        return
+        try:
+            respuesta = E.cliente_obs.get_media_input_status(C.NOMBRE_FUENTE_EFECTOS)
+            estado = mod_obs_eventos._valor(respuesta, "media_state", "mediaState")
+            dur_ms = mod_obs_eventos._valor(respuesta, "media_duration", "mediaDuration")
+        except Exception as e:
+            print(f"No se pudo consultar el estado del efecto: {e}")
+            return
+        # Respaldo de duración desde OBS (por si el decode local falló):
+        # viene en ms y se guarda en segundos.
+        try:
+            if dur_ms and not E._sesion_reproduccion.get("duracion"):
+                if E._sesion_reproduccion.get("token") == token and float(dur_ms) > 0:
+                    E._sesion_reproduccion["duracion"] = float(dur_ms) / 1000.0
+        except Exception:
+            pass
     if estado in C.ESTADOS_MEDIA_DETENIDO:
         if E._sesion_reproduccion.get("token") == token:
             # Fin natural con la sesión todavía vigente: se vacía la
