@@ -310,11 +310,12 @@ def _iniciar_reproduccion(indice):
     E._sesion_reproduccion["inicio"] = time.time()
     E._sesion_reproduccion["deteniendo"] = False
     E._sesion_reproduccion["duracion"] = None
-    mod_ui_soundboard._fijar_pad_activo(indice)
     try:
         ruta = (E.config_soundboard.get(str(indice)) or {}).get("archivo")
     except Exception:
         ruta = None
+    E._sesion_reproduccion["archivo"] = ruta
+    mod_ui_soundboard._fijar_pad_activo(indice)
     threading.Thread(
         target=_cargar_duracion,
         args=(indice, token, ruta),
@@ -469,6 +470,14 @@ def detener_y_vaciar_efectos():
 
 
 def reproducir_sonido(indice):
+    try:
+        datos = E.config_soundboard.get(str(indice)) or {}
+    except Exception:
+        datos = {}
+    if not datos.get("archivo"):
+        # Pad vacío: no hay nada que reproducir (y sin esto la sesión
+        # quedaba activa con la luz prendida para siempre).
+        return
     sesion = E._sesion_reproduccion
     if sesion.get("indice") == indice:
         # Segundo clic sobre el pad que suena: fundido de 2 segundos.
@@ -523,21 +532,36 @@ def _consultar_estado_reproduccion():
     inicio = E._sesion_reproduccion.get("inicio") or 0
     if time.time() - inicio < C.GRACIA_INICIO_REPRODUCCION_SEG:
         return
-        try:
-            respuesta = E.cliente_obs.get_media_input_status(C.NOMBRE_FUENTE_EFECTOS)
-            estado = mod_obs_eventos._valor(respuesta, "media_state", "mediaState")
-            dur_ms = mod_obs_eventos._valor(respuesta, "media_duration", "mediaDuration")
-        except Exception as e:
-            print(f"No se pudo consultar el estado del efecto: {e}")
-            return
-        # Respaldo de duración desde OBS (por si el decode local falló):
-        # viene en ms y se guarda en segundos.
-        try:
-            if dur_ms and not E._sesion_reproduccion.get("duracion"):
-                if E._sesion_reproduccion.get("token") == token and float(dur_ms) > 0:
+    try:
+        respuesta = E.cliente_obs.get_media_input_status(C.NOMBRE_FUENTE_EFECTOS)
+        estado = mod_obs_eventos._valor(respuesta, "media_state", "mediaState")
+        dur_ms = mod_obs_eventos._valor(respuesta, "media_duration", "mediaDuration")
+    except Exception as e:
+        print(f"No se pudo consultar el estado del efecto: {e}")
+        return
+    # Respaldo de duración desde OBS (por si el decode local falló):
+    # viene en ms y se guarda en segundos. Sólo vale si el archivo
+    # que OBS tiene cargado es el de ESTA sesión: si no, sería la
+    # duración del efecto anterior todavía en transición.
+    try:
+        if dur_ms and not E._sesion_reproduccion.get("duracion"):
+            if E._sesion_reproduccion.get("token") == token and float(dur_ms) > 0:
+                try:
+                    info_fx = E.cliente_obs.get_input_settings(C.NOMBRE_FUENTE_EFECTOS)
+                    aj_fx = mod_obs_eventos._valor(info_fx, "input_settings", "inputSettings") or {}
+                    cargado = mod_obs_eventos._valor(aj_fx, "local_file", "localFile")
+                except Exception:
+                    cargado = None
+                try:
+                    esperado = E._sesion_reproduccion.get("archivo")
+                    ok = bool(cargado and esperado and mod_ui_soundboard._normalizar_ruta(
+                        cargado) == mod_ui_soundboard._normalizar_ruta(esperado))
+                except Exception:
+                    ok = False
+                if ok:
                     E._sesion_reproduccion["duracion"] = float(dur_ms) / 1000.0
-        except Exception:
-            pass
+    except Exception:
+        pass
     if estado in C.ESTADOS_MEDIA_DETENIDO:
         if E._sesion_reproduccion.get("token") == token:
             # Fin natural con la sesión todavía vigente: se vacía la
