@@ -20,6 +20,38 @@ import sys
 _ES_WINDOWS = sys.platform.startswith("win")
 
 
+def log_conexion(paso, detalle=""):
+    """Log de conexión: terminal + archivo config/conexion.log.
+
+    En `python main.py` se ve en la terminal. En el .exe (--windowed)
+    no hay consola visible, por eso también se guarda en archivo.
+    Nunca lanza excepciones ni muestra la contraseña.
+    """
+    import datetime
+    import os
+    try:
+        hora = datetime.datetime.now().strftime("%H:%M:%S")
+    except Exception:
+        hora = "??:??:??"
+    linea = f"[{hora}] [CONEXION] [{paso}] {detalle}".rstrip()
+    try:
+        print(linea, flush=True)
+    except Exception:
+        pass
+    try:
+        from consola_obs import rutas as _R
+        os.makedirs(_R.CARPETA_CONFIG, exist_ok=True)
+        ruta_log = os.path.join(_R.CARPETA_CONFIG, "conexion.log")
+        with open(ruta_log, "a", encoding="utf-8") as f:
+            try:
+                fecha = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                fecha = hora
+            f.write(f"{fecha} [{paso}] {detalle}\n")
+    except Exception:
+        pass
+
+
 def obtener_todas_ips_locales():
     """Todas las IPv4 locales utiles (sin loopback ni link-local)."""
     ips = []

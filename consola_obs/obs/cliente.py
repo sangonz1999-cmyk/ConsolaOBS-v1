@@ -99,26 +99,66 @@ def conectar_obs():
     host = E.entrada_host.get().strip() or "localhost"
     texto_puerto = E.entrada_puerto.get().strip() or "4455"
     password = E.entrada_password.get()
+    paso = "INICIO"
 
     try:
         puerto = int(texto_puerto)
     except ValueError:
+        mod_red.log_conexion("INICIO", f"puerto invalido {texto_puerto!r}")
         messagebox.showerror("Puerto inválido", "El puerto debe ser un número.")
+        return
+
+    try:
+        _ip_propia = mod_red.obtener_ip_local() or "(no detectada)"
+    except Exception:
+        _ip_propia = "(no detectada)"
+    mod_red.log_conexion("INICIO", f"host={host} puerto={puerto} pass_len={len(password or '')} mi_ip={_ip_propia}")
+
+    # 1) Resolver el host (DNS / IP). Si esto falla, ni se intenta el socket.
+    paso = "RESOLVER_HOST"
+    try:
+        import socket as _socket
+        _info = _socket.getaddrinfo(host, puerto, type=_socket.SOCK_STREAM)
+        _ips = sorted({x[4][0] for x in _info})
+        mod_red.log_conexion("RESOLVER_HOST", f"OK {host} -> {_ips}")
+    except Exception as e:
+        mod_red.log_conexion("RESOLVER_HOST", f"FALLO no se pudo resolver {host!r}: {e!r}")
+        E.conectado = False
+        messagebox.showerror(
+            "Error de conexión",
+            f"No se pudo resolver el Host {host!r}.\nRevisá que sea una IP (ej. 192.168.1.76) o 'localhost'.\n\nDetalle: {e}\n(Más detalle en la terminal y en config/conexion.log)",
+        )
         return
 
     # Firewall automático (mejor esfuerzo, sin frenar la conexión):
     # en la PC del OBS el puerto tiene que estar permitido inbound.
     # Si ya existe la regla no hace nada; si falta y no hay admin,
     # solo queda registrado para avisar en el error.
+    paso = "FIREWALL"
     try:
-        mod_red.asegurar_regla_firewall(puerto)
-    except Exception:
-        pass
+        ok_fw, admin_fw, msg_fw = mod_red.asegurar_regla_firewall(puerto)
+        mod_red.log_conexion("FIREWALL", f"ok={ok_fw} necesita_admin={admin_fw} {msg_fw}")
+    except Exception as e:
+        mod_red.log_conexion("FIREWALL", f"no se pudo chequear: {e!r}")
 
     try:
+        paso = "REQCLIENT_CONNECT"
+        mod_red.log_conexion(paso, f"conectando ReqClient a {host}:{puerto} timeout=5 ...")
         nuevo_cliente = obs.ReqClient(host=host, port=puerto, password=password, timeout=5)
-        nuevo_cliente.get_version()                                                 
+        mod_red.log_conexion(paso, "OK socket TCP + handshake websocket")
 
+        paso = "GET_VERSION"
+        mod_red.log_conexion(paso, "pidiendo get_version ...")
+        _ver = nuevo_cliente.get_version()
+        try:
+            _vobs = getattr(_ver, "obs_version", "?")
+            _vws = getattr(_ver, "obs_websocket_version", "?")
+            mod_red.log_conexion(paso, f"OK obs={_vobs} websocket={_vws} (auth correcta)")
+        except Exception:
+            mod_red.log_conexion(paso, "OK (sin detalle de version)")
+
+        paso = "EVENTCLIENT_CONNECT"
+        mod_red.log_conexion(paso, f"conectando EventClient a {host}:{puerto} ...")
         nuevo_cliente_eventos = obs.EventClient(
             host=host, port=puerto, password=password,
             subs=(
@@ -127,6 +167,8 @@ def conectar_obs():
                 obs.Subs.FILTERS
             )
         )
+        mod_red.log_conexion(paso, "OK")
+        paso = "REGISTRO_CALLBACKS"
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_meters)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_created)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_program_scene_changed)
@@ -146,17 +188,27 @@ def conectar_obs():
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_name_changed)
 
     except Exception as e:
+        import traceback as _tb
+        try:
+            _detalle_tb = "".join(_tb.format_exception(type(e), e, e.__traceback__)).strip()[-2000:]
+        except Exception:
+            _detalle_tb = ""
+        mod_red.log_conexion(paso, f"FALLO en {paso}: {type(e).__name__}: {e}")
+        if _detalle_tb:
+            mod_red.log_conexion(paso, f"traceback: {_detalle_tb}")
         E.conectado = False
         try:
             texto = mod_red.mensaje_error_conexion(e, host, puerto)
         except Exception:
             texto = f"No se pudo conectar a OBS.\n\n{e}"
+        texto += f"\n\n(Falló en paso {paso}. Detalle en la terminal y en config/conexion.log)"
         messagebox.showerror("Error de conexión", texto)
         return
 
     E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
+    mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
     actualizar_estado_conexion()
