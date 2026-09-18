@@ -575,6 +575,71 @@ def _limpiar_overlay_progreso():
         pass
 
 
+def _imagen_barra_progreso(ancho_total, alto, radio, color_rgb, progreso):
+    """Foto RGBA de la barra de progreso: relleno semitransparente con
+    las mismas esquinas redondeadas que la cara del pad (un rectángulo
+    común se saldría por las puntas redondeadas y se vería cortado).
+    None sin Pillow."""
+    try:
+        if not HAY_PILLOW:
+            return None
+        w = max(1, int(round(ancho_total * max(0.0, min(1.0, progreso)))))
+        h = max(1, int(round(alto)))
+        r = max(1, min(int(radio), w // 2, h // 2))
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ImageDraw.Draw(img).rounded_rectangle(
+            [0, 0, w - 1, h - 1], radius=r, fill=tuple(color_rgb) + (130,))
+        return ImageTk.PhotoImage(img)
+    except Exception:
+        return None
+
+
+def _crear_overlay_progreso(cv, x0, y0, x1, y1, radio, color, prog):
+    """Crea el item del overlay y devuelve (id, foto_or_None). Con Pillow
+    es imagen redondeada; sin Pillow, rectángulo con stipple."""
+    try:
+        if HAY_PILLOW:
+            try:
+                rgb = mod_ui_dibujo._hex_a_rgb(color)
+            except Exception:
+                return (None, None)
+            foto = _imagen_barra_progreso(x1 - x0, y1 - y0, radio, rgb, prog)
+            if foto is None:
+                return (None, None)
+            return (cv.create_image(x0, y0, anchor="nw", image=foto), foto)
+        xx = x0 + (x1 - x0) * max(0.0, min(1.0, prog))
+        return (cv.create_rectangle(
+            x0, y0, xx, y1, fill=color, outline="", stipple="gray50"), None)
+    except Exception:
+        return (None, None)
+
+
+def _mover_overlay_progreso(ov, cv, x0, y0, x1, y1, radio, color, prog, ancho_ahora):
+    """Avanza/actualiza el overlay vigente (regenera la imagen sólo si
+    cambió el ancho ≥2px o el color)."""
+    try:
+        iid = ov.get("id")
+        if HAY_PILLOW:
+            if abs(ancho_ahora - ov.get("ancho", -99)) >= 2 or ov.get("color") != color:
+                try:
+                    rgb = mod_ui_dibujo._hex_a_rgb(color)
+                except Exception:
+                    return
+                foto = _imagen_barra_progreso(x1 - x0, y1 - y0, radio, rgb, prog)
+                if foto is None:
+                    return
+                cv.itemconfig(iid, image=foto)
+                ov["foto"] = foto
+                ov["ancho"] = ancho_ahora
+                ov["color"] = color
+        else:
+            xx = x0 + (x1 - x0) * max(0.0, min(1.0, prog))
+            cv.coords(iid, x0, y0, xx, y1)
+            cv.itemconfig(iid, fill=color)
+    except Exception:
+        E._overlay_progreso = None
+
+
 def _refrescar_barra_progreso():
     """Loop cada ~40 ms: pinta sobre la cara del pad que suena una barra
     semitransparente del color de su etiqueta, barriendo de izquierda a
@@ -597,7 +662,7 @@ def _refrescar_barra_progreso():
                 if info is None:
                     _limpiar_overlay_progreso()
                 else:
-                    cv, (x0, y0, x1, y1) = info
+                    cv, (x0, y0, x1, y1), radio = info
                     try:
                         viva = cv.winfo_exists()
                     except Exception:
@@ -606,20 +671,30 @@ def _refrescar_barra_progreso():
                         _limpiar_overlay_progreso()
                     else:
                         color = datos_pad.get("color") or E.color_acento()
-                        xx = x0 + (x1 - x0) * max(0.0, min(1.0, progreso))
+                        ancho_ahora = (x1 - x0) * progreso
                         ov = E._overlay_progreso
                         if ov is None or ov.get("indice") != indice:
                             _limpiar_overlay_progreso()
-                            iid = cv.create_rectangle(
-                                x0, y0, xx, y1, fill=color, outline="",
-                                stipple="gray50")
-                            E._overlay_progreso = {"indice": indice, "id": iid, "canvas": cv}
+                            iid, foto = _crear_overlay_progreso(
+                                cv, x0, y0, x1, y1, radio, color, progreso)
+                            if iid is not None:
+                                E._overlay_progreso = {
+                                    "indice": indice, "id": iid, "canvas": cv,
+                                    "ancho": ancho_ahora, "color": color,
+                                    "foto": foto,
+                                }
                         else:
-                            try:
-                                cv.coords(ov["id"], x0, y0, xx, y1)
-                                cv.itemconfig(ov["id"], fill=color)
-                            except Exception:
-                                E._overlay_progreso = None
+                            _mover_overlay_progreso(
+                                ov, cv, x0, y0, x1, y1, radio, color, progreso, ancho_ahora)
+            # Red de contención para la luz: sin OBS nadie informa el fin
+            # (hilo local muerto, escucha cambiada a mitad, OBS caído).
+            # Pasada la duración + margen, se apaga si sigue vigente.
+            if not E.conectado:
+                try:
+                    if (time.time() - (ses.get("inicio") or 0)) > duracion + 0.5:
+                        _apagar_pad_si_token_vigente(indice, ses.get("token"))
+                except Exception:
+                    pass
     except Exception:
         pass
     try:
@@ -866,7 +941,7 @@ def construir_soundboard():
             caja_cara_img, radio_cara_img = _geometria_cara_placa(ancho_imagen_pad, alto_pad_principal)
         ancho_cara_img = max(1, round(caja_cara_img[2] - caja_cara_img[0]))
         alto_cara_img = max(1, round(caja_cara_img[3] - caja_cara_img[1]))
-        E._canvas_pads[i] = (pad_canvas, tuple(caja_cara_img))
+        E._canvas_pads[i] = (pad_canvas, tuple(caja_cara_img), radio_cara_img)
         miniatura = (
             cargar_miniatura(i, ruta_imagen, (ancho_cara_img, alto_cara_img), radio_cara_img)
             if ruta_imagen else None
