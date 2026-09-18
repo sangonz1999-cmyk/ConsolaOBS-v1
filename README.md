@@ -72,33 +72,34 @@ consola_obs/
 Funcionamiento, mecánicas y arquitectura en detalle:
 
 ## Índice
-0. ¿Qué es?
-1. Requisitos y dependencias
-2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)
-3. Conexión a OBS (config, estado, formato de datos)
-4. Modelo de datos / estado global
-5. Eventos de OBS en tiempo real (bidireccional)
-6. Medidores VU tipo LED + medidores de niveles (VU meters)
-7. Saturación / "rojo" en el medidor
-8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)
-8b. Eliminar fuente (clic derecho > Eliminar fuente…)
-8c. Quitar de todas las escenas (clic derecho)
-9. Fuentes "principales" (favoritos que se generan siempre)
-## 10. Filtros de audio (crear, editar, ajustes en tiempo real)
-## 10b. Propiedades de fuente (clic derecho > Propiedades)
-## 11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)
-## 11b. Agregar fuente (clic derecho en el panel > Agregar fuente)
-## 11c. Vaciar pad vs Eliminar pad
-## 12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable
-## 13. Redimensionado responsive (factor de escala, velo, supersampling)
-## 14. Persistencia (config JSON)
-## 15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)
-## 16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)
-## 17. Flux de arranque / cierre
-## 18. Consideraciones de hilos y concurrencia
-## 19. Cómo compilar el .exe
+[0. ¿Qué es?](#sec-0)
+[1. Requisitos y dependencias](#sec-1)
+[2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)](#sec-2)
+[3. Conexión a OBS (config, estado, formato de datos)](#sec-3)
+[4. Modelo de datos / estado global](#sec-4)
+[5. Eventos de OBS en tiempo real (bidireccional)](#sec-5)
+[6. Medidores VU tipo LED + medidores de niveles (VU meters)](#sec-6)
+[7. Saturación / "rojo" en el medidor](#sec-7)
+[8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)](#sec-8)
+[8b. Eliminar fuente (clic derecho > Eliminar fuente…)](#sec-8b)
+[8c. Quitar de todas las escenas (clic derecho)](#sec-8c)
+[9. Fuentes "principales" (favoritos que se generan siempre)](#sec-9)
+[10. Filtros de audio (crear, editar, ajustes en tiempo real)](#sec-10)
+[10b. Propiedades de fuente (clic derecho > Propiedades)](#sec-10b)
+[11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)](#sec-11)
+[11b. Agregar fuente (clic derecho en el panel > Agregar fuente)](#sec-11b)
+[11c. Vaciar pad vs Eliminar pad](#sec-11c)
+[12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable](#sec-12)
+[13. Redimensionado responsive (factor de escala, velo, supersampling)](#sec-13)
+[14. Persistencia (config JSON)](#sec-14)
+[15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)](#sec-15)
+[16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)](#sec-16)
+[17. Flux de arranque / cierre](#sec-17)
+[18. Consideraciones de hilos y concurrencia](#sec-18)
+[19. Cómo compilar el .exe](#sec-19)
 
 
+<a id="sec-0"></a>
 ## 0. ¿QUÉ ES?
 Programa de escritorio (Tkinter) que
 actúa como "consola de sonido" remota para OBS Studio, conectándose al
@@ -120,6 +121,7 @@ dibujo a mano sobre Canvas de Tk, con estética oscura profesional y
 fuentes tipográficas propias opcionales (assets/fuentes/*.ttf|*.otf).
 
 
+<a id="sec-1"></a>
 ## 1. REQUISITOS Y DEPENDENCIAS
 Python 3.x (se usa solo biblioteca estándar de Tk, más):
 
@@ -142,6 +144,7 @@ defecto 4455). La contraseña/host/puerto se guardan en
 config_conexion.json.
 
 
+<a id="sec-2"></a>
 ## 2. ARQUITECTURA GENERAL
 Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el estado compartido en `estado.py` y las constantes en `constantes.py`):
 
@@ -165,6 +168,7 @@ Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el 
   - Reajuste de columnas de fuentes y soundboard: con throttle tras 30 ms (solo reubica, nunca reconstruye).
 
 
+<a id="sec-3"></a>
 ## 3. CONEXIÓN A OBS
 CS: Se guarda en config_conexion.json {host, puerto, password}.
 Defaults: host "localhost", puerto 4455.
@@ -184,6 +188,7 @@ clave_obs_camel)` para leer un campo tolerando ambos nombres, y
 - el medidor se pone en gris/atenuado cuando la fuente NO está en la escena activa (ver abajo).
 
 
+<a id="sec-4"></a>
 ## 4. ESTADO GLOBAL / MODELO DE DATOS
 Globals relevantes:
 - conectado: bool de estado.
@@ -201,6 +206,7 @@ Globals relevantes:
 - config_conexion, config_interfaz, cargadas al inicio y guardadas al cerrar.
 
 
+<a id="sec-5"></a>
 ## 5. EVENTOS DE OBS EN TIEMPO REAL (OBS → UI, bidireccional)
 El programa se suscribe a los callbacks de eventos de OBS-WebSocket y
 los refleja en la UI al instante:
@@ -237,6 +243,7 @@ Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
 - Al eliminar una fuente: remove_input (sección 8b). Todo esta sincronización es EN AMBAS DIRECCIONES y en tiempo real.
 
 
+<a id="sec-6"></a>
 ## 6. MEDIDORES VU TIPO LED
 Cada tarjeta de fuente tiene un medidor de dos canales (barra LED
 vertical, NUM_SEGMENTOS_VU=24 segmentos) que imita el medidor de OBS.
@@ -266,6 +273,7 @@ marcas perpendiculares de escala dB pegadas a la barra y línea de pico.
 - La ganancia de los filtros se suma al nivel mostrado (se refleja en el medidor) leyendo la ganancia real de cada filtro de audio (sección CALIBRACIÓN al inicio): así el medidor muestra el "post fader + filtros".
 
 
+<a id="sec-7"></a>
 ## 7. SATURACIÓN / "ROJO"
 Cuando una fuente pasa de 0 dB(UMBRAL_SATURACION_MUL = 0.999, es decir
 ≈ 0 dB), el medidor LED se pone TODO EN ROJO (todos los segmentos
@@ -288,6 +296,7 @@ decaimiento suave.
 - Segmento saturado: todo rojo (o gris claro si atenuado).
 
 
+<a id="sec-8"></a>
 ## 8. TARJETAS DE FUENTE (el fader)
 Por cada fuente de audio de OBS se crea una tarjeta con:
 
@@ -317,6 +326,7 @@ algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
 - _columna_disponible_fuentes: cuántas tarjetas entran por fila (histéresis de 40 px).
 
 
+<a id="sec-8b"></a>
 ## 8b. ELIMINAR FUENTE (clic derecho > Eliminar fuente…)
 `_eliminar_fuente` en `ui/tarjeta_fuente.py`: a diferencia del resto del menú, esto borra la fuente de OBS de verdad (no sólo la tarjeta), vía `remove_input` en un hilo daemon:
 - Pide conexión activa; bloquea la fuente interna del soundboard (`Soundboard_Efectos`).
@@ -325,10 +335,12 @@ algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
 - Limpieza centralizada (`_limpiar_referencias_fuente_borrada`): al desaparecer una fuente —desde la consola o desde OBS— se la saca de `fuentes_principales` y `colores_fuentes` (con guardado de config) y se cierran sus ventanas de Filtros/Propiedades si estaban abiertas.
 
 
+<a id="sec-8c"></a>
 ## 8c. QUITAR DE TODAS LAS ESCENAS (clic derecho)
 `_quitar_fuente_de_escenas` en `ui/tarjeta_fuente.py` + `quitar_fuente_de_todas_las_escenas` en `obs/cliente.py`: recorre todas las escenas y borra con `remove_scene_item` cada ítem de primer nivel que referencie a la fuente, SIN borrar el input (sigue existiendo y se puede reagregar desde OBS). Corre en hilo daemon, serializado con `_lock_sincronizar_escenas`, pide confirmación, bloquea la fuente interna del soundboard y las marcadas como principales (esas se mantienen en escena por definición), y al terminar refresca la lista e informa en cuántas escenas estaba. La tarjeta queda atenuada hasta que la fuente vuelva a alguna escena.
 
 
+<a id="sec-9"></a>
 ## 9. FUENTES "PRINCIPALES" (favoritas que se generan SIEMPRE)
 Una fuente marcada como "principal" (★ en el menú contextual de la
 tarjeta) se comporta distinto al resto:
@@ -347,6 +359,7 @@ tal como estén (grises si no están en la escena activa); las principales
 se fuerzan a estar activas en todas las escenas siempre.
 
 
+<a id="sec-10"></a>
 ## 10. FILTROS DE AUDIO (tiempo real, bidireccional)
 Ventana "Filtros" por fuente (desde el menú contextual):
 - Lista los filtros de audio reales de la fuente (get_source_filter_list).
@@ -368,6 +381,7 @@ Ventana "Filtros" por fuente (desde el menú contextual):
 - Ganancia se refleja en el VU: _refrescar_ganancia_fuente, en un hilo, suma la ganancia de todos los filtros habilitados que aportan dB (gain_filter.db, compressor output_gain, etc.) y el medidor la muestra (sin reconstruir el nivel a mano: usa el nivel crudo).
 
 
+<a id="sec-10b"></a>
 ## 10b. PROPIEDADES DE FUENTE (clic derecho > Propiedades)
 Ventana "Propiedades" por fuente (`consola_obs/audio/propiedades.py`), agregada al menú contextual junto a Filtros:
 - Arma los controles según el `inputKind` real de la fuente (get_input_settings), con el mismo criterio de esquema fijo que los filtros: ESQUEMA_PROPIEDADES_ENTRADA en estado.py cubre Mic/Aux y Audio de escritorio (WASAPI/CoreAudio/Pulse), Captura de audio de aplicación, Fuente de medios y Captura de ventana — calcados campo por campo, mismo orden y mismas opciones que la ventana real de OBS.
@@ -380,6 +394,7 @@ Ventana "Propiedades" por fuente (`consola_obs/audio/propiedades.py`), agregada 
 - Fuente de medios (ffmpeg_source) calcada exacto a la ventana de OBS: mismo orden y etiquetas (incluidos decodificación por hardware y velocidad), con el Buffer visible sólo en modo red como en OBS.
 
 
+<a id="sec-11"></a>
 ## 11. SOUNDBOARD (pads con efectos)
 El soundboard es una grilla de "pads" (botones) que reproducen sonidos
 via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
@@ -425,6 +440,7 @@ pad de borde y del LED).
 - "Chico", "Mediano" (default), "Grande": cambian diámetro del botón, fuente de botón, ancho/alto del pad, íconos, fuente del nombre, etc.
 
 
+<a id="sec-11b"></a>
 ## 11b. AGREGAR FUENTE (clic derecho en el panel > Agregar fuente)
 Módulo nuevo `consola_obs/audio/fuentes.py`. Clic derecho sobre una zona VACÍA del panel de fuentes (no sobre una tarjeta: esa tiene su propio menú) abre `_abrir_menu_contextual_panel_fuentes` (en `ui/tarjeta_fuente.py`), atado tanto al canvas como al frame interno para cubrir cualquier hueco vacío.
 - El menú tiene un submenú "➕ Agregar fuente" con los tipos de entrada de AUDIO (ENTRADAS_DE_AUDIO_PERMITIDAS en estado.py: Captura de audio de aplicación, Captura de entrada audio, Captura de salida de audio, Multimedia), cada uno con su icono SVG original, cruzados en el momento contra get_input_kind_list para no ofrecer un tipo que esa instancia/plataforma de OBS no tenga — mismo criterio que FILTROS_DE_SONIDO_PERMITIDOS. Nombres y orden calcados del menú "Agregar fuente" real de OBS.
@@ -434,12 +450,14 @@ Módulo nuevo `consola_obs/audio/fuentes.py`. Clic derecho sobre una zona VACÍA
 - El botón "AGREGAR FUENTE" del menú de Ajustes sigue existiendo como atajo al selector completo.
 
 
+<a id="sec-11c"></a>
 ## 11c. VACIAR PAD vs ELIMINAR PAD
 Menú contextual del pad en `ui/soundboard.py` (100% local: los pads no son objetos de OBS, todos comparten la única fuente `Soundboard_Efectos`):
 - **Vaciar pad** (`_quitar_pad`, sólo si tiene sonido): borra nombre/archivo/imagen pero deja el botón vacío en su lugar (conserva el color de etiqueta). Invalida su miniatura cacheada.
 - **Eliminar pad** (`_eliminar_pad`, siempre visible): saca el pad de la grilla por completo, corre todos los posteriores una posición hacia atrás para cerrar el hueco (inverso a `_insertar_pad_al_principio`) y decrementa `num_pads_soundboard` (guarda `config_soundboard.json` + `config_interfaz.json`). Corta la reproducción activa antes de reordenar para no dejar la sesión apuntando a otro índice, e invalida las miniaturas cacheadas desde ese índice.
 
 
+<a id="sec-12"></a>
 ## 12. CABECERA Y PANELES
 Cabecera (ventana_cabecera):
 - Fondo con degradado vertical (COLOR_CABECERA_ARRIBA → COLOR_CABECERA_ABAJO) dibujado en Canvas.
@@ -453,6 +471,7 @@ Cabecera (ventana_cabecera):
 - Las dos grillas (fuentes y soundboard) se ordenan según la config "orientacion_paneles" (vertical/horizontal) y "orden_paneles" (fuentes arriba/abajo o izquierda/derecha), persistidos en config_interfaz.json. La posición del divisor se guarda al cerrar.
 
 
+<a id="sec-13"></a>
 ## 13. REDIMENSIONADO (estilo soundboard de Nico)
 Tamaños fijos por ajuste de íconos (Chico/Mediano/Grande), sin importar
 el tamaño de la ventana. Al mover el borde o el divisor, las grillas
@@ -482,6 +501,7 @@ Al cambiar el tamaño, tanto faders (_reubicar_fuentes) como pads
 destruye ni se recrea, así no hay nada que parpadee.
 
 
+<a id="sec-14"></a>
 ## 14. PERSISTENCIA (JSON)
 Archivos (se guardan en `config/` junto al .py/.exe):
 
@@ -508,6 +528,7 @@ se guarda de inmediato (guardar_config_interfaz / guardar_config_soundboard).
 - Alias "Tipografia de obs" (primero en el selector): Open Sans con fallback a Helvetica/Arial; si no hay elección guardada se usa por defecto.
 
 
+<a id="sec-15"></a>
 ## 15. ESTÉTICA / DIBUJO A MANO
 La interfaz combina iconos SVG originales con dibujo a mano sobre tk.Canvas:
 
@@ -528,6 +549,7 @@ Paletas de color por etiqueta: PALETA_ETIQUETAS (rojo, naranja,
 amarillo, verde, teal, azul, índigo, violeta, magenta).
 
 
+<a id="sec-16"></a>
 ## 16. WINDOWS: ANTI-PARPADEO NATIVO
 Solo en win32, con ctypes:
 - _congelar_pintado_ventana(): envía WM_SETREDRAW(0) al HWND real de la ventana (mediante _hwnd_ventana_real, que sube por la jerarquía hasta la ventana raíz de Windows) para que Windows deje de repintar las franjas nuevas durante el arrastre del borde.
@@ -539,6 +561,7 @@ Esto se invoca durante el arrastre de redimensionado, así el usuario
 ve el último cuadro completo hasta que suelta (sin parpadeos).
 
 
+<a id="sec-17"></a>
 ## 17. FLUJO DE ARRANQUE / CIERRE
 Arranque:
 1. Leer config (si existe).
@@ -556,6 +579,7 @@ sondeo de filtros (si editor abierto), refresco de reproducción y barra de prog
 - Cerrar la ventana (ventana.destroy()).
 
 
+<a id="sec-18"></a>
 ## 18. CONCURRENCIA (útil para reconstruir)
 Reglas de oro implementadas:
 - La red y los medidores VU corren en hilos daemon; la UI se toca solo desde el hilo principal vía ventana.after(0,...).
@@ -574,6 +598,7 @@ Reglas de oro implementadas:
 - Los valores que comparten los hilos con la UI (niveles_actuales, ultima_vez_saturado, fuentes...) viven en dicts globales y se protegen con locks cuando hay riesgo de carrera; el resto se copia por valor (inmutables) hacia la UI.
 
 
+<a id="sec-19"></a>
 ## 19. CÓMO COMPILAR A .EXE
 Doble clic en `compilar.bat` (usa PyInstaller, Windows):
 
