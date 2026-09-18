@@ -1014,13 +1014,40 @@ def _abrir_menu_contextual_fuente(nombre, event):
     es_principal = nombre in E.fuentes_principales
 
     menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c", activeforeground="white")
-    menu.add_command(label="✏  Renombrar…", command=lambda: _iniciar_renombrar_fuente(nombre))
-    menu.add_command(
-        label=("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
-        command=lambda: _alternar_principal(nombre)
-    )
-    menu.add_command(label="🎚  Filtros…", command=lambda: mod_audio_filtros.abrir_filtros(nombre))
-    menu.add_command(label="⚙  Propiedades…", command=lambda: mod_audio_propiedades.abrir_propiedades(nombre))
+    menu._imagenes = []
+
+    def _item(svg, texto, texto_respaldo, comando):
+        try:
+            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+        except Exception:
+            foto = None
+        if foto is None:
+            menu.add_command(label=texto_respaldo, command=comando)
+        else:
+            menu._imagenes.append(foto)
+            menu.add_command(label=texto, image=foto, compound="left", command=comando)
+
+    def _cascada(svg, texto, texto_respaldo, submenu):
+        try:
+            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+        except Exception:
+            foto = None
+        if foto is None:
+            menu.add_cascade(label=texto_respaldo, menu=submenu)
+        else:
+            menu._imagenes.append(foto)
+            menu.add_cascade(label=texto, image=foto, compound="left", menu=submenu)
+
+    _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
+          lambda: _iniciar_renombrar_fuente(nombre))
+    _item("menu/menu_favorito_off.svg" if es_principal else "menu/menu_favorito_on.svg",
+          ("Quitar de principales" if es_principal else "Marcar como principal"),
+          ("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
+          lambda: _alternar_principal(nombre))
+    _item("menu/menu_filtros.svg", "Filtros…", "🎚  Filtros…",
+          lambda: mod_audio_filtros.abrir_filtros(nombre))
+    _item("menu/menu_propiedades.svg", "Propiedades…", "⚙  Propiedades…",
+          lambda: mod_audio_propiedades.abrir_propiedades(nombre))
     menu.add_separator()
 
     submenu_color = tk.Menu(menu, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c")
@@ -1033,11 +1060,12 @@ def _abrir_menu_contextual_fuente(nombre, event):
             label="        ", background=color, activebackground=color,
             command=lambda c=color: _asignar_color_fuente(nombre, c)
         )
-    menu.add_cascade(label="🏷  Color de etiqueta", menu=submenu_color)
+    _cascada("menu/menu_etiqueta.svg", "Color de etiqueta", "🏷  Color de etiqueta", submenu_color)
 
     menu.add_separator()
     menu.add_command(label="Quitar de todas las escenas…", command=lambda: _quitar_fuente_de_escenas(nombre))
-    menu.add_command(label="🗑  Eliminar fuente…", command=lambda: _eliminar_fuente(nombre))
+    _item("menu/menu_eliminar.svg", "Eliminar fuente…", "🗑  Eliminar fuente…",
+          lambda: _eliminar_fuente(nombre))
 
     try:
         menu.tk_popup(event.x_root, event.y_root)

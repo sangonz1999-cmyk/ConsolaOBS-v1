@@ -57,13 +57,39 @@ def _abrir_menu_contextual_pad(indice, event):
     tiene_sonido = bool(datos.get("archivo"))
 
     menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c", activeforeground="white")
-    menu.add_command(
-        label=("🔊  Cambiar sonido…" if tiene_sonido else "🔊  Asignar sonido…"),
-        command=lambda: asignar_sonido(indice)
-    )
+    menu._imagenes = []
+
+    def _item(svg, texto, texto_respaldo, comando):
+        try:
+            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+        except Exception:
+            foto = None
+        if foto is None:
+            menu.add_command(label=texto_respaldo, command=comando)
+        else:
+            menu._imagenes.append(foto)
+            menu.add_command(label=texto, image=foto, compound="left", command=comando)
+
+    def _cascada(svg, texto, texto_respaldo, submenu):
+        try:
+            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+        except Exception:
+            foto = None
+        if foto is None:
+            menu.add_cascade(label=texto_respaldo, menu=submenu)
+        else:
+            menu._imagenes.append(foto)
+            menu.add_cascade(label=texto, image=foto, compound="left", menu=submenu)
+
+    _item("menu/menu_pad_sonido.svg",
+          ("Cambiar sonido…" if tiene_sonido else "Asignar sonido…"),
+          ("🔊  Cambiar sonido…" if tiene_sonido else "🔊  Asignar sonido…"),
+          lambda: asignar_sonido(indice))
     if tiene_sonido:
-        menu.add_command(label="🖼  Asignar imagen…", command=lambda: asignar_imagen(indice))
-        menu.add_command(label="✏  Renombrar…", command=lambda: _iniciar_renombrar_pad(indice))
+        _item("menu/menu_pad_imagen.svg", "Asignar imagen…", "🖼  Asignar imagen…",
+              lambda: asignar_imagen(indice))
+        _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
+              lambda: _iniciar_renombrar_pad(indice))
     menu.add_separator()
 
     submenu_color = tk.Menu(menu, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c")
@@ -76,12 +102,13 @@ def _abrir_menu_contextual_pad(indice, event):
             label="        ", background=color, activebackground=color,
             command=lambda c=color: _asignar_color_pad(indice, c)
         )
-    menu.add_cascade(label="🏷  Color de etiqueta", menu=submenu_color)
+    _cascada("menu/menu_etiqueta.svg", "Color de etiqueta", "🏷  Color de etiqueta", submenu_color)
 
     menu.add_separator()
     if tiene_sonido:
         menu.add_command(label="🗑  Vaciar pad", command=lambda: _quitar_pad(indice))
-    menu.add_command(label="🗑  Eliminar pad", command=lambda: _eliminar_pad(indice))
+    _item("menu/menu_eliminar.svg", "Eliminar pad", "🗑  Eliminar pad",
+          lambda: _eliminar_pad(indice))
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
