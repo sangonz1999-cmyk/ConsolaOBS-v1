@@ -1018,7 +1018,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
 
     def _item(svg, texto, texto_respaldo, comando):
         try:
-            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
             foto = None
         if foto is None:
@@ -1029,7 +1029,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
 
     def _cascada(svg, texto, texto_respaldo, submenu):
         try:
-            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
             foto = None
         if foto is None:
@@ -1040,7 +1040,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
 
     _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
           lambda: _iniciar_renombrar_fuente(nombre))
-    _item("menu/menu_favorito_off.svg" if es_principal else "menu/menu_favorito_on.svg",
+    _item("menu/menu_favorito_on.svg" if es_principal else "menu/menu_favorito_off.svg",
           ("Quitar de principales" if es_principal else "Marcar como principal"),
           ("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
           lambda: _alternar_principal(nombre))

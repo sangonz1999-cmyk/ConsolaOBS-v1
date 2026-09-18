@@ -61,7 +61,7 @@ def _abrir_menu_contextual_pad(indice, event):
 
     def _item(svg, texto, texto_respaldo, comando):
         try:
-            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
             foto = None
         if foto is None:
@@ -72,7 +72,7 @@ def _abrir_menu_contextual_pad(indice, event):
 
     def _cascada(svg, texto, texto_respaldo, submenu):
         try:
-            foto = mod_ui_dibujo._imagen_svg(svg, 16)
+            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
             foto = None
         if foto is None:

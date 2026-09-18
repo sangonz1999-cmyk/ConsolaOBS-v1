@@ -877,6 +877,66 @@ def _imagen_svg(nombre_archivo, lado):
         return None
 
 
+def _imagen_svg_menu(nombre_archivo, lado):
+    """Icono de menú clic-derecho: igual que _imagen_svg pero normaliza
+    el tamaño VISUAL recortando el aire del viewBox.
+
+    Por qué: los SVG nuevos no comparten viewBox (renombrar y
+    propiedades usan 40x40 con el dibujo ocupando solo una parte,
+    el resto 24x24 casi a sangre). Renderizados a la misma escala,
+    el lápiz y el engranaje se veían más chicos que la estrella o
+    el filtro. Recortando por el bbox del contenido (con un poco de
+    aire) y encajando en un cuadrado, todos quedan del mismo tamaño
+    visual sin importar el viewBox original. Cacheado."""
+    if not HAY_PILLOW:
+        return None
+    lado = max(8, int(lado))
+    clave = ("menu", nombre_archivo, lado)
+    if clave in _cache_svg:
+        return _cache_svg[clave]
+    try:
+        import pymupdf
+    except Exception:
+        return None
+    try:
+        import os as _os
+        ruta = _os.path.join(R.CARPETA_ICONOS, nombre_archivo)
+        if not _os.path.isfile(ruta):
+            print(f"No se encontró el icono SVG: {ruta}")
+            return None
+        doc = pymupdf.open(ruta)
+        page = doc[0]
+        zoom = 256 / max(page.rect.width, page.rect.height)
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=True)
+        img = Image.frombytes("RGBA", (pix.width, pix.height), pix.samples)
+        try:
+            doc.close()
+        except Exception:
+            pass
+        # Recorte por contenido: el bbox de lo no-transparente.
+        try:
+            caja = img.getbbox()
+        except Exception:
+            caja = None
+        if caja:
+            aire = max(4, int(256 * 0.04))
+            x0 = max(0, caja[0] - aire)
+            y0 = max(0, caja[1] - aire)
+            x1 = min(img.width, caja[2] + aire)
+            y1 = min(img.height, caja[3] + aire)
+            if x1 > x0 and y1 > y0:
+                img = img.crop((x0, y0, x1, y1))
+        # Encuadre cuadrado: el lado mayor manda, centrado.
+        costado = max(img.width, img.height) or 1
+        lienzo = Image.new("RGBA", (costado, costado), (0, 0, 0, 0))
+        lienzo.alpha_composite(img, ((costado - img.width) // 2, (costado - img.height) // 2))
+        foto = ImageTk.PhotoImage(lienzo.resize((lado, lado), Image.LANCZOS))
+        _cache_svg[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
 def _imagen_monitor_svg(tam_px, color_cuadrado):
     """Auricular SVG original sobre su cuadrado de estado (azul/verde);
     apagado usa mixer-headphones-off.svg tal cual (ya trae su X y su diadema
