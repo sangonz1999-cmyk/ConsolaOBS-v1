@@ -354,7 +354,10 @@ from collections import deque as _deque
 
 _p = {"marco": None, "visible": False, "tab": "Recientes", "tabs": [],
       "rels_biblio": [], "rels_playlist": [],
-      "tree_biblio": None, "tree_playlist": None, "busqueda": ""}
+      "tree_biblio": None, "tree_playlist": None, "busqueda": "",
+      # Carpeta que se está reproduciendo directo (doble clic en tab o
+      # en tema de biblioteca). None = suena la playlist del panel.
+      "origen_directo": None}
 _cola_dur = _deque()
 _en_cola_dur = set()
 _fallos_dur = set()
@@ -471,6 +474,7 @@ def _pintar_tabs(biblioteca):
         # inicio, sin mover nada a la playlist actual.
         boton.bind("<Double-Button-1>",
                    lambda e, t=nombre: _reproducir_tab_completa(t))
+    _marcar_origen()
 
 
 def _reproducir_tab_completa(nombre):
@@ -483,7 +487,9 @@ def _reproducir_tab_completa(nombre):
         temas = []
     if not temas:
         return
+    _p["origen_directo"] = nombre
     mod_musica.reproducir_lista(list(temas), 0)
+    _marcar_origen()
 
 
 def _elegir_tab(nombre):
@@ -568,33 +574,62 @@ def _pintar_tabla_playlist():
     _p["rels_playlist"] = _filas_tabla(_p["tree_playlist"],
                                        mod_musica.playlist_actual(),
                                        compacta=True)
-    _resaltar_playlist()
+    _resaltar_actual()
 
 
-def _resaltar_playlist():
+def _marcar_origen():
+    """Borde de color en la pestaña que se está reproduciendo directo
+    (None = suena la playlist del panel, sin marca)."""
+    try:
+        marco = _p.get("marco_tabs")
+        if marco is None:
+            return
+        for w in marco.winfo_children():
+            try:
+                base = w.cget("text").rsplit(" (", 1)[0]
+            except Exception:
+                continue
+            if base and base == _p.get("origen_directo"):
+                w.config(highlightbackground=E.color_acento(),
+                         highlightthickness=2)
+            else:
+                w.config(highlightthickness=0)
+    except Exception:
+        pass
+
+
+def _resaltar_actual():
+    """Resalta el tema sonando en AMBAS tablas (playlist y biblioteca)."""
     if not _panel_vivo() or not _p.get("visible"):
         return
     try:
-        tree = _p["tree_playlist"]
         actual = mod_musica.estado_actual().get("rel")
-        for iid in tree.get_children():
-            try:
-                tree.item(iid, tags=())
-            except Exception:
-                pass
-        if actual and actual in _p.get("rels_playlist", []):
-            try:
-                tree.item(str(_p["rels_playlist"].index(actual)), tags=("sonando",))
-            except Exception:
-                pass
     except Exception:
-        pass
+        actual = None
+    for clave, arbol in (("rels_playlist", _p.get("tree_playlist")),
+                         ("rels_biblio", _p.get("tree_biblio"))):
+        try:
+            if arbol is None:
+                continue
+            rels = _p.get(clave, [])
+            for iid in arbol.get_children():
+                try:
+                    arbol.item(iid, tags=())
+                except Exception:
+                    pass
+            if actual and actual in rels:
+                try:
+                    arbol.item(str(rels.index(actual)), tags=("sonando",))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
 
 def _refrescar_panel():
     if not _panel_vivo() or not _p.get("visible"):
         return
-    _resaltar_playlist()
+    _resaltar_actual()
 
 
 def _asegurar_duraciones():
@@ -715,14 +750,18 @@ def _reproducir_vista_biblio(indice):
     except Exception:
         return
     if 0 <= indice < len(vista):
+        _p["origen_directo"] = _p.get("tab")
         mod_musica.reproducir_lista(vista, indice)
+        _marcar_origen()
 
 
 def _reproducir_indice_playlist(indice):
     if not _necesita_conexion():
         return
     try:
+        _p["origen_directo"] = None
         mod_musica.reproducir_playlist(int(indice))
+        _marcar_origen()
     except Exception:
         pass
 
@@ -968,8 +1007,13 @@ def _construir_panel():
 
     fila_busqueda = tk.Frame(marco, bg=E.color_barra_titulo())
     fila_busqueda.pack(side="top", fill="x", padx=8, pady=(6, 4))
-    tk.Label(fila_busqueda, text="🔍", bg=E.color_barra_titulo(), fg="#8fa0bd",
-             font=(E.FUENTE_UI, 10)).pack(side="left")
+    _foto_buscar = _icono_barra("menu_barra_buscar.svg")
+    if _foto_buscar is None:
+        tk.Label(fila_busqueda, text="🔍", bg=E.color_barra_titulo(), fg="#8fa0bd",
+                 font=(E.FUENTE_UI, 10)).pack(side="left")
+    else:
+        tk.Label(fila_busqueda, image=_foto_buscar, bg=E.color_barra_titulo()).pack(
+            side="left", padx=(0, 4))
     _p["entrada_busqueda"] = tk.Entry(
         fila_busqueda, bg="#1b2230", fg="white", insertbackground="white",
         relief="flat", highlightthickness=1, highlightbackground="#2b3548",
@@ -977,12 +1021,7 @@ def _construir_panel():
     )
     _p["entrada_busqueda"].pack(side="left", fill="x", expand=True, ipady=3)
     _p["entrada_busqueda"].bind("<KeyRelease>", _al_buscar_panel)
-    tk.Button(
-        fila_busqueda, text="↻", bg="#242d3d", fg="white",
-        activebackground="#2f3a4d", activeforeground="white",
-        relief="flat", bd=0, font=(E.FUENTE_UI, 10, "bold"), cursor="hand2",
-        command=_recargar_panel,
-    ).pack(side="left", padx=(6, 0))
+    _boton_icono(fila_busqueda, "menu_barra_actualizar.svg", "↻", _recargar_panel)
 
     _p["marco_tabs"] = tk.Frame(marco, bg=E.color_barra_titulo())
     _p["marco_tabs"].pack(side="top", fill="x", padx=8, pady=(0, 4))
