@@ -19,6 +19,17 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Iconos SVG originales de OBS** (vía pymupdf): parlante/mute/auriculares y tipos de fuente; tipografía Open Sans ("Tipografia de obs").
 - **Alto de tarjeta regulable** (Compacto/Normal/Alto/Muy alto) que se combina con el tamaño de íconos.
 
+## Descarga (sin programar nada)
+
+En [Releases](https://github.com/sangonz1999-cmyk/ConsolaOBS-v1/releases) hay dos `.zip`. Hacen falta **los dos**, uno por PC:
+
+- **PC del sonidista (consola/laptop) → `ConsolaOBS-Consola.zip`**: el programa (`ConsolaOBS.exe`) + sonidos, imágenes, iconos y fuentes. Se descomprime y se abre el `.exe` con doble clic.
+- **PC principal (la del OBS) → `ConsolaOBS-OBS.zip`**: solo los sonidos (`.mp3`). Acá no se instala nada: solo OBS + esta carpeta.
+
+**Por qué los dos (regla de oro)**: cuando disparás un efecto, la consola le dice al OBS "reproducí `C:\...\X.mp3`" y el OBS lo busca **en su propio disco**. Si el archivo no está ahí, el stream queda en silencio (vos igual lo escuchás por los parlantes de la consola, pero eso es audio local y no va al stream). Por eso los sonidos tienen que quedar en la **misma ruta** en ambas PCs (ej: las dos en `C:\ConsolaOBS`).
+
+Notas: Windows SmartScreen avisa por ser un `.exe` sin firma (Más información → Ejecutar de todos modos). En OBS: Herramientas → WebSocket → habilitar, puerto 4455. Alternativa para programadores: clonar el repo en ambas PCs (misma ruta) y usar `instalar.bat` + `compilar.bat` (ver abajo).
+
 ## Requisitos
 
 - Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`, `pymupdf`).
