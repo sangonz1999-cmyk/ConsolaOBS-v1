@@ -208,9 +208,15 @@ def conectar_obs():
     E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
+    E.host_conectado = host
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
+    try:
+        _base_obs = E.entrada_base_obs.get().strip()
+    except Exception:
+        _base_obs = ""
+    mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": _base_obs})
     actualizar_estado_conexion()
     mod_ui_tarjeta.actualizar()
 
@@ -218,6 +224,7 @@ def conectar_obs():
 def desconectar_obs():
 
     E.conectado = False
+    E.host_conectado = None
 
     for cliente in (E.cliente_obs, E.cliente_eventos):
         try:

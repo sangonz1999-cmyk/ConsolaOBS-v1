@@ -7,6 +7,7 @@ from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
 from consola_obs.obs import eventos as mod_obs_eventos
+from consola_obs.audio import rutas_obs as mod_rutas_obs
 from consola_obs.ui import soundboard as mod_ui_soundboard
 
 _reproduccion_local = {"dispositivo": None, "token": None}
@@ -256,10 +257,14 @@ def _cargar_y_disparar(indice, accion, token):
         return
 
     try:
+        # La ruta se traduce si el OBS está en otra PC (Fase 2 música):
+        # en la misma PC llega intacta, en otra se antepone la carpeta
+        # base configurada. El audio local de abajo siempre usa la
+        # ruta de ESTA pc, sin traducir.
         E.cliente_obs.set_input_settings(
             C.NOMBRE_FUENTE_EFECTOS,
             {
-                "local_file": datos["archivo"],
+                "local_file": mod_rutas_obs.resolver_para_obs(datos["archivo"]),
                 "is_local_file": True,
                 "restart_on_activate": False,
                 "close_when_inactive": False,

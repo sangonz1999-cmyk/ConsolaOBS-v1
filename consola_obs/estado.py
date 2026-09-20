@@ -56,6 +56,12 @@ cliente_eventos = None
 
 _lock_pedidos_obs = threading.Lock()
 
+# Host al que se está conectado ahora (tal cual se escribió en
+# Ajustes → Host, None si desconectado). La capa de rutas lo usa
+# para decidir si manda rutas directas (misma PC) o traducidas a la
+# base del OBS (otra PC), sin depender de widgets.
+host_conectado = None
+
 _lock_sincronizar_escenas = threading.Lock()
 
 fuentes = {}                                                          

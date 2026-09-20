@@ -313,6 +313,13 @@ GRACIA_INICIO_REPRODUCCION_SEG = 0.35  # ignora el estado recién arrancado un
 ESTADOS_MEDIA_DETENIDO = {"OBS_MEDIA_STATE_STOPPED", "OBS_MEDIA_STATE_ENDED", "OBS_MEDIA_STATE_ERROR"}
 
 
+# Sondeo de la música de fondo (Fase 2): cada cuánto se le pregunta
+# a OBS el estado real (sonando/pausada/posición/duración).
+INTERVALO_SONDEO_MUSICA_MS = 500
+# Cuántas pistas recientes guarda la ventana de música.
+MAX_RECIENTES_MUSICA = 10
+
+
 COLOR_PANEL_SOUNDBOARD = "#10141b"
 
 # Salto mínimo en píxeles para repintar en un evento de redimensionado:

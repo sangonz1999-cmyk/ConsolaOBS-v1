@@ -20,6 +20,7 @@ else:
 ARCHIVO_CONEXION = os.path.join(CARPETA_SCRIPT, "config", "config_conexion.json")
 ARCHIVO_SOUNDBOARD = os.path.join(CARPETA_SCRIPT, "config", "config_soundboard.json")
 ARCHIVO_INTERFAZ = os.path.join(CARPETA_SCRIPT, "config", "config_interfaz.json")
+ARCHIVO_MUSICA = os.path.join(CARPETA_SCRIPT, "config", "config_musica.json")
 
 CARPETA_CONFIG = os.path.join(CARPETA_SCRIPT, "config")
 

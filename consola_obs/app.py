@@ -419,6 +419,20 @@ def main():
     E.entrada_password = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Contraseña"), show="•")
     E.entrada_password.insert(0, E.config_previa.get("password", ""))
 
+    # Carpeta assets del lado del OBS (Fase 2 música): solo importa si
+    # el OBS está en OTRA pc. No se puede explorar el disco remoto,
+    # así que se escribe/pega a mano UNA vez y queda guardada (ej:
+    # D:\ConsolaOBS\assets). En la misma PC se ignora.
+    E.entrada_base_obs = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Carpeta OBS"))
+    E.entrada_base_obs.insert(0, E.config_interfaz_previa.get("carpeta_base_obs", ""))
+    E._etiqueta_base_obs = tk.Label(
+        E.barra,
+        text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC)",
+        bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
+        wraplength=300, justify="left",
+    )
+    E._etiqueta_base_obs.pack(fill="x", padx=16, pady=(0, 2))
+
     # IP LAN automática: para que otra PC se conecte A ESTA, tiene que
     # poner ESTA ip como Host. Se detecta sola, sin tener que hacer
     # ipconfig a mano. No cambia la conexión actual: solo informa.
