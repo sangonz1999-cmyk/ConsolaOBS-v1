@@ -244,7 +244,9 @@ def _refrescar_mini_player():
         elif _w.get("img_play") is not None:
             _w["play"].config(image=_w["img_play"], text="", width=34, height=28)
         else:
-            _w["play"].config(image="", text="▶", width=3, height=28)
+            # OJO: height en píxeles solo vale con imagen; en texto va
+            # en líneas (28 serían 28 renglones: el botón gigante).
+            _w["play"].config(image="", text="▶", width=3, height=1)
         dur = float(snap.get("duracion_ms") or 0.0)
         cur = float(snap.get("cursor_ms") or 0.0)
         _w["tiempos"].config(
@@ -256,17 +258,16 @@ def _refrescar_mini_player():
             _w["repetir"].config(image=_w["img_mezclar"], text="",
                                  width=34, height=28, bg=E.color_acento())
         elif modo == "mezclar":
-            _w["repetir"].config(image="", text="🔀", width=3, height=28,
+            _w["repetir"].config(image="", text="🔀", width=3, height=1,
                                  bg=E.color_acento(), fg="white")
-        elif modo == "repetir":
-            _w["repetir"].config(image="", text="🔁", width=3, height=28,
-                                 bg=E.color_acento(), fg="white")
-        elif _w.get("img_mezclar") is not None:
+        elif modo == "repetir" or _w.get("img_mezclar") is None:
+            # Mismo OJO que en play: height=1 en modo texto.
+            _w["repetir"].config(image="", text="🔁", width=3, height=1,
+                                 bg=(E.color_acento() if modo == "repetir" else "#242d3d"),
+                                 fg="white")
+        else:
             _w["repetir"].config(image=_w["img_mezclar"], text="",
                                  width=34, height=28, bg="#242d3d")
-        else:
-            _w["repetir"].config(image="", text="🔁", width=3, height=28,
-                                 bg="#242d3d", fg="white")
     except Exception:
         pass
     try:

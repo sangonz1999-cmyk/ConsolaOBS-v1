@@ -404,18 +404,12 @@ def modo():
 
 
 def alternar_modo():
-    """El botón recorre repetir -> mezclar -> apagado -> repetir.
-    Mezclar implica no frenar nunca (siempre hay siguiente)."""
+    """El botón alterna mezclar on/off (repetir queda siempre activo:
+    dos estados, sin tercer estado apagado)."""
     try:
-        actual = modo()
         cfg = _config()
-        if actual == "repetir":
-            cfg["mezclar"] = True
-        elif actual == "mezclar":
-            cfg["mezclar"] = False
-            cfg["repetir"] = False
-        else:
-            cfg["repetir"] = True
+        cfg["mezclar"] = not bool(cfg.get("mezclar", False))
+        cfg["repetir"] = True
         mod_configuracion.guardar_config_musica(cfg)
         return modo()
     except Exception as e:
