@@ -247,7 +247,7 @@ def _refrescar_mini_player():
             text=f"{mod_musica.formatear_ms(cur)} / {mod_musica.formatear_ms(dur)}"
         )
         _dibujar_progreso(cur / dur if dur > 0 else 0.0)
-        _w["repetir"].config(bg=("#3b4a63" if snap.get("repetir") else "#242d3d"))
+        _w["repetir"].config(bg=(E.color_acento() if snap.get("repetir") else "#242d3d"))
     except Exception:
         pass
     try:
@@ -475,6 +475,7 @@ def _pintar_tabs(biblioteca):
         boton.bind("<Double-Button-1>",
                    lambda e, t=nombre: _reproducir_tab_completa(t))
     _marcar_origen()
+    _marcar_origen()
 
 
 def _reproducir_tab_completa(nombre):
@@ -632,13 +633,19 @@ def _refrescar_panel():
     _resaltar_actual()
 
 
-def _asegurar_duraciones():
-    """Encola lo que falta y garantiza un único obrero de fondo. A
-    diferencia de antes, repintar (tab, búsqueda) NO reinicia la cola:
-    lo ya decodificado se guarda y lo pendiente sigue, hasta cubrir
-    todas las canciones."""
+def _asegurar_duraciones(toda=False):
+    """Encola lo que falta y garantiza un único obrero de fondo. Con
+    toda=True encola la biblioteca ENTERA (al abrir), no solo la vista:
+    así se detectan las duraciones de todas las canciones solas."""
     try:
         rels = list(_p.get("rels_biblio", [])) + list(_p.get("rels_playlist", []))
+        if toda:
+            try:
+                biblio = _p.get("biblioteca", {}) or mod_musica.escanear_biblioteca()
+                for temas in biblio.values():
+                    rels.extend(temas)
+            except Exception:
+                pass
     except Exception:
         return
     try:
@@ -727,7 +734,7 @@ def _recargar_panel():
     _pintar_tabs(_p["biblioteca"])
     _pintar_tabla_biblio()
     _pintar_tabla_playlist()
-    _asegurar_duraciones()
+    _asegurar_duraciones(toda=True)
 
 
 def _al_buscar_panel(event=None):
@@ -840,6 +847,19 @@ def _menu_playlist(event):
         menu.grab_release()
 
 
+def _volver_a_playlist():
+    """Sale del modo carpeta-directa y vuelve a sonar la playlist
+    actual desde el inicio."""
+    if not mod_musica.playlist_actual():
+        try:
+            messagebox.showinfo("Playlist vacía",
+                                "La playlist actual está vacía: arrastrá temas desde la biblioteca.")
+        except Exception:
+            pass
+        return
+    _reproducir_indice_playlist(0)
+
+
 def _sacar_indice_playlist(idx):
     try:
         if mod_musica.sacar_de_playlist(int(idx)):
@@ -900,11 +920,18 @@ def _dnd_release(event):
     except Exception:
         return
     if not activo:
-        # Clic simple en la playlist = reproducir ese tema (en
-        # silencio si no hay conexión, para no naggear al seleccionar).
-        if origen == "playlist" and _arbol_bajo_puntero(event.x_root, event.y_root) == "playlist":
-            if E.conectado:
-                _reproducir_indice_playlist(idx_origen)
+        # Clic simple: en playlist reproduce; en biblioteca también
+        # SI ya se viene reproduciendo desde la biblioteca (origen
+        # directo): así se cambia de tema con un clic. En silencio
+        # si no hay conexión, para no naggear al seleccionar.
+        destino = _arbol_bajo_puntero(event.x_root, event.y_root)
+        if not E.conectado:
+            return
+        if origen == "playlist" and destino == "playlist":
+            _reproducir_indice_playlist(idx_origen)
+        elif (origen == "biblio" and destino == "biblio"
+              and _p.get("origen_directo") is not None):
+            _reproducir_vista_biblio(idx_origen)
         return
     destino = _arbol_bajo_puntero(event.x_root, event.y_root)
     if destino is None:
@@ -1039,8 +1066,17 @@ def _construir_panel():
 
     col_izq = tk.Frame(divisor, bg=E.color_barra_titulo())
     divisor.add(col_izq, minsize=200, stretch="always")
-    tk.Label(col_izq, text="▶ Playlist actual", bg=E.color_barra_titulo(),
-             fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(fill="x")
+    cab_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
+    cab_pls.pack(fill="x")
+    tk.Label(cab_pls, text="▶ Playlist actual", bg=E.color_barra_titulo(),
+             fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(
+                 side="left", fill="x", expand=True)
+    tk.Button(
+        cab_pls, text="↩ Playlist", bg="#242d3d", fg="white",
+        activebackground="#2f3a4d", activeforeground="white",
+        relief="flat", bd=0, font=(E.FUENTE_UI, 8, "bold"), cursor="hand2",
+        command=_volver_a_playlist,
+    ).pack(side="right")
     marco_tree_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
     marco_tree_pls.pack(fill="both", expand=True)
     _p["tree_playlist"] = _crear_tabla(marco_tree_pls, compacta=True)

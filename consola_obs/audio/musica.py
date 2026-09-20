@@ -83,10 +83,19 @@ def album_de_rel(rel):
 
 def leer_duracion_local(ruta_abs):
     """Duración en ms decodificando con miniaudio (None si no se
-    puede). Para la columna de la tabla; va en hilo y con caché."""
+    puede). Se lee a bytes con Python y se decodifica en memoria
+    porque miniaudio no abre en Windows rutas con caracteres raros
+    (｜, emojis, etc.): falla aunque el archivo esté perfecto."""
+    try:
+        with open(ruta_abs, "rb") as f:
+            crudo = f.read()
+    except Exception:
+        return None
+    if not crudo:
+        return None
     try:
         import miniaudio
-        decodificado = miniaudio.decode_file(ruta_abs)
+        decodificado = miniaudio.decode(crudo)
         ncan = max(1, decodificado.nchannels or 1)
         rate = max(1, decodificado.sample_rate or 1)
         ms = len(decodificado.samples) / ncan / rate * 1000.0
