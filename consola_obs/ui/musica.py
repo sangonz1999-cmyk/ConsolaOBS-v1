@@ -254,20 +254,20 @@ def _refrescar_mini_player():
         )
         _dibujar_progreso(cur / dur if dur > 0 else 0.0)
         modo = snap.get("modo") or ("repetir" if snap.get("repetir") else "off")
-        if modo == "mezclar" and _w.get("img_mezclar") is not None:
+        # Un solo icono para los 3 estados: apagado oscuro, repetir
+        # gris seleccionado, mezclar con el acento del diseño.
+        if _w.get("img_mezclar") is not None:
             _w["repetir"].config(image=_w["img_mezclar"], text="",
-                                 width=34, height=28, bg=E.color_acento())
+                                 width=34, height=28,
+                                 bg={"mezclar": E.color_acento(),
+                                     "repetir": "#3b4a63"}.get(modo, "#242d3d"))
         elif modo == "mezclar":
             _w["repetir"].config(image="", text="🔀", width=3, height=1,
                                  bg=E.color_acento(), fg="white")
-        elif modo == "repetir" or _w.get("img_mezclar") is None:
-            # Mismo OJO que en play: height=1 en modo texto.
+        else:
             _w["repetir"].config(image="", text="🔁", width=3, height=1,
                                  bg=(E.color_acento() if modo == "repetir" else "#242d3d"),
                                  fg="white")
-        else:
-            _w["repetir"].config(image=_w["img_mezclar"], text="",
-                                 width=34, height=28, bg="#242d3d")
     except Exception:
         pass
     try:
