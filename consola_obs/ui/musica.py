@@ -216,6 +216,8 @@ def _refrescar_mini_player():
             _w["titulo"].config(text="Sin música — 🎵 Elegí un tema…", fg="#828da6")
         if snap["estado"] == "SONANDO" and _w.get("img_pause") is not None:
             _w["play"].config(image=_w["img_pause"], text="", width=34, height=28)
+        elif _w.get("img_play") is not None:
+            _w["play"].config(image=_w["img_play"], text="", width=34, height=28)
         else:
             _w["play"].config(image="", text="▶", width=3, height=28)
         dur = float(snap.get("duracion_ms") or 0.0)
@@ -258,10 +260,10 @@ def construir_mini_player():
     fila = tk.Frame(marco, bg=E.color_barra_titulo())
     fila.pack(side="top", fill="x", padx=8, pady=(6, 2))
 
-    # Play/pausa: icono de pausa SVG sonando (no hay triángulo de
-    # play en el set, así que en pausa se usa el ▶ de texto).
+    # Play/pausa con iconos SVG: pausa sonando, triángulo en pausa.
     _w["play"] = _boton_transporte(fila, "▶", _alternar_playpausa)
     _w["img_pause"] = _icono_barra("menu_barra_pause.svg")
+    _w["img_play"] = _icono_barra("menu_barra_play.svg")
     _boton_icono(fila, "menu_barra_stop.svg", "⏹", _detener)
     _boton_icono(fila, "menu_barra_reiniciar.svg", "↻", _reiniciar)
     _boton_icono(fila, "menu_barra_anterior.svg", "⏮", _anterior)
