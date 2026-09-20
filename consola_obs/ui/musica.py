@@ -1201,10 +1201,6 @@ def _construir_panel():
     _p["tree_biblio"].pack(side="left", fill="both", expand=True)
     for _col in ("n", "titulo", "album", "fecha"):
         _p["tree_biblio"].heading(_col, command=lambda c=_col: _ordenar_biblio(c))
-    # Sin scrollbar vertical: ocupa todo y con la ruedita alcanza.
-    _barra_bib_x = ttk.Scrollbar(marco_tree_bib, orient="horizontal",
-                                 command=_p["tree_biblio"].xview,
-                                 style="Discreta.Horizontal.TScrollbar")
-    _barra_bib_x.pack(side="bottom", fill="x")
-    _p["tree_biblio"].configure(xscrollcommand=_barra_bib_x.set)
+    # Sin scrollbar horizontal: la columna Título estira y con
+    # Shift+rueda igual se puede mover de costado si hace falta.
     _atajos_arbol(_p["tree_biblio"], "biblio")
