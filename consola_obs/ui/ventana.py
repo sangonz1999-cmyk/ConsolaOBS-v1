@@ -1024,6 +1024,13 @@ def al_cerrar():
     except Exception:
         pass
     try:
+        # Ídem música de fondo (Fase 5): no puede quedar sonando ni
+        # cargada sin UI que la controle.
+        from consola_obs.audio import musica as mod_audio_musica
+        mod_audio_musica.detener_y_vaciar_musica()
+    except Exception:
+        pass
+    try:
         mod_obs_cliente.desconectar_obs()
     except Exception:
         pass

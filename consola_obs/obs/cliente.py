@@ -223,6 +223,15 @@ def conectar_obs():
 
 def desconectar_obs():
 
+    try:
+        # La música no puede seguir sonando sin UI que la controle
+        # (a diferencia de los efectos, que se dejan como están al
+        # desconectar): STOP + vaciado antes de soltar el socket.
+        from consola_obs.audio import musica as mod_audio_musica
+        mod_audio_musica.detener_y_vaciar_musica()
+    except Exception:
+        pass
+
     E.conectado = False
     E.host_conectado = None
 

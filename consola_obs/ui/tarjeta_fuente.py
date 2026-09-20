@@ -1390,6 +1390,12 @@ def _iniciar_renombrar_fuente(nombre):
             "Esta es la fuente interna del soundboard y el programa depende de que se llame así. No se puede renombrar."
         )
         return
+    if nombre == C.NOMBRE_FUENTE_MUSICA:
+        messagebox.showinfo(
+            "No se puede renombrar",
+            "Esta es la fuente interna de la música y el programa depende de que se llame así. No se puede renombrar."
+        )
+        return
 
     nuevo_nombre = simpledialog.askstring(
         "Renombrar fuente",
@@ -1436,6 +1442,13 @@ def _eliminar_fuente(nombre):
         messagebox.showinfo(
             "No se puede eliminar",
             "Esta es la fuente interna del soundboard y el programa depende de que exista. "
+            "No se puede eliminar."
+        )
+        return
+    if nombre == C.NOMBRE_FUENTE_MUSICA:
+        messagebox.showinfo(
+            "No se puede eliminar",
+            "Esta es la fuente interna de la música y el programa depende de que exista. "
             "No se puede eliminar."
         )
         return
@@ -1502,6 +1515,13 @@ def _quitar_fuente_de_escenas(nombre):
         messagebox.showinfo(
             "No se puede quitar",
             "Esta es la fuente interna del soundboard y el programa depende de que esté en escena. "
+            "No se puede quitar."
+        )
+        return
+    if nombre == C.NOMBRE_FUENTE_MUSICA:
+        messagebox.showinfo(
+            "No se puede quitar",
+            "Esta es la fuente interna de la música y el programa depende de que esté en escena. "
             "No se puede quitar."
         )
         return
@@ -1707,9 +1727,12 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
                     nombre, datos["vol_db"], datos["muted"], datos["tipo_monitor"]
                 )
             else:
-                nombre_visible = (
-                    C.ETIQUETA_FUENTE_EFECTOS if nombre == C.NOMBRE_FUENTE_EFECTOS else nombre
-                )
+                if nombre == C.NOMBRE_FUENTE_EFECTOS:
+                    nombre_visible = C.ETIQUETA_FUENTE_EFECTOS
+                elif nombre == C.NOMBRE_FUENTE_MUSICA:
+                    nombre_visible = C.ETIQUETA_FUENTE_MUSICA
+                else:
+                    nombre_visible = nombre
                 crear_fader_fuente(
                     nombre, datos["vol_db"], datos["muted"], datos["tipo_monitor"],
                     nombre_visible=nombre_visible

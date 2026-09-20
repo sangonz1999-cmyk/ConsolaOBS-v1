@@ -18,13 +18,14 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Barra de progreso en pads**: mientras suena, una barra semitransparente del color de la etiqueta barre la cara al ritmo real del audio.
 - **Iconos SVG originales de OBS** (vía pymupdf): parlante/mute/auriculares y tipos de fuente; tipografía Open Sans ("Tipografia de obs").
 - **Alto de tarjeta regulable** (Compacto/Normal/Alto/Muy alto) que se combina con el tamaño de íconos.
+- **Música en el stream**: mini player al pie de fuentes (play/pausa/stop/reinicio/anterior/siguiente/repetir, progreso clickeable con seek exacto) + panel biblioteca expandible estilo Spotify (playlist actual a la izquierda, carpetas/tabs + buscador a la derecha, drag & drop y clic derecho para armar la playlist, duraciones y resaltado del tema sonando). La música sale solo al stream, nunca por parlantes. Archivos en `assets/Musica/<carpeta>/`.
 
 ## Descarga (sin programar nada)
 
 En [Releases](https://github.com/sangonz1999-cmyk/ConsolaOBS-v1/releases) hay dos `.zip`. Hacen falta **los dos**, uno por PC:
 
 - **PC del sonidista (consola/laptop) → `ConsolaOBS-Consola.zip`**: el programa (`ConsolaOBS.exe`) + sonidos, imágenes, iconos y fuentes. Se descomprime y se abre el `.exe` con doble clic.
-- **PC principal (la del OBS) → `ConsolaOBS-OBS.zip`**: solo los sonidos (`.mp3`). Acá no se instala nada: solo OBS + esta carpeta.
+- **PC principal (la del OBS) → `ConsolaOBS-OBS.zip`**: solo los sonidos (`.mp3` de efectos y de música). Acá no se instala nada: solo OBS + esta carpeta.
 
 **Por qué los dos (regla de oro)**: cuando disparás un efecto, la consola le dice al OBS "reproducí `C:\...\X.mp3`" y el OBS lo busca **en su propio disco**. Si el archivo no está ahí, el stream queda en silencio (vos igual lo escuchás por los parlantes de la consola, pero eso es audio local y no va al stream). Por eso los sonidos tienen que quedar en la **misma ruta** en ambas PCs (ej: las dos en `C:\ConsolaOBS`).
 
