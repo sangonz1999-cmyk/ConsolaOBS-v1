@@ -470,9 +470,18 @@ def _en_hilo(funcion, *args):
     threading.Thread(target=funcion, args=args, daemon=True).start()
 
 
+def _largar_lista(lista, indice):
+    """Pone la cola en memoria y larga el tema (sin guardar nada)."""
+    _cola[:] = list(lista)
+    _sesion["indice_cola"] = indice
+    _sesion["token"] += 1
+    _en_hilo(_hacer_reproducir, list(lista)[indice], _sesion["token"])
+
+
 def reproducir_lista(lista, indice=0):
-    """Pone la cola (y la guarda como playlist actual) y larga el tema
-    indicado (versión pública, en hilo)."""
+    """Pone la cola, la guarda como playlist actual y larga el tema
+    indicado (versión pública, en hilo). Para sonar SIN tocar la
+    playlist (carpeta directa) usar reproducir_sesion."""
     if not lista:
         return
     try:
@@ -480,9 +489,23 @@ def reproducir_lista(lista, indice=0):
     except Exception:
         indice = 0
     definir_playlist(lista)
-    _sesion["indice_cola"] = indice
-    _sesion["token"] += 1
-    _en_hilo(_hacer_reproducir, list(lista)[indice], _sesion["token"])
+    _largar_lista(list(lista), indice)
+
+
+def reproducir_sesion(lista, indice=0):
+    """Larga una lista SIN guardarla como playlist (carpeta directa):
+    la playlist actual queda intacta."""
+    try:
+        lista = list(lista)
+    except Exception:
+        return
+    if not lista:
+        return
+    try:
+        indice = max(0, min(int(indice), len(lista) - 1))
+    except Exception:
+        indice = 0
+    _largar_lista(lista, indice)
 
 
 def reproducir_rel(rel):

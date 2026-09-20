@@ -103,7 +103,10 @@ def _alternar_playpausa():
     elif snap["estado"] == "PAUSADA" or snap.get("rel"):
         mod_musica.reanudar()
     elif mod_musica.playlist_actual():
+        _guardar_pos_carpeta()
         mod_musica.reproducir_playlist(0)
+        _p["fuente"] = "playlist"
+        _marcar_fuente()
     else:
         _necesita_tema(snap)
 
@@ -355,9 +358,13 @@ from collections import deque as _deque
 _p = {"marco": None, "visible": False, "tab": "Recientes", "tabs": [],
       "rels_biblio": [], "rels_playlist": [],
       "tree_biblio": None, "tree_playlist": None, "busqueda": "",
-      # Carpeta que se está reproduciendo directo (doble clic en tab o
-      # en tema de biblioteca). None = suena la playlist del panel.
-      "origen_directo": None}
+      # Fuente en reproducción: "carpeta" (directo desde biblioteca,
+      # SIN tocar la playlist) o "playlist" (panel). El contexto de
+      # carpeta guarda tab + lista + posición para retomar; el de
+      # playlist, solo la posición (la lista persiste en config).
+      "fuente": None, "fuente_tab": None,
+      "ctx_biblio": {"tab": None, "rels": [], "idx": 0},
+      "ctx_playlist_idx": 0}
 _cola_dur = _deque()
 _en_cola_dur = set()
 _fallos_dur = set()
@@ -474,12 +481,12 @@ def _pintar_tabs(biblioteca):
         # inicio, sin mover nada a la playlist actual.
         boton.bind("<Double-Button-1>",
                    lambda e, t=nombre: _reproducir_tab_completa(t))
-    _marcar_origen()
-    _marcar_origen()
+    _marcar_fuente()
 
 
 def _reproducir_tab_completa(nombre):
-    """Doble clic en pestaña: suena toda esa carpeta desde el inicio."""
+    """Doble clic en pestaña: suena toda esa carpeta desde el inicio,
+    SIN tocar la playlist actual."""
     if not _necesita_conexion():
         return
     try:
@@ -488,19 +495,40 @@ def _reproducir_tab_completa(nombre):
         temas = []
     if not temas:
         return
-    _p["origen_directo"] = nombre
-    mod_musica.reproducir_lista(list(temas), 0)
-    _marcar_origen()
+    _guardar_pos_playlist()
+    _p["fuente"] = "carpeta"
+    _p["fuente_tab"] = nombre
+    _p["ctx_biblio"] = {"tab": nombre, "rels": list(temas), "idx": 0}
+    mod_musica.reproducir_sesion(list(temas), 0)
+    _marcar_fuente()
+
+
+def _guardar_pos_playlist():
+    """Recuerda dónde iba la playlist (para retomar al volver)."""
+    try:
+        snap = mod_musica.estado_actual()
+        pls = mod_musica.playlist_actual()
+        if snap.get("rel") in pls:
+            _p["ctx_playlist_idx"] = pls.index(snap["rel"])
+    except Exception:
+        pass
+
+
+def _guardar_pos_carpeta():
+    """Recuerda dónde iba la carpeta (para retomar al volver)."""
+    try:
+        snap = mod_musica.estado_actual()
+        ctx = _p.get("ctx_biblio") or {}
+        rels = ctx.get("rels") or []
+        if snap.get("rel") in rels:
+            ctx["idx"] = rels.index(snap["rel"])
+    except Exception:
+        pass
 
 
 def _elegir_tab(nombre):
     _p["tab"] = nombre
-    try:
-        for w in _p["marco_tabs"].winfo_children():
-            txt = w.cget("text").rsplit(" (", 1)[0]
-            w.config(bg=("#3b4a63" if txt == nombre else "#242d3d"))
-    except Exception:
-        pass
+    _marcar_fuente()
     _pintar_tabla_biblio()
 
 
@@ -578,23 +606,37 @@ def _pintar_tabla_playlist():
     _resaltar_actual()
 
 
-def _marcar_origen():
-    """Borde de color en la pestaña que se está reproduciendo directo
-    (None = suena la playlist del panel, sin marca)."""
+def _marcar_fuente():
+    """Pinta qué fuente suena: la pestaña de la carpeta con fondo de
+    acento (verde/azul según diseño), o la cabecera de la playlist.
+    La pestaña seleccionada (navegación) lleva #3b4a63."""
     try:
+        fuente = _p.get("fuente")
+        fuente_tab = _p.get("fuente_tab")
         marco = _p.get("marco_tabs")
-        if marco is None:
-            return
-        for w in marco.winfo_children():
-            try:
-                base = w.cget("text").rsplit(" (", 1)[0]
-            except Exception:
-                continue
-            if base and base == _p.get("origen_directo"):
-                w.config(highlightbackground=E.color_acento(),
-                         highlightthickness=2)
+        if marco is not None:
+            for w in marco.winfo_children():
+                try:
+                    base = w.cget("text").rsplit(" (", 1)[0]
+                except Exception:
+                    continue
+                if not base:
+                    continue
+                if fuente == "carpeta" and base == fuente_tab:
+                    w.config(bg=E.color_acento(), fg="#0c111b")
+                elif base == _p.get("tab"):
+                    w.config(bg="#3b4a63", fg="white")
+                else:
+                    w.config(bg="#242d3d", fg="white")
+    except Exception:
+        pass
+    try:
+        titulo = _p.get("titulo_playlist")
+        if titulo is not None:
+            if _p.get("fuente") == "playlist":
+                titulo.config(bg=E.color_acento(), fg="#0c111b")
             else:
-                w.config(highlightthickness=0)
+                titulo.config(bg=E.color_barra_titulo(), fg="white")
     except Exception:
         pass
 
@@ -757,18 +799,23 @@ def _reproducir_vista_biblio(indice):
     except Exception:
         return
     if 0 <= indice < len(vista):
-        _p["origen_directo"] = _p.get("tab")
-        mod_musica.reproducir_lista(vista, indice)
-        _marcar_origen()
+        _guardar_pos_playlist()
+        _p["fuente"] = "carpeta"
+        _p["fuente_tab"] = _p.get("tab")
+        _p["ctx_biblio"] = {"tab": _p.get("tab"), "rels": list(vista),
+                            "idx": indice}
+        mod_musica.reproducir_sesion(vista, indice)
+        _marcar_fuente()
 
 
 def _reproducir_indice_playlist(indice):
     if not _necesita_conexion():
         return
     try:
-        _p["origen_directo"] = None
+        _guardar_pos_carpeta()
+        _p["fuente"] = "playlist"
         mod_musica.reproducir_playlist(int(indice))
-        _marcar_origen()
+        _marcar_fuente()
     except Exception:
         pass
 
@@ -847,17 +894,53 @@ def _menu_playlist(event):
         menu.grab_release()
 
 
-def _volver_a_playlist():
-    """Sale del modo carpeta-directa y vuelve a sonar la playlist
-    actual desde el inicio."""
-    if not mod_musica.playlist_actual():
-        try:
-            messagebox.showinfo("Playlist vacía",
-                                "La playlist actual está vacía: arrastrá temas desde la biblioteca.")
-        except Exception:
-            pass
+def _alternar_fuente():
+    """Botón ⇄: intercambia qué suena (playlist actual <-> carpeta),
+    retomando cada lado donde iba."""
+    if not _necesita_conexion():
         return
-    _reproducir_indice_playlist(0)
+    try:
+        if _p.get("fuente") == "carpeta":
+            _guardar_pos_carpeta()
+            pls = mod_musica.playlist_actual()
+            if not pls:
+                try:
+                    messagebox.showinfo("Playlist vacía",
+                                        "La playlist actual está vacía: arrastrá temas desde la biblioteca.")
+                except Exception:
+                    pass
+                return
+            try:
+                idx = max(0, min(int(_p.get("ctx_playlist_idx", 0)), len(pls) - 1))
+            except Exception:
+                idx = 0
+            _p["fuente"] = "playlist"
+            mod_musica.reproducir_playlist(idx)
+        else:
+            ctx = _p.get("ctx_biblio") or {}
+            try:
+                rels = [r for r in (ctx.get("rels") or [])
+                        if os.path.isfile(mod_musica.ruta_absoluta(r))]
+            except Exception:
+                rels = []
+            if not rels:
+                try:
+                    messagebox.showinfo("Sin carpeta",
+                                        "Primero reproducí una carpeta (doble clic en una pestaña o un tema).")
+                except Exception:
+                    pass
+                return
+            _guardar_pos_playlist()
+            try:
+                idx = max(0, min(int(ctx.get("idx", 0)), len(rels) - 1))
+            except Exception:
+                idx = 0
+            _p["fuente"] = "carpeta"
+            _p["fuente_tab"] = ctx.get("tab")
+            mod_musica.reproducir_sesion(rels, idx)
+        _marcar_fuente()
+    except Exception:
+        pass
 
 
 def _sacar_indice_playlist(idx):
@@ -921,16 +1004,16 @@ def _dnd_release(event):
         return
     if not activo:
         # Clic simple: en playlist reproduce; en biblioteca también
-        # SI ya se viene reproduciendo desde la biblioteca (origen
-        # directo): así se cambia de tema con un clic. En silencio
-        # si no hay conexión, para no naggear al seleccionar.
+        # SI ya se viene reproduciendo desde una carpeta: así se
+        # cambia de tema con un clic. En silencio si no hay conexión,
+        # para no naggear al seleccionar.
         destino = _arbol_bajo_puntero(event.x_root, event.y_root)
         if not E.conectado:
             return
         if origen == "playlist" and destino == "playlist":
             _reproducir_indice_playlist(idx_origen)
         elif (origen == "biblio" and destino == "biblio"
-              and _p.get("origen_directo") is not None):
+              and _p.get("fuente") == "carpeta"):
             _reproducir_vista_biblio(idx_origen)
         return
     destino = _arbol_bajo_puntero(event.x_root, event.y_root)
@@ -1068,14 +1151,15 @@ def _construir_panel():
     divisor.add(col_izq, minsize=200, stretch="always")
     cab_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
     cab_pls.pack(fill="x")
-    tk.Label(cab_pls, text="▶ Playlist actual", bg=E.color_barra_titulo(),
-             fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(
-                 side="left", fill="x", expand=True)
+    _p["titulo_playlist"] = tk.Label(cab_pls, text="▶ Playlist actual",
+                                     bg=E.color_barra_titulo(),
+                                     fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w")
+    _p["titulo_playlist"].pack(side="left", fill="x", expand=True)
     tk.Button(
-        cab_pls, text="↩ Playlist", bg="#242d3d", fg="white",
+        cab_pls, text="⇄ Fuente", bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 8, "bold"), cursor="hand2",
-        command=_volver_a_playlist,
+        command=_alternar_fuente,
     ).pack(side="right")
     marco_tree_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
     marco_tree_pls.pack(fill="both", expand=True)

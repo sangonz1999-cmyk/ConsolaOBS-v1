@@ -76,14 +76,23 @@ def cargar_config_musica():
     """Biblioteca de música: recientes + repetir + playlist actual +
     caché de duraciones. Si no existe o está rota, valores de fábrica."""
     fabrica = {"recientes": [], "repetir": True, "playlist": [], "duraciones": {}}
-    if os.path.exists(R.ARCHIVO_MUSICA):
-        try:
-            with open(R.ARCHIVO_MUSICA, "r", encoding="utf-8") as f:
-                datos = json.load(f)
-            if isinstance(datos, dict):
-                fabrica.update(datos)
-        except Exception as e:
-            print(f"No se pudo leer la configuración de música: {e}")
+    # Reintentos de lectura: un guardado concurrente (o el antivirus)
+    # puede negar el acceso un instante en Windows (Errno 13).
+    datos = None
+    for intento in range(4):
+        if os.path.exists(R.ARCHIVO_MUSICA):
+            try:
+                with open(R.ARCHIVO_MUSICA, "r", encoding="utf-8") as f:
+                    datos = json.load(f)
+                break
+            except Exception as e:
+                if intento >= 3:
+                    print(f"No se pudo leer la configuración de música: {e}")
+                else:
+                    import time as _t
+                    _t.sleep(0.05 * (2 ** intento))
+    if isinstance(datos, dict):
+        fabrica.update(datos)
     if not isinstance(fabrica.get("recientes"), list):
         fabrica["recientes"] = []
     if not isinstance(fabrica.get("repetir"), bool):
