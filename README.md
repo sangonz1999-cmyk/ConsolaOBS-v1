@@ -47,6 +47,16 @@ python main.py
 
 Con doble clic en `compilar.bat` se genera `ConsolaOBS.exe` en la misma carpeta (con el icono de `assets/iconos/`).
 
+## Música en el stream
+
+Música de fondo para el directo, controlada toda desde el programa (OBS solo ejecuta con la fuente `Música`).
+
+- Poné `.mp3` (o wav/ogg/flac/m4a) en `assets\Musica\<categoría>\`: cada subcarpeta es una pestaña. Las duraciones se detectan solas en segundo plano.
+- Mini player al pie de fuentes: play/pausa, stop, reiniciar, anterior (con más de 3 s reinicia el tema), siguiente, modo (repetir/aleatorio/apagado), título, tiempos y barra clickeable (salta al momento exacto).
+- Botón Biblioteca (▲/▼): panel con la playlist actual a la izquierda y la biblioteca a la derecha (pestañas, buscador en toda la biblioteca, ordenar por columnas). Drag & drop o clic derecho para armarla; clic en un tema lo reproduce; doble clic en una pestaña suena la carpeta sin tocar la playlist; botón ⇄ intercambia entre playlist y carpeta retomando cada una donde iba.
+- El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
+- Si el OBS está en otra PC: copiá los mp3 también allá (zip de OBS) y completá UNA vez Ajustes → Conexión → "Carpeta OBS" con la ruta de `assets\` del otro lado.
+
 ## Instalar Git y clonar el repo (Windows)
 
 1. Descargá Git de https://git-scm.com/download/win e instalalo con las opciones por defecto.
