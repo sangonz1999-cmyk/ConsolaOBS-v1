@@ -150,6 +150,21 @@ def _alternar_repetir():
     _refrescar_mini_player()
 
 
+def _actualizar_flecha_biblio():
+    """▲ colapsada (se abre) / ▼ expandida (se oculta)."""
+    try:
+        boton = _w.get("boton_biblio")
+        if boton is None:
+            return
+        flecha = " ▼" if _p.get("visible") else " ▲"
+        if _w.get("biblio_con_icono"):
+            boton.config(text="Biblioteca" + flecha)
+        else:
+            boton.config(text="🎵 Biblioteca" + flecha)
+    except Exception:
+        pass
+
+
 def _alternar_panel_biblioteca():
     """El botón Biblioteca expande/colapsa el panel sobre la barra."""
     if not _panel_vivo():
@@ -171,6 +186,7 @@ def _alternar_panel_biblioteca():
             return
         _p["visible"] = True
         _recargar_panel()
+    _actualizar_flecha_biblio()
 
 
 def _clic_progreso(event):
@@ -295,16 +311,19 @@ def construir_mini_player():
 
     _foto_nota = _icono_barra("menu_barra_nota.svg")
     if _foto_nota is None:
-        texto_biblio, img_biblio = "🎵 Biblioteca", ""
+        texto_biblio, img_biblio = "🎵 Biblioteca ▲", ""
+        _w["biblio_con_icono"] = False
     else:
-        texto_biblio, img_biblio = "Biblioteca", _foto_nota
-    tk.Button(
+        texto_biblio, img_biblio = "Biblioteca ▲", _foto_nota
+        _w["biblio_con_icono"] = True
+    _w["boton_biblio"] = tk.Button(
         fila, text=texto_biblio, image=img_biblio, compound="left",
         bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=_alternar_panel_biblioteca,
-    ).pack(side="left")
+    )
+    _w["boton_biblio"].pack(side="left")
 
     _w["progreso"] = tk.Canvas(
         marco, height=12, bg=COLOR_PISTA, highlightthickness=0, cursor="hand2"
@@ -329,16 +348,25 @@ def construir_mini_player():
 # biblioteca (pestañas + buscador) a la derecha. Drag & drop entre
 # lados para agregar/sacar/reordenar, o clic derecho. Tablas estilo
 # Spotify: # | Título | Álbum (= carpeta) | Agregado | duración.
+# Las duraciones las rellena un único obrero de fondo con cola
+# persistente (ver _asegurar_duraciones): repintar no lo reinicia.
+from collections import deque as _deque
+
 _p = {"marco": None, "visible": False, "tab": "Recientes", "tabs": [],
-      "rels_biblio": [], "rels_playlist": [], "gen": 0,
+      "rels_biblio": [], "rels_playlist": [],
       "tree_biblio": None, "tree_playlist": None, "busqueda": ""}
+_cola_dur = _deque()
+_en_cola_dur = set()
+_fallos_dur = set()
+_lock_dur = threading.Lock()
+_estado_dur = {"activo": False}
 _dnd = {"origen": None, "iid": None, "x0": 0, "y0": 0, "activo": False}
 
 COLUMNAS_TABLA = ("n", "titulo", "album", "fecha", "dur")
 COLUMNAS_PLAYLIST = ("n", "titulo", "album")
 TITULOS_TABLA = {"n": "#", "titulo": "Título", "album": "Álbum",
                  "fecha": "Agregado", "dur": "🕒"}
-ANCHOS_TABLA = {"n": 36, "titulo": 260, "album": 120, "fecha": 92, "dur": 56}
+ANCHOS_TABLA = {"n": 28, "titulo": 260, "album": 90, "fecha": 92, "dur": 56}
 
 
 def _panel_vivo():
@@ -431,13 +459,31 @@ def _pintar_tabs(biblioteca):
     for nombre in tabs:
         n = (len(_temas_recientes_existentes()) if nombre == "Recientes"
              else len(biblioteca.get(nombre, [])))
-        tk.Button(
+        boton = tk.Button(
             _p["marco_tabs"], text=f"{nombre} ({n})",
             bg=("#3b4a63" if nombre == _p["tab"] else "#242d3d"), fg="white",
             activebackground="#2f3a4d", activeforeground="white",
             relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
             command=lambda t=nombre: _elegir_tab(t),
-        ).pack(side="left", padx=2)
+        )
+        boton.pack(side="left", padx=2)
+        # Doble clic en la pestaña = suena toda la carpeta desde el
+        # inicio, sin mover nada a la playlist actual.
+        boton.bind("<Double-Button-1>",
+                   lambda e, t=nombre: _reproducir_tab_completa(t))
+
+
+def _reproducir_tab_completa(nombre):
+    """Doble clic en pestaña: suena toda esa carpeta desde el inicio."""
+    if not _necesita_conexion():
+        return
+    try:
+        temas = _temas_de_tab(_p.get("biblioteca", {}), nombre)
+    except Exception:
+        temas = []
+    if not temas:
+        return
+    mod_musica.reproducir_lista(list(temas), 0)
 
 
 def _elegir_tab(nombre):
@@ -552,43 +598,67 @@ def _refrescar_panel():
 
 
 def _asegurar_duraciones():
-    """Hilo de relleno: decodifica las duraciones que faltan (de a una)
-    y actualiza solo las filas que sigan vigentes (generación)."""
+    """Encola lo que falta y garantiza un único obrero de fondo. A
+    diferencia de antes, repintar (tab, búsqueda) NO reinicia la cola:
+    lo ya decodificado se guarda y lo pendiente sigue, hasta cubrir
+    todas las canciones."""
     try:
         rels = list(_p.get("rels_biblio", [])) + list(_p.get("rels_playlist", []))
     except Exception:
         return
-    faltan, vistos = [], set()
-    for rel in rels:
-        if rel not in vistos:
-            vistos.add(rel)
-            try:
-                if mod_musica.duracion_cacheada(rel) is None:
-                    faltan.append(rel)
-            except Exception:
-                pass
-    if not faltan:
+    try:
+        with _lock_dur:
+            for rel in rels:
+                if (rel not in _en_cola_dur and rel not in _fallos_dur
+                        and mod_musica.duracion_cacheada(rel) is None):
+                    _en_cola_dur.add(rel)
+                    _cola_dur.append(rel)
+            if not _cola_dur or _estado_dur.get("activo"):
+                return
+            _estado_dur["activo"] = True
+    except Exception:
         return
-    _p["gen"] = _p.get("gen", 0) + 1
-    gen = _p["gen"]
+    threading.Thread(target=_obrero_duraciones, daemon=True).start()
 
-    def _trabajo():
-        for rel in faltan:
+
+def _obrero_duraciones():
+    try:
+        while True:
+            try:
+                with _lock_dur:
+                    if not _cola_dur:
+                        return
+                    rel = _cola_dur.popleft()
+            except Exception:
+                return
             try:
                 ms = mod_musica.duracion_de(rel)
             except Exception:
                 ms = None
+            with _lock_dur:
+                _en_cola_dur.discard(rel)
+                if not ms:
+                    _fallos_dur.add(rel)
             if ms:
                 try:
-                    E.ventana.after(0, _actualizar_duracion_fila, gen, rel, ms)
+                    E.ventana.after(0, _actualizar_duracion_fila, rel, ms)
                 except Exception:
                     return
+    finally:
+        try:
+            with _lock_dur:
+                _estado_dur["activo"] = False
+        except Exception:
+            pass
+        # Por si entró trabajo nuevo al final: reasegura un obrero.
+        try:
+            _asegurar_duraciones()
+        except Exception:
+            pass
 
-    threading.Thread(target=_trabajo, daemon=True).start()
 
-
-def _actualizar_duracion_fila(gen, rel, ms):
-    if gen != _p.get("gen") or not _panel_vivo():
+def _actualizar_duracion_fila(rel, ms):
+    if not _panel_vivo():
         return
     texto = mod_musica.formatear_ms(ms)
     for clave, arbol in (("rels_biblio", _p.get("tree_biblio")),
@@ -886,7 +956,7 @@ def _construir_panel():
         pass
     _p.update({"marco": None, "visible": False, "tab": "Recientes",
                "tabs": [], "rels_biblio": [], "rels_playlist": [],
-               "gen": 0, "tree_biblio": None, "tree_playlist": None,
+               "tree_biblio": None, "tree_playlist": None,
                "busqueda": "", "orden_biblio": {"col": None, "desc": False}})
     _estilo_tablas()
 
@@ -949,11 +1019,7 @@ def _construir_panel():
     _p["tree_biblio"].pack(side="left", fill="both", expand=True)
     for _col in ("n", "titulo", "album", "fecha"):
         _p["tree_biblio"].heading(_col, command=lambda c=_col: _ordenar_biblio(c))
-    _barra_bib = ttk.Scrollbar(marco_tree_bib, orient="vertical",
-                               command=_p["tree_biblio"].yview,
-                               style="Discreta.Vertical.TScrollbar")
-    _barra_bib.pack(side="left", fill="y")
-    _p["tree_biblio"].configure(yscrollcommand=_barra_bib.set)
+    # Sin scrollbar vertical: ocupa todo y con la ruedita alcanza.
     _barra_bib_x = ttk.Scrollbar(marco_tree_bib, orient="horizontal",
                                  command=_p["tree_biblio"].xview,
                                  style="Discreta.Horizontal.TScrollbar")
