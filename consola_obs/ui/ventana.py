@@ -11,6 +11,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
+from consola_obs.ui import musica as mod_ui_musica
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import cabecera as mod_ui_cabecera
 
@@ -636,6 +637,13 @@ def construir_cuerpo():
     # Si alguna vez queda tapado sin sesión (release perdido), un clic
     # sobre la tapa lo destapa y acomoda (asentar es idempotente).
     E.tapa_pads.bind("<ButtonPress-1>", lambda e: _asentar_grillas())
+
+    # Mini player de música al pie del panel de fuentes (se reconstruye
+    # acá para sobrevivir a cambios de tema/diseño como el resto).
+    try:
+        mod_ui_musica.construir_mini_player()
+    except Exception as e:
+        print(f"No se pudo construir el mini player de música: {e}")
 
 
 def actualizar_scroll(event=None):

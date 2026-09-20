@@ -140,13 +140,19 @@ def estado_actual():
 
 def _hacer_reproducir(rel, token):
     """Carga el tema en OBS y lo larga (sincrónico, para tests y para
-    el hilo de las versiones públicas)."""
+    el hilo de las versiones públicas). Acepta rel a Musica o ruta
+    absoluta (esta última es el selector provisorio de Fase 3 y no
+    entra en recientes)."""
     if token is not None and token != _sesion["token"]:
         return False
     if not E.conectado:
         print("Sin conexión: conectate a OBS para la música.")
         return False
-    ruta_abs = _absoluta(rel)
+    try:
+        es_absoluta = os.path.isabs(rel)
+    except Exception:
+        es_absoluta = False
+    ruta_abs = rel if es_absoluta else _absoluta(rel)
     try:
         E.cliente_obs.set_input_settings(
             C.NOMBRE_FUENTE_MUSICA,
@@ -170,7 +176,8 @@ def _hacer_reproducir(rel, token):
     _sesion["estado"] = "SONANDO"
     _sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
     _sesion["cursor_ms"] = 0.0
-    _tocar_reciente(rel)
+    if not es_absoluta:
+        _tocar_reciente(rel)
     asegurar_sondeo()
     return True
 
@@ -205,6 +212,15 @@ def reproducir_lista(lista, indice=0):
 def reproducir_rel(rel):
     """Atajo: cola de un solo tema (versión pública, en hilo)."""
     reproducir_lista([rel], 0)
+
+
+def reproducir_archivo(ruta_abs):
+    """Reproduce un archivo suelto por ruta absoluta (selector
+    provisorio del mini player en Fase 3; en Fase 4 la biblioteca
+    reemplaza este camino y todo pasa por rels)."""
+    if not ruta_abs or not os.path.isabs(ruta_abs):
+        return
+    reproducir_lista([os.path.normpath(ruta_abs)], 0)
 
 
 def _avanzar(auto):
