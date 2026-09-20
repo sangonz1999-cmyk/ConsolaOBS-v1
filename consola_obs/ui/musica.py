@@ -1,14 +1,16 @@
-"""Mini player de música (Fase 3) + ventana biblioteca (Fase 4).
+"""Mini player de música + panel biblioteca/playlist expandible.
 
 La barra vive al pie del panel de fuentes (transporte, título y
 progreso clickeable con seek exacto) y se reconstruye con
-construir_cuerpo. El botón abre la biblioteca estilo Spotify:
-carpetas a la izquierda, temas a la derecha, Recientes arriba,
-doble clic reproduce y el tema sonando queda resaltado.
+construir_cuerpo. El botón Biblioteca expande un panel sobre la
+barra (nada de popup): a la izquierda la playlist actual, a la
+derecha la biblioteca (carpetas en pestañas + buscador), con drag &
+drop entre lados y menú de clic derecho.
 """
 import os
+import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 from consola_obs import estado as E
 from consola_obs import constantes as C
@@ -16,9 +18,12 @@ from consola_obs.audio import musica as mod_musica
 from consola_obs.ui import dibujo as mod_ui_dibujo
 
 ALTURA_MINI = 82
+ALTURA_PANEL = 300
 INTERVALO_REFRESCO_MS = 250
 COLOR_PISTA = "#242d3d"
 COLOR_TIEMPO = "#8fa0bd"
+COLOR_FILA_SONANDO = "#31435c"
+COLOR_FONDO_TABLA = "#151a24"
 
 _w = {}
 _loop = {"en_marcha": False}
@@ -45,7 +50,7 @@ def _necesita_tema(snap):
     if snap.get("rel"):
         return True
     try:
-            messagebox.showinfo("Sin música", "Elegí un tema en la\n🎵 Biblioteca")
+        messagebox.showinfo("Sin música", "Elegí un tema en la\n🎵 Biblioteca")
     except Exception:
         pass
     return False
@@ -97,6 +102,8 @@ def _alternar_playpausa():
         mod_musica.pausar()
     elif snap["estado"] == "PAUSADA" or snap.get("rel"):
         mod_musica.reanudar()
+    elif mod_musica.playlist_actual():
+        mod_musica.reproducir_playlist(0)
     else:
         _necesita_tema(snap)
 
@@ -143,9 +150,23 @@ def _alternar_repetir():
     _refrescar_mini_player()
 
 
-def _elegir_tema_provisorio():
-    """El botón de la barra abre la biblioteca (Fase 4)."""
-    abrir_biblioteca()
+def _alternar_panel_biblioteca():
+    """El botón Biblioteca expande/colapsa el panel sobre la barra."""
+    if not _panel_vivo():
+        return
+    if _p.get("visible"):
+        try:
+            _p["marco"].pack_forget()
+        except Exception:
+            pass
+        _p["visible"] = False
+    else:
+        try:
+            _p["marco"].pack(side="bottom", fill="x")
+        except Exception:
+            return
+        _p["visible"] = True
+        _recargar_panel()
 
 
 def _clic_progreso(event):
@@ -210,6 +231,10 @@ def _refrescar_mini_player():
     except Exception:
         pass
     try:
+        _refrescar_panel()
+    except Exception:
+        pass
+    try:
         E.ventana.after(INTERVALO_REFRESCO_MS, _refrescar_mini_player)
     except Exception:
         _loop["en_marcha"] = False
@@ -217,7 +242,8 @@ def _refrescar_mini_player():
 
 def construir_mini_player():
     """Crea la barra al pie del panel de fuentes (se llama al final de
-    construir_cuerpo, así sobrevive a cambios de tema/diseño)."""
+    construir_cuerpo, así sobrevive a cambios de tema/diseño). El
+    panel biblioteca se construye oculto acá mismo."""
     try:
         viejo = _w.get("marco")
         if viejo is not None:
@@ -273,7 +299,7 @@ def construir_mini_player():
         bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
-        command=_elegir_tema_provisorio,
+        command=_alternar_panel_biblioteca,
     ).pack(side="left")
 
     _w["progreso"] = tk.Canvas(
@@ -281,6 +307,8 @@ def construir_mini_player():
     )
     _w["progreso"].pack(side="top", fill="x", padx=10, pady=(2, 6))
     _w["progreso"].bind("<Button-1>", _clic_progreso)
+
+    _construir_panel()
 
     if not _loop["en_marcha"]:
         _loop["en_marcha"] = True
@@ -291,20 +319,26 @@ def construir_mini_player():
 
 
 # ------------------------------------------------------------------
-# Ventana biblioteca estilo Spotify (Fase 4)
+# Panel biblioteca/playlist expandible (sin popup)
 # ------------------------------------------------------------------
-# Un solo Toplevel: si ya está abierta se trae al frente y se
-# reescanea (los temas nuevos aparecen solos). Carpetas a la
-# izquierda (Recientes primero), temas a la derecha, doble clic o
-# Enter reproduce, y el tema sonando queda resaltado.
-_biblio = {"ventana": None, "carpeta": None, "temas": [],
-           "loop": False}
-COLOR_RESALTADO_TEMA = "#31435c"
+# Se despliega sobre la mini barra: playlist actual a la izquierda,
+# biblioteca (pestañas + buscador) a la derecha. Drag & drop entre
+# lados para agregar/sacar/reordenar, o clic derecho. Tablas estilo
+# Spotify: # | Título | Álbum (= carpeta) | Agregado | duración.
+_p = {"marco": None, "visible": False, "tab": "Recientes", "tabs": [],
+      "rels_biblio": [], "rels_playlist": [], "gen": 0,
+      "tree_biblio": None, "tree_playlist": None, "busqueda": ""}
+_dnd = {"origen": None, "iid": None, "x0": 0, "y0": 0, "activo": False}
+
+COLUMNAS_TABLA = ("n", "titulo", "album", "fecha", "dur")
+TITULOS_TABLA = {"n": "#", "titulo": "Título", "album": "Álbum",
+                 "fecha": "Agregado", "dur": "🕒"}
+ANCHOS_TABLA = {"n": 36, "titulo": 200, "album": 120, "fecha": 92, "dur": 56}
 
 
-def _biblio_viva():
+def _panel_vivo():
     try:
-        return bool(_biblio.get("ventana") and _biblio["ventana"].winfo_exists())
+        return bool(_p.get("marco") and _p["marco"].winfo_exists())
     except Exception:
         return False
 
@@ -316,6 +350,52 @@ def _titulo_rel(rel):
         return rel
 
 
+def _estilo_tablas():
+    try:
+        estilo = getattr(E, "_estilo_scrollbar", None)
+        if estilo is None:
+            return
+        estilo.configure("Musica.Treeview", background="#151a24",
+                         fieldbackground="#151a24", foreground="white",
+                         rowheight=24, borderwidth=0)
+        estilo.configure("Musica.Treeview.Heading", background="#1b2230",
+                         foreground="#8fa0bd", font=(E.FUENTE_UI, 9, "bold"))
+        estilo.map("Musica.Treeview", background=[("selected", "#2f3a4d")],
+                   foreground=[("selected", "white")])
+    except Exception:
+        pass
+
+
+def _crear_tabla(padre):
+    tree = ttk.Treeview(padre, columns=COLUMNAS_TABLA, show="headings",
+                        style="Musica.Treeview", selectmode="browse")
+    for col in COLUMNAS_TABLA:
+        tree.heading(col, text=TITULOS_TABLA[col])
+        tree.column(col, width=ANCHOS_TABLA[col], stretch=(col == "titulo"),
+                    anchor="w" if col == "titulo" else "center")
+    tree.tag_configure("sonando", background=COLOR_FILA_SONANDO)
+    return tree
+
+
+def _filas_tabla(tree, rels):
+    """Llena la tabla; devuelve la lista tal cual (para mapear iid)."""
+    try:
+        for iid in tree.get_children():
+            tree.delete(iid)
+    except Exception:
+        return []
+    for i, rel in enumerate(rels):
+        try:
+            dur = mod_musica.duracion_cacheada(rel)
+            tree.insert("", "end", iid=str(i), values=(
+                i + 1, _titulo_rel(rel), mod_musica.album_de_rel(rel),
+                mod_musica.fecha_de_archivo(mod_musica.ruta_absoluta(rel)),
+                mod_musica.formatear_ms(dur) if dur else "--:--"))
+        except Exception:
+            pass
+    return list(rels)
+
+
 def _temas_recientes_existentes():
     try:
         from consola_obs import rutas as _R
@@ -325,243 +405,483 @@ def _temas_recientes_existentes():
         return []
 
 
-def _pintar_carpetas(biblioteca):
-    lista = _biblio["lista_carpetas"]
-    lista.delete(0, "end")
-    _biblio["nombres_carpetas"] = ["Recientes"] + sorted(biblioteca)
-    for nombre in _biblio["nombres_carpetas"]:
-        if nombre == "Recientes":
-            lista.insert("end", f"🕘 Recientes ({len(_temas_recientes_existentes())})")
-        else:
-            lista.insert("end", f"📁 {nombre} ({len(biblioteca[nombre])})")
-    actual = _biblio.get("carpeta")
-    if actual in _biblio["nombres_carpetas"]:
-        lista.selection_clear(0, "end")
-        lista.selection_set(_biblio["nombres_carpetas"].index(actual))
-        lista.see(_biblio["nombres_carpetas"].index(actual))
-    else:
-        _biblio["carpeta"] = "Recientes"
-        lista.selection_clear(0, "end")
-        lista.selection_set(0)
-
-
-def _temas_de_carpeta(biblioteca, carpeta):
-    if carpeta == "Recientes":
-        return _temas_recientes_existentes()
-    return list(biblioteca.get(carpeta, []))
-
-
-def _pintar_temas():
-    if not _biblio_viva():
+def _pintar_tabs(biblioteca):
+    try:
+        for w in _p["marco_tabs"].winfo_children():
+            w.destroy()
+    except Exception:
         return
-    biblioteca = _biblio.get("biblioteca", {})
-    carpeta = _biblio.get("carpeta") or "Recientes"
-    filtro = (_biblio.get("busqueda", "").strip().lower()
-              if isinstance(_biblio.get("busqueda"), str) else "")
-    temas = _temas_de_carpeta(biblioteca, carpeta)
+    tabs = ["Recientes"] + sorted(biblioteca)
+    _p["tabs"] = tabs
+    if _p.get("tab") not in tabs:
+        _p["tab"] = "Recientes"
+    for nombre in tabs:
+        n = (len(_temas_recientes_existentes()) if nombre == "Recientes"
+             else len(biblioteca.get(nombre, [])))
+        tk.Button(
+            _p["marco_tabs"], text=f"{nombre} ({n})",
+            bg=("#3b4a63" if nombre == _p["tab"] else "#242d3d"), fg="white",
+            activebackground="#2f3a4d", activeforeground="white",
+            relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
+            command=lambda t=nombre: _elegir_tab(t),
+        ).pack(side="left", padx=2)
+
+
+def _elegir_tab(nombre):
+    _p["tab"] = nombre
+    try:
+        for w in _p["marco_tabs"].winfo_children():
+            txt = w.cget("text").rsplit(" (", 1)[0]
+            w.config(bg=("#3b4a63" if txt == nombre else "#242d3d"))
+    except Exception:
+        pass
+    _pintar_tabla_biblio()
+
+
+def _temas_de_tab(biblioteca, tab):
+    if tab == "Recientes":
+        return _temas_recientes_existentes()
+    return list(biblioteca.get(tab, []))
+
+
+def _pintar_tabla_biblio():
+    if not _panel_vivo():
+        return
+    biblioteca = _p.get("biblioteca", {})
+    filtro = (_p.get("busqueda", "").strip().lower()
+              if isinstance(_p.get("busqueda"), str) else "")
+    temas = _temas_de_tab(biblioteca, _p.get("tab") or "Recientes")
     if filtro:
         temas = [t for t in temas if filtro in _titulo_rel(t).lower()]
-    _biblio["temas"] = temas
-    lista = _biblio["lista_temas"]
-    lista.delete(0, "end")
-    if not temas:
-        if not biblioteca:
-            lista.insert("end", "Poné mp3 en assets/Musica/<carpeta>/")
-        elif carpeta == "Recientes":
-            lista.insert("end", "Todavía no hay recientes.")
-        else:
-            lista.insert("end", "Carpeta vacía.")
-    for rel in temas:
-        lista.insert("end", "♪ " + _titulo_rel(rel))
-    _resaltar_tema_actual()
+    _p["rels_biblio"] = _filas_tabla(_p["tree_biblio"], temas)
 
 
-def _resaltar_tema_actual():
-    if not _biblio_viva():
+def _pintar_tabla_playlist():
+    if not _panel_vivo():
+        return
+    _p["rels_playlist"] = _filas_tabla(_p["tree_playlist"], mod_musica.playlist_actual())
+    _resaltar_playlist()
+
+
+def _resaltar_playlist():
+    if not _panel_vivo() or not _p.get("visible"):
         return
     try:
-        lista = _biblio["lista_temas"]
+        tree = _p["tree_playlist"]
         actual = mod_musica.estado_actual().get("rel")
-        for i in range(lista.size()):
+        for iid in tree.get_children():
             try:
-                lista.itemconfig(i, bg="#10141b", fg="white")
+                tree.item(iid, tags=())
             except Exception:
                 pass
-        if actual and actual in _biblio.get("temas", []):
-            idx = _biblio["temas"].index(actual)
+        if actual and actual in _p.get("rels_playlist", []):
             try:
-                lista.itemconfig(idx, bg=COLOR_RESALTADO_TEMA)
+                tree.item(str(_p["rels_playlist"].index(actual)), tags=("sonando",))
             except Exception:
                 pass
-        snap = mod_musica.estado_actual()
-        titulo = snap.get("titulo") or "—"
-        _biblio["actual"].config(text=f"♪ {titulo}  ·  {snap.get('estado', '')}")
     except Exception:
         pass
 
 
-def _refrescar_biblioteca():
-    if not _biblio_viva():
-        _biblio["loop"] = False
+def _refrescar_panel():
+    if not _panel_vivo() or not _p.get("visible"):
         return
-    _resaltar_tema_actual()
+    _resaltar_playlist()
+
+
+def _asegurar_duraciones():
+    """Hilo de relleno: decodifica las duraciones que faltan (de a una)
+    y actualiza solo las filas que sigan vigentes (generación)."""
     try:
-        E.ventana.after(500, _refrescar_biblioteca)
-    except Exception:
-        _biblio["loop"] = False
-
-
-def _cargar_biblioteca():
-    if not _biblio_viva():
-        return
-    _biblio["biblioteca"] = mod_musica.escanear_biblioteca()
-    _pintar_carpetas(_biblio["biblioteca"])
-    _pintar_temas()
-
-
-def _al_elegir_carpeta(event=None):
-    if not _biblio_viva():
-        return
-    try:
-        sel = _biblio["lista_carpetas"].curselection()
-        if not sel:
-            return
-        _biblio["carpeta"] = _biblio["nombres_carpetas"][sel[0]]
+        rels = list(_p.get("rels_biblio", [])) + list(_p.get("rels_playlist", []))
     except Exception:
         return
-    _pintar_temas()
-
-
-def _al_buscar(event=None):
-    if not _biblio_viva():
+    faltan, vistos = [], set()
+    for rel in rels:
+        if rel not in vistos:
+            vistos.add(rel)
+            try:
+                if mod_musica.duracion_cacheada(rel) is None:
+                    faltan.append(rel)
+            except Exception:
+                pass
+    if not faltan:
         return
-    try:
-        _biblio["busqueda"] = _biblio["entrada_busqueda"].get()
-    except Exception:
-        _biblio["busqueda"] = ""
-    _pintar_temas()
+    _p["gen"] = _p.get("gen", 0) + 1
+    gen = _p["gen"]
+
+    def _trabajo():
+        for rel in faltan:
+            try:
+                ms = mod_musica.duracion_de(rel)
+            except Exception:
+                ms = None
+            if ms:
+                try:
+                    E.ventana.after(0, _actualizar_duracion_fila, gen, rel, ms)
+                except Exception:
+                    return
+
+    threading.Thread(target=_trabajo, daemon=True).start()
 
 
-def _reproducir_seleccionado():
-    if not _necesita_conexion():
+def _actualizar_duracion_fila(gen, rel, ms):
+    if gen != _p.get("gen") or not _panel_vivo():
         return
-    if not _biblio_viva():
-        return
-    try:
-        sel = _biblio["lista_temas"].curselection()
-        temas = _biblio.get("temas", [])
-        if not sel or not temas or sel[0] >= len(temas):
-            messagebox.showinfo("Biblioteca", "Elegí un tema de la lista.")
-            return
-        mod_musica.reproducir_lista(list(temas), int(sel[0]))
-    except Exception:
-        return
-    _resaltar_tema_actual()
-
-
-def _cerrar_biblioteca():
-    _biblio["loop"] = False
-    try:
-        if _biblio.get("ventana") is not None:
-            _biblio["ventana"].destroy()
-    except Exception:
-        pass
-    _biblio["ventana"] = None
-
-
-def abrir_biblioteca():
-    """Abre la ventana biblioteca (o la trae al frente reescaneada si
-    ya estaba abierta)."""
-    if _biblio_viva():
+    texto = mod_musica.formatear_ms(ms)
+    for clave, arbol in (("rels_biblio", _p.get("tree_biblio")),
+                         ("rels_playlist", _p.get("tree_playlist"))):
         try:
-            _cargar_biblioteca()
-            _biblio["ventana"].lift()
-            _biblio["ventana"].focus_force()
+            rels = _p.get(clave, [])
+            if rel in rels and arbol is not None:
+                iid = str(rels.index(rel))
+                vals = list(arbol.item(iid, "values"))
+                vals[4] = texto
+                arbol.item(iid, values=vals)
         except Exception:
             pass
+
+
+def _recargar_panel():
+    """Reescanea y repinta pestañas + ambas tablas. Conserva la tab."""
+    if not _panel_vivo():
         return
+    try:
+        actual = mod_musica.playlist_actual()
+        if actual != mod_musica.obtener_playlist():
+            mod_musica.definir_playlist(actual)
+        elif list(mod_musica._cola) != actual:
+            mod_musica.definir_playlist(actual)
+    except Exception:
+        pass
+    _p["biblioteca"] = mod_musica.escanear_biblioteca()
+    _pintar_tabs(_p["biblioteca"])
+    _pintar_tabla_biblio()
+    _pintar_tabla_playlist()
+    _asegurar_duraciones()
 
-    ventana = tk.Toplevel(E.ventana)
-    ventana.title("🎵 Música en el stream")
-    ventana.configure(bg="#10141b")
-    ventana.geometry("560x480")
-    _biblio["ventana"] = ventana
-    _biblio["carpeta"] = "Recientes"
-    _biblio["temas"] = []
-    _biblio["busqueda"] = ""
-    ventana.protocol("WM_DELETE_WINDOW", _cerrar_biblioteca)
 
-    tk.Label(
-        ventana, text="🎵 Música en el stream", bg="#10141b", fg="white",
-        font=(E.FUENTE_UI, 12, "bold"),
-    ).pack(anchor="w", padx=12, pady=(12, 2))
-    tk.Label(
-        ventana, text="Doble clic o Enter reproduce al stream",
-        bg="#10141b", fg="#828da6", font=(E.FUENTE_UI, 9),
-    ).pack(anchor="w", padx=12, pady=(0, 8))
+def _al_buscar_panel(event=None):
+    if not _panel_vivo():
+        return
+    try:
+        _p["busqueda"] = _p["entrada_busqueda"].get()
+    except Exception:
+        _p["busqueda"] = ""
+    _pintar_tabla_biblio()
+    _asegurar_duraciones()
 
-    fila_busqueda = tk.Frame(ventana, bg="#10141b")
-    fila_busqueda.pack(fill="x", padx=12, pady=(0, 8))
-    _biblio["entrada_busqueda"] = tk.Entry(
+
+def _reproducir_vista_biblio(indice):
+    if not _necesita_conexion():
+        return
+    vista = list(_p.get("rels_biblio", []))
+    try:
+        indice = int(indice)
+    except Exception:
+        return
+    if 0 <= indice < len(vista):
+        mod_musica.reproducir_lista(vista, indice)
+
+
+def _reproducir_indice_playlist(indice):
+    if not _necesita_conexion():
+        return
+    try:
+        mod_musica.reproducir_playlist(int(indice))
+    except Exception:
+        pass
+
+
+def _agregar_rel(rel):
+    if not isinstance(rel, str) or not rel:
+        return
+    try:
+        if mod_musica.agregar_a_playlist(rel):
+            _pintar_tabla_playlist()
+            _asegurar_duraciones()
+    except Exception:
+        pass
+
+
+def _menu_biblio(event):
+    tree = _p.get("tree_biblio")
+    if tree is None:
+        return
+    try:
+        iid = tree.identify_row(event.y)
+        if iid in ("", "vacia"):
+            return
+        idx = int(iid)
+        rel = _p.get("rels_biblio", [])[idx]
+    except Exception:
+        return
+    try:
+        tree.selection_set(iid)
+    except Exception:
+        pass
+    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
+                   activebackground="#323b4c", activeforeground="white")
+    menu.add_command(label="Agregar a la playlist",
+                     command=lambda: _agregar_rel(rel))
+    menu.add_command(label="Reproducir ahora",
+                     command=lambda: _reproducir_vista_biblio(idx))
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
+
+
+def _menu_playlist(event):
+    tree = _p.get("tree_playlist")
+    if tree is None:
+        return
+    try:
+        iid = tree.identify_row(event.y)
+        if iid in ("", "vacia"):
+            return
+        idx = int(iid)
+    except Exception:
+        return
+    try:
+        tree.selection_set(iid)
+    except Exception:
+        pass
+    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
+                   activebackground="#323b4c", activeforeground="white")
+    menu.add_command(label="Reproducir",
+                     command=lambda: _reproducir_indice_playlist(idx))
+    menu.add_command(label="Sacar de la playlist",
+                     command=lambda: (_sacar_indice_playlist(idx)))
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
+
+
+def _sacar_indice_playlist(idx):
+    try:
+        if mod_musica.sacar_de_playlist(int(idx)):
+            _pintar_tabla_playlist()
+    except Exception:
+        pass
+
+
+def _dnd_press(cual, event):
+    tree = _p["tree_biblio"] if cual == "biblio" else _p["tree_playlist"]
+    if tree is None:
+        _dnd.update({"origen": None, "iid": None, "activo": False})
+        return
+    try:
+        iid = tree.identify_row(event.y)
+    except Exception:
+        iid = ""
+    if iid in ("", "vacia"):
+        _dnd.update({"origen": None, "iid": None, "activo": False})
+        return
+    _dnd.update({"origen": cual, "iid": iid, "x0": event.x_root,
+                 "y0": event.y_root, "activo": False})
+
+
+def _dnd_move(event):
+    if not _dnd.get("origen"):
+        return
+    try:
+        dx = abs(event.x_root - _dnd.get("x0", 0))
+        dy = abs(event.y_root - _dnd.get("y0", 0))
+        if dx > C.UMBRAL_ARRASTRE_PX or dy > C.UMBRAL_ARRASTRE_PX:
+            _dnd["activo"] = True
+    except Exception:
+        pass
+
+
+def _arbol_bajo_puntero(x_root, y_root):
+    try:
+        widget = E.ventana.winfo_containing(x_root, y_root)
+    except Exception:
+        return None
+    while widget is not None:
+        if widget is _p.get("tree_biblio"):
+            return "biblio"
+        if widget is _p.get("tree_playlist"):
+            return "playlist"
+        widget = widget.master
+    return None
+
+
+def _dnd_release(event):
+    origen, iid, activo = _dnd.get("origen"), _dnd.get("iid"), _dnd.get("activo")
+    _dnd.update({"origen": None, "iid": None, "activo": False})
+    if not origen or not iid or not activo:
+        return
+    destino = _arbol_bajo_puntero(event.x_root, event.y_root)
+    if destino is None:
+        return
+    try:
+        idx_origen = int(iid)
+    except Exception:
+        return
+    tree_dest = _p["tree_playlist"] if destino == "playlist" else _p["tree_biblio"]
+    try:
+        y_dest = event.y_root - tree_dest.winfo_rooty()
+        iid_dest = tree_dest.identify_row(y_dest)
+        en_encabezado = False
+        if iid_dest not in ("", "vacia"):
+            idx_dest = int(iid_dest)
+        else:
+            # Sobre el encabezado = al principio; debajo de todo = al final.
+            try:
+                caja0 = tree_dest.bbox("0")
+            except Exception:
+                caja0 = ""
+            if caja0 and y_dest < caja0[1]:
+                idx_dest, en_encabezado = 0, True
+            else:
+                idx_dest = None
+    except Exception:
+        idx_dest, en_encabezado = None, False
+    try:
+        if origen == "biblio" and destino == "playlist":
+            rels = _p.get("rels_biblio", [])
+            if 0 <= idx_origen < len(rels):
+                pls = mod_musica.playlist_actual()
+                if rels[idx_origen] not in pls:
+                    # Agregar es "al final", salvo fila explícita.
+                    if idx_dest is None or en_encabezado:
+                        pls.append(rels[idx_origen])
+                    else:
+                        pls.insert(min(idx_dest, len(pls)), rels[idx_origen])
+                    mod_musica.definir_playlist(pls)
+                    _pintar_tabla_playlist()
+                    _asegurar_duraciones()
+        elif origen == "playlist" and destino == "biblio":
+            _sacar_indice_playlist(idx_origen)
+        elif origen == "playlist" and destino == "playlist":
+            if idx_dest is None:
+                idx_dest = len(mod_musica.playlist_actual()) - 1
+            if mod_musica.mover_en_playlist(idx_origen, idx_dest):
+                _pintar_tabla_playlist()
+    except Exception:
+        pass
+
+
+def _atajos_arbol(tree, cual):
+    tree.bind("<ButtonPress-1>", lambda e: _dnd_press(cual, e))
+    tree.bind("<B1-Motion>", _dnd_move)
+    tree.bind("<ButtonRelease-1>", _dnd_release)
+    if cual == "biblio":
+        tree.bind("<Double-Button-1>",
+                  lambda e: _reproducir_vista_biblio(_indice_bajo_puntero(tree, e)))
+        tree.bind("<Return>", lambda e: _reproducir_vista_biblio(_indice_foco(tree)))
+        tree.bind("<Button-3>", _menu_biblio)
+    else:
+        tree.bind("<Double-Button-1>",
+                  lambda e: _reproducir_indice_playlist(_indice_bajo_puntero(tree, e)))
+        tree.bind("<Return>", lambda e: _reproducir_indice_playlist(_indice_foco(tree)))
+        tree.bind("<Button-3>", _menu_playlist)
+
+
+def _indice_bajo_puntero(tree, event):
+    try:
+        iid = tree.identify_row(event.y)
+        return int(iid) if iid not in ("", "vacia") else -1
+    except Exception:
+        return -1
+
+
+def _indice_foco(tree):
+    try:
+        return int(tree.focus()) if tree.focus() not in ("", "vacia") else -1
+    except Exception:
+        return -1
+
+
+def _construir_panel():
+    """Arma el panel oculto (se muestra con el botón Biblioteca). Se
+    llama al final de construir_mini_player."""
+    try:
+        viejo = _p.get("marco")
+        if viejo is not None:
+            try:
+                viejo.destroy()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    _p.update({"marco": None, "visible": False, "tab": "Recientes",
+               "tabs": [], "rels_biblio": [], "rels_playlist": [],
+               "gen": 0, "tree_biblio": None, "tree_playlist": None,
+               "busqueda": ""})
+    _estilo_tablas()
+
+    marco = tk.Frame(E.marco_fuentes, bg=E.color_barra_titulo(), height=300)
+    marco.pack_propagate(False)
+    _p["marco"] = marco
+
+    tk.Frame(marco, bg=E.color_acento(), height=2).pack(side="top", fill="x")
+
+    fila_busqueda = tk.Frame(marco, bg=E.color_barra_titulo())
+    fila_busqueda.pack(side="top", fill="x", padx=8, pady=(6, 4))
+    tk.Label(fila_busqueda, text="🔍", bg=E.color_barra_titulo(), fg="#8fa0bd",
+             font=(E.FUENTE_UI, 10)).pack(side="left")
+    _p["entrada_busqueda"] = tk.Entry(
         fila_busqueda, bg="#1b2230", fg="white", insertbackground="white",
         relief="flat", highlightthickness=1, highlightbackground="#2b3548",
         font=(E.FUENTE_UI, 10),
     )
-    _biblio["entrada_busqueda"].pack(side="left", fill="x", expand=True, ipady=4)
-    _biblio["entrada_busqueda"].bind("<KeyRelease>", _al_buscar)
+    _p["entrada_busqueda"].pack(side="left", fill="x", expand=True, ipady=3)
+    _p["entrada_busqueda"].bind("<KeyRelease>", _al_buscar_panel)
     tk.Button(
         fila_busqueda, text="↻", bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 10, "bold"), cursor="hand2",
-        command=_cargar_biblioteca,
+        command=_recargar_panel,
     ).pack(side="left", padx=(6, 0))
 
-    cuerpo = tk.Frame(ventana, bg="#10141b")
-    cuerpo.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+    _p["marco_tabs"] = tk.Frame(marco, bg=E.color_barra_titulo())
+    _p["marco_tabs"].pack(side="top", fill="x", padx=8, pady=(0, 4))
 
-    _biblio["lista_carpetas"] = tk.Listbox(
-        cuerpo, width=22, bg="#151a24", fg="white",
-        selectbackground="#2f3a4d", selectforeground="white",
-        relief="flat", highlightthickness=1, highlightbackground="#2b3548",
-        font=(E.FUENTE_UI, 10), exportselection=False,
-    )
-    _biblio["lista_carpetas"].pack(side="left", fill="y", padx=(0, 8))
-    _biblio["lista_carpetas"].bind("<<ListboxSelect>>", _al_elegir_carpeta)
+    cuerpo = tk.Frame(marco, bg=E.color_barra_titulo())
+    cuerpo.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
 
-    _biblio["lista_temas"] = tk.Listbox(
-        cuerpo, bg="#151a24", fg="white",
-        selectbackground="#2f3a4d", selectforeground="white",
-        relief="flat", highlightthickness=1, highlightbackground="#2b3548",
-        font=(E.FUENTE_UI, 10), exportselection=False,
-    )
-    _biblio["lista_temas"].pack(side="left", fill="both", expand=True)
-    _biblio["lista_temas"].bind("<Double-Button-1>", lambda e: _reproducir_seleccionado())
-    _biblio["lista_temas"].bind("<Return>", lambda e: _reproducir_seleccionado())
+    col_izq = tk.Frame(cuerpo, bg=E.color_barra_titulo())
+    col_izq.pack(side="left", fill="both", expand=True, padx=(0, 4))
+    tk.Label(col_izq, text="▶ Playlist actual", bg=E.color_barra_titulo(),
+             fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(fill="x")
+    marco_tree_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
+    marco_tree_pls.pack(fill="both", expand=True)
+    _p["tree_playlist"] = _crear_tabla(marco_tree_pls)
+    _p["tree_playlist"].pack(side="left", fill="both", expand=True)
+    _barra_pls = ttk.Scrollbar(marco_tree_pls, orient="vertical",
+                               command=_p["tree_playlist"].yview,
+                               style="Discreta.Vertical.TScrollbar")
+    _barra_pls.pack(side="left", fill="y")
+    _p["tree_playlist"].configure(yscrollcommand=_barra_pls.set)
+    _p["tree_playlist"].tag_configure("sonando", background=COLOR_FILA_SONANDO)
+    _atajos_arbol(_p["tree_playlist"], "playlist")
 
-    pie = tk.Frame(ventana, bg="#10141b")
-    pie.pack(fill="x", padx=12, pady=(0, 12))
-    _biblio["actual"] = tk.Label(
-        pie, text="♪ —", bg="#10141b", fg="#8fa0bd",
-        font=(E.FUENTE_UI, 9, "bold"), anchor="w",
-    )
-    _biblio["actual"].pack(side="left", fill="x", expand=True)
-    tk.Button(
-        pie, text="▶ Reproducir", bg="#242d3d", fg="white",
-        activebackground="#2f3a4d", activeforeground="white",
-        relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
-        command=_reproducir_seleccionado,
-    ).pack(side="left", padx=(0, 6))
-    tk.Button(
-        pie, text="Cerrar", bg="#242d3d", fg="white",
-        activebackground="#2f3a4d", activeforeground="white",
-        relief="flat", bd=0, font=(E.FUENTE_UI, 9), cursor="hand2",
-        command=_cerrar_biblioteca,
-    ).pack(side="left")
+    col_der = tk.Frame(cuerpo, bg=E.color_barra_titulo())
+    col_der.pack(side="left", fill="both", expand=True, padx=(4, 0))
+    tk.Label(col_der, text="Biblioteca", bg=E.color_barra_titulo(),
+             fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(fill="x")
+    marco_tree_bib = tk.Frame(col_der, bg=E.color_barra_titulo())
+    marco_tree_bib.pack(fill="both", expand=True)
+    _p["tree_biblio"] = _crear_tabla(marco_tree_bib)
+    _p["tree_biblio"].pack(side="left", fill="both", expand=True)
+    _barra_bib = ttk.Scrollbar(marco_tree_bib, orient="vertical",
+                               command=_p["tree_biblio"].yview,
+                               style="Discreta.Vertical.TScrollbar")
+    _barra_bib.pack(side="left", fill="y")
+    _p["tree_biblio"].configure(yscrollcommand=_barra_bib.set)
+    _atajos_arbol(_p["tree_biblio"], "biblio")
 
-    _cargar_biblioteca()
-    if not _biblio["loop"]:
-        _biblio["loop"] = True
-        try:
-            E.ventana.after(500, _refrescar_biblioteca)
-        except Exception:
-            _biblio["loop"] = False
+
+def _al_buscar_panel(event=None):
+    if not _panel_vivo():
+        return
+    try:
+        _p["busqueda"] = _p["entrada_busqueda"].get()
+    except Exception:
+        _p["busqueda"] = ""
+    _pintar_tabla_biblio()
+    _asegurar_duraciones()

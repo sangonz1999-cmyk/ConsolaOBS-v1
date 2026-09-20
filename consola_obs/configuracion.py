@@ -73,9 +73,9 @@ def guardar_config_interfaz(datos_nuevos):
 
 
 def cargar_config_musica():
-    """Biblioteca de música: recientes + repetir. Si no existe o está
-    rota, devuelve los valores de fábrica."""
-    fabrica = {"recientes": [], "repetir": True}
+    """Biblioteca de música: recientes + repetir + playlist actual +
+    caché de duraciones. Si no existe o está rota, valores de fábrica."""
+    fabrica = {"recientes": [], "repetir": True, "playlist": [], "duraciones": {}}
     if os.path.exists(R.ARCHIVO_MUSICA):
         try:
             with open(R.ARCHIVO_MUSICA, "r", encoding="utf-8") as f:
@@ -88,12 +88,21 @@ def cargar_config_musica():
         fabrica["recientes"] = []
     if not isinstance(fabrica.get("repetir"), bool):
         fabrica["repetir"] = True
+    if not isinstance(fabrica.get("playlist"), list):
+        fabrica["playlist"] = []
+    if not isinstance(fabrica.get("duraciones"), dict):
+        fabrica["duraciones"] = {}
     return fabrica
 
 
 def guardar_config_musica(datos):
+    # Escritura atómica (tmp + replace): el hilo de duraciones y la UI
+    # escriben este JSON a la vez, y un open("w") directo dejaba al
+    # otro con el archivo truncado a la mitad (parse vacío).
     try:
-        with open(R.ARCHIVO_MUSICA, "w", encoding="utf-8") as f:
+        ruta_tmp = R.ARCHIVO_MUSICA + ".tmp"
+        with open(ruta_tmp, "w", encoding="utf-8") as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
+        os.replace(ruta_tmp, R.ARCHIVO_MUSICA)
     except Exception as e:
         print(f"No se pudo guardar la configuración de música: {e}")

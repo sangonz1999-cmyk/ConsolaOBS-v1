@@ -50,6 +50,226 @@ def formatear_ms(milisegundos):
         return "00:00"
 
 
+MESES_ES = ("ene", "feb", "mar", "abr", "may", "jun",
+            "jul", "ago", "sep", "oct", "nov", "dic")
+
+
+def formatear_fecha(timestamp):
+    """segundos epoch -> '18 ago 2026' (columna de la tabla)."""
+    try:
+        import datetime
+        f = datetime.datetime.fromtimestamp(float(timestamp))
+        return f"{f.day} {MESES_ES[f.month - 1]} {f.year}"
+    except Exception:
+        return "--"
+
+
+def fecha_de_archivo(ruta_abs):
+    """Fecha de agregado (mtime del archivo) o '--'."""
+    try:
+        return formatear_fecha(os.path.getmtime(ruta_abs))
+    except Exception:
+        return "--"
+
+
+def album_de_rel(rel):
+    """La carpeta actúa como álbum; lo suelto es 'General'."""
+    try:
+        carpeta = os.path.dirname(rel)
+        return carpeta if carpeta else "General"
+    except Exception:
+        return "General"
+
+
+def leer_duracion_local(ruta_abs):
+    """Duración en ms decodificando con miniaudio (None si no se
+    puede). Para la columna de la tabla; va en hilo y con caché."""
+    try:
+        import miniaudio
+        decodificado = miniaudio.decode_file(ruta_abs)
+        ncan = max(1, decodificado.nchannels or 1)
+        rate = max(1, decodificado.sample_rate or 1)
+        ms = len(decodificado.samples) / ncan / rate * 1000.0
+        return ms if ms > 0 else None
+    except Exception:
+        return None
+
+
+def _firma_archivo(ruta_abs):
+    try:
+        st = os.stat(ruta_abs)
+        return [st.st_size, int(st.st_mtime)]
+    except Exception:
+        return None
+
+
+def duracion_cacheada(rel):
+    """Duración desde el caché SIN decodificar (None si no está o el
+    archivo cambió). Para pintar la tabla sin congelar la UI; el hilo
+    de relleno del panel usa duracion_de()."""
+    try:
+        caché = _config().get("duraciones") or {}
+        ruta_abs = _absoluta_si_rel(rel)
+        firma = _firma_archivo(ruta_abs)
+        if firma is None:
+            return None
+        vieja = caché.get(rel)
+        if isinstance(vieja, dict) and vieja.get("firma") == firma and vieja.get("ms"):
+            return float(vieja["ms"])
+        return None
+    except Exception:
+        return None
+
+
+def duracion_de(rel):
+    """Duración en ms con caché persistente (config): la primera vez
+    decodifica, después sale del JSON. None si no se pudo."""
+    try:
+        ms = duracion_cacheada(rel)
+        if ms:
+            return ms
+        ruta_abs = _absoluta_si_rel(rel)
+        if _firma_archivo(ruta_abs) is None:
+            return None
+        ms = leer_duracion_local(ruta_abs)
+        if ms:
+            cfg = _config()
+            caché = cfg.get("duraciones") or {}
+            caché[rel] = {"ms": ms, "firma": _firma_archivo(ruta_abs)}
+            cfg["duraciones"] = caché
+            mod_configuracion.guardar_config_musica(cfg)
+            return float(ms)
+        return None
+    except Exception:
+        return None
+
+
+def _absoluta_si_rel(rel):
+    try:
+        if os.path.isabs(rel):
+            return rel
+        return _absoluta(rel)
+    except Exception:
+        return rel
+
+
+def obtener_playlist():
+    """La playlist actual (copia, tal cual está guardada)."""
+    try:
+        lista = [r for r in _config().get("playlist", []) if isinstance(r, str)]
+    except Exception:
+        lista = []
+    return lista
+
+
+def playlist_actual():
+    """Playlist podada a archivos existentes (copia). Es lo que se
+    muestra y reproduce."""
+    try:
+        return [r for r in obtener_playlist()
+                if isinstance(r, str) and os.path.isfile(_absoluta_si_rel(r))]
+    except Exception:
+        return []
+
+
+def ruta_absoluta(rel):
+    """Absoluta local de un rel (o tal cual si ya es absoluta)."""
+    return _absoluta_si_rel(rel)
+
+
+def _playlist_existente():
+    try:
+        return [r for r in obtener_playlist()
+                if os.path.isfile(_absoluta_si_rel(r))]
+    except Exception:
+        return []
+
+
+def definir_playlist(lista):
+    """Reemplaza la playlist actual (y la cola) y la guarda."""
+    try:
+        limpia = [r for r in list(lista) if isinstance(r, str)]
+    except Exception:
+        limpia = []
+    _cola[:] = limpia
+    try:
+        cfg = _config()
+        cfg["playlist"] = limpia
+        mod_configuracion.guardar_config_musica(cfg)
+    except Exception as e:
+        print(f"No se pudo guardar la playlist: {e}")
+    return list(limpia)
+
+
+def agregar_a_playlist(rel):
+    """Suma al final (sin duplicar el mismo). Devuelve True si entró."""
+    if not isinstance(rel, str) or not rel:
+        return False
+    actual = _playlist_existente()
+    if rel in actual:
+        _cola[:] = actual
+        return False
+    actual.append(rel)
+    definir_playlist(actual)
+    return True
+
+
+def sacar_de_playlist(indice):
+    """Saca por posición. Si era el tema sonando, avanza (o frena)."""
+    actual = _playlist_existente()
+    try:
+        indice = int(indice)
+    except Exception:
+        return False
+    if not 0 <= indice < len(actual):
+        return False
+    era_actual = (_sesion.get("rel") == actual[indice])
+    actual.pop(indice)
+    definir_playlist(actual)
+    if era_actual:
+        if actual:
+            _sesion["indice_cola"] = min(indice, len(actual) - 1)
+            _sesion["token"] += 1
+            _en_hilo(_hacer_reproducir, actual[_sesion["indice_cola"]], _sesion["token"])
+        else:
+            detener()
+    return True
+
+
+def mover_en_playlist(origen, destino):
+    """Reordena dentro de la playlist (drag & drop interno)."""
+    actual = _playlist_existente()
+    try:
+        origen, destino = int(origen), int(destino)
+    except Exception:
+        return False
+    if not 0 <= origen < len(actual) or not 0 <= destino < len(actual):
+        return False
+    if origen == destino:
+        return True
+    tema = actual.pop(origen)
+    actual.insert(destino, tema)
+    # El índice de lo que suena se recalcula por identidad.
+    try:
+        _sesion["indice_cola"] = actual.index(_sesion["rel"]) if _sesion.get("rel") in actual else None
+    except Exception:
+        pass
+    definir_playlist(actual)
+    return True
+
+
+def reproducir_playlist(indice):
+    """Reproduce la playlist actual desde una posición."""
+    actual = _playlist_existente()
+    if not actual:
+        return
+    try:
+        indice = max(0, min(int(indice), len(actual) - 1))
+    except Exception:
+        indice = 0
+    reproducir_lista(actual, indice)
+
+
 def escanear_biblioteca():
     """Lee assets/Musica/: {carpeta: [rel, ...]} ordenado. Los audios
     sueltos en la raíz van en la carpeta 'General'. Solo extensiones
@@ -202,17 +422,18 @@ def _en_hilo(funcion, *args):
 
 
 def reproducir_lista(lista, indice=0):
-    """Pone la cola y larga el tema indicado (versión pública, en hilo)."""
+    """Pone la cola (y la guarda como playlist actual) y larga el tema
+    indicado (versión pública, en hilo)."""
     if not lista:
         return
     try:
         indice = max(0, min(int(indice), len(lista) - 1))
     except Exception:
         indice = 0
-    _cola[:] = list(lista)
+    definir_playlist(lista)
     _sesion["indice_cola"] = indice
     _sesion["token"] += 1
-    _en_hilo(_hacer_reproducir, lista[indice], _sesion["token"])
+    _en_hilo(_hacer_reproducir, list(lista)[indice], _sesion["token"])
 
 
 def reproducir_rel(rel):
