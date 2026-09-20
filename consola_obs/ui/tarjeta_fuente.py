@@ -257,12 +257,17 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
+    # La clave incluye el orden: reordenar (drag & drop) no cambia ni
+    # columnas ni ancho, y sin esto el early return de abajo se tragaba
+    # el reorden y la grilla nunca se movía (la lista se guardaba bien,
+    # pero las tarjetas quedaban en su lugar).
+    clave_grilla = (columnas, ancho_celda, tuple(E.orden_fuentes))
     # Si no cambió ni la cantidad de columnas ni el ancho, las posiciones
     # son idénticas: no hay nada que mover.
-    if (not forzar) and E._ultima_grilla_fuentes.get("clave") == (columnas, ancho_celda):
+    if (not forzar) and E._ultima_grilla_fuentes.get("clave") == clave_grilla:
         mod_ui_ventana.actualizar_scroll()
         return
-    E._ultima_grilla_fuentes["clave"] = (columnas, ancho_celda)
+    E._ultima_grilla_fuentes["clave"] = clave_grilla
     for idx, nombre in enumerate(E.orden_fuentes):
         if nombre not in E.fuentes:
             continue
