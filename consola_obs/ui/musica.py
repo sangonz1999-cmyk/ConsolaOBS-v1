@@ -380,7 +380,7 @@ def _crear_tabla(padre, compacta=False):
     for col in columnas:
         tree.heading(col, text=TITULOS_TABLA[col])
         tree.column(col, width=ANCHOS_TABLA[col],
-                    stretch=(compacta and col == "titulo"),
+                    stretch=(col == "titulo"),
                     anchor="w" if col == "titulo" else "center")
     tree.tag_configure("sonando", background=COLOR_FILA_SONANDO)
     return tree
@@ -457,6 +457,53 @@ def _temas_de_tab(biblioteca, tab):
     return list(biblioteca.get(tab, []))
 
 
+def _mtime_rel(rel):
+    try:
+        return os.path.getmtime(mod_musica.ruta_absoluta(rel))
+    except Exception:
+        return 0.0
+
+
+def _vista_biblio_ordenada(temas):
+    """Aplica el orden de la cabecera clickeada (toggle asc/desc)."""
+    o = _p.get("orden_biblio") or {"col": None, "desc": False}
+    col, desc = o.get("col"), bool(o.get("desc"))
+    try:
+        if col == "titulo":
+            return sorted(temas, key=lambda r: _titulo_rel(r).lower(), reverse=desc)
+        if col == "album":
+            return sorted(temas, key=lambda r: (mod_musica.album_de_rel(r).lower(),
+                                                _titulo_rel(r).lower()), reverse=desc)
+        if col == "fecha":
+            return sorted(temas, key=_mtime_rel, reverse=desc)
+        if col == "n" and desc:
+            return list(reversed(temas))
+    except Exception:
+        pass
+    return list(temas)
+
+
+def _ordenar_biblio(col):
+    """Clic en cabecera de la biblioteca: ordena (segundo clic invierte)."""
+    o = _p.get("orden_biblio") or {"col": None, "desc": False}
+    if o.get("col") == col:
+        o["desc"] = not o.get("desc", False)
+    else:
+        o = {"col": col, "desc": False}
+    _p["orden_biblio"] = o
+    try:
+        tree = _p.get("tree_biblio")
+        if tree is not None:
+            for c in ("n", "titulo", "album", "fecha"):
+                marca = ""
+                if o.get("col") == c:
+                    marca = " ▼" if o.get("desc") else " ▲"
+                tree.heading(c, text=TITULOS_TABLA[c] + marca)
+    except Exception:
+        pass
+    _pintar_tabla_biblio()
+
+
 def _pintar_tabla_biblio():
     if not _panel_vivo():
         return
@@ -466,7 +513,7 @@ def _pintar_tabla_biblio():
     temas = _temas_de_tab(biblioteca, _p.get("tab") or "Recientes")
     if filtro:
         temas = [t for t in temas if filtro in _titulo_rel(t).lower()]
-    _p["rels_biblio"] = _filas_tabla(_p["tree_biblio"], temas)
+    _p["rels_biblio"] = _filas_tabla(_p["tree_biblio"], _vista_biblio_ordenada(temas))
 
 
 def _pintar_tabla_playlist():
@@ -614,6 +661,14 @@ def _agregar_rel(rel):
     if not isinstance(rel, str) or not rel:
         return
     try:
+        if rel in mod_musica.playlist_actual():
+            try:
+                messagebox.showwarning(
+                    "Ya está en la playlist",
+                    f"\"{_titulo_rel(rel)}\" ya está en la playlist actual.")
+            except Exception:
+                pass
+            return
         if mod_musica.agregar_a_playlist(rel):
             _pintar_tabla_playlist()
             _asegurar_duraciones()
@@ -729,14 +784,21 @@ def _arbol_bajo_puntero(x_root, y_root):
 def _dnd_release(event):
     origen, iid, activo = _dnd.get("origen"), _dnd.get("iid"), _dnd.get("activo")
     _dnd.update({"origen": None, "iid": None, "activo": False})
-    if not origen or not iid or not activo:
-        return
-    destino = _arbol_bajo_puntero(event.x_root, event.y_root)
-    if destino is None:
+    if not origen or not iid:
         return
     try:
         idx_origen = int(iid)
     except Exception:
+        return
+    if not activo:
+        # Clic simple en la playlist = reproducir ese tema (en
+        # silencio si no hay conexión, para no naggear al seleccionar).
+        if origen == "playlist" and _arbol_bajo_puntero(event.x_root, event.y_root) == "playlist":
+            if E.conectado:
+                _reproducir_indice_playlist(idx_origen)
+        return
+    destino = _arbol_bajo_puntero(event.x_root, event.y_root)
+    if destino is None:
         return
     tree_dest = _p["tree_playlist"] if destino == "playlist" else _p["tree_biblio"]
     try:
@@ -759,18 +821,10 @@ def _dnd_release(event):
         idx_dest, en_encabezado = None, False
     try:
         if origen == "biblio" and destino == "playlist":
+            # Agregar es siempre al final (arrastre o clic derecho).
             rels = _p.get("rels_biblio", [])
             if 0 <= idx_origen < len(rels):
-                pls = mod_musica.playlist_actual()
-                if rels[idx_origen] not in pls:
-                    # Agregar es "al final", salvo fila explícita.
-                    if idx_dest is None or en_encabezado:
-                        pls.append(rels[idx_origen])
-                    else:
-                        pls.insert(min(idx_dest, len(pls)), rels[idx_origen])
-                    mod_musica.definir_playlist(pls)
-                    _pintar_tabla_playlist()
-                    _asegurar_duraciones()
+                _agregar_rel(rels[idx_origen])
         elif origen == "playlist" and destino == "biblio":
             _sacar_indice_playlist(idx_origen)
         elif origen == "playlist" and destino == "playlist":
@@ -798,8 +852,7 @@ def _atajos_arbol(tree, cual):
         tree.bind("<Return>", lambda e: _reproducir_vista_biblio(_indice_foco(tree)))
         tree.bind("<Button-3>", _menu_biblio)
     else:
-        tree.bind("<Double-Button-1>",
-                  lambda e: _reproducir_indice_playlist(_indice_bajo_puntero(tree, e)))
+        # Sin doble clic: el clic simple ya reproduce (ver _dnd_release).
         tree.bind("<Return>", lambda e: _reproducir_indice_playlist(_indice_foco(tree)))
         tree.bind("<Button-3>", _menu_playlist)
 
@@ -834,7 +887,7 @@ def _construir_panel():
     _p.update({"marco": None, "visible": False, "tab": "Recientes",
                "tabs": [], "rels_biblio": [], "rels_playlist": [],
                "gen": 0, "tree_biblio": None, "tree_playlist": None,
-               "busqueda": ""})
+               "busqueda": "", "orden_biblio": {"col": None, "desc": False}})
     _estilo_tablas()
 
     marco = tk.Frame(E.marco_fuentes, bg=E.color_barra_titulo(), height=300)
@@ -894,6 +947,8 @@ def _construir_panel():
     marco_tree_bib.pack(fill="both", expand=True)
     _p["tree_biblio"] = _crear_tabla(marco_tree_bib)
     _p["tree_biblio"].pack(side="left", fill="both", expand=True)
+    for _col in ("n", "titulo", "album", "fecha"):
+        _p["tree_biblio"].heading(_col, command=lambda c=_col: _ordenar_biblio(c))
     _barra_bib = ttk.Scrollbar(marco_tree_bib, orient="vertical",
                                command=_p["tree_biblio"].yview,
                                style="Discreta.Vertical.TScrollbar")

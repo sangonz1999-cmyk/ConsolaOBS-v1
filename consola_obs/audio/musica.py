@@ -222,9 +222,13 @@ def _playlist_existente():
 
 
 def definir_playlist(lista):
-    """Reemplaza la playlist actual (y la cola) y la guarda."""
+    """Reemplaza la playlist actual (y la cola) y la guarda. Solo
+    acepta rels a la biblioteca: las rutas absolutas (pistas sueltas
+    provisorias) suenan en memoria pero no se persisten, para que no
+    quede basura como pistas del Temp en la playlist guardada."""
     try:
-        limpia = [r for r in list(lista) if isinstance(r, str)]
+        limpia = [r for r in list(lista)
+                  if isinstance(r, str) and r and not os.path.isabs(r)]
     except Exception:
         limpia = []
     _cola[:] = limpia
@@ -486,6 +490,24 @@ def reproducir_archivo(ruta_abs):
     reproducir_lista([os.path.normpath(ruta_abs)], 0)
 
 
+def _indice_sano():
+    """Índice válido del tema que suena dentro de la cola (se
+    auto-repara por identidad si el índice guardado quedó viejo tras
+    agregar/sacar/mover). None si no se puede saber."""
+    try:
+        if _sesion.get("rel") in _cola:
+            return _cola.index(_sesion["rel"])
+    except Exception:
+        pass
+    try:
+        i = _sesion.get("indice_cola")
+        if i is not None and 0 <= int(i) < len(_cola):
+            return int(i)
+    except Exception:
+        pass
+    return None
+
+
 def _avanzar(auto):
     """Pasa al siguiente tema de la cola (con vuelta si repetir).
     auto=True viene del fin natural; manual siempre avanza."""
@@ -494,11 +516,12 @@ def _avanzar(auto):
     if auto and not repetir():
         _sesion["estado"] = "DETENIDA"
         return
-    base = _sesion.get("indice_cola")
-    try:
-        base = int(base) if base is not None else -1
-    except Exception:
-        base = -1
+    base = _indice_sano()
+    if base is None:
+        if not auto:
+            base = -1
+        else:
+            return
     siguiente = (base + 1) % len(_cola)
     _sesion["indice_cola"] = siguiente
     _sesion["token"] += 1
@@ -524,12 +547,21 @@ def _avanzar_si_hay_cola(_paso):
 
 
 def _retroceder_si_hay_cola():
+    # Estilo Spotify: si pasaron más de 3 s, anterior reinicia el
+    # tema actual en vez de cambiar (si no, un toque accidental te
+    # saca del tema). Si no, va al anterior con vuelta.
     if not _cola:
         return
-    base = _sesion.get("indice_cola")
     try:
-        base = int(base) if base is not None else 0
+        cursor = float(_sesion.get("cursor_ms") or 0.0)
     except Exception:
+        cursor = 0.0
+    if cursor > 3000.0 and _sesion.get("rel"):
+        _sesion["cursor_ms"] = 0.0
+        _hacer_accion("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
+        return
+    base = _indice_sano()
+    if base is None:
         base = 0
     _sesion["indice_cola"] = (base - 1) % len(_cola)
     _sesion["token"] += 1

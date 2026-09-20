@@ -92,6 +92,15 @@ def main():
 
     mod_configuracion.cargar_config_soundboard()
     E.config_previa = mod_configuracion.cargar_config_conexion()
+    # La playlist actual arranca vacía en cada inicio: lo que sonaba
+    # ayer no se reanuda solo (ni suena nada "por defecto").
+    try:
+        _cfg_mus = mod_configuracion.cargar_config_musica()
+        if _cfg_mus.get("playlist"):
+            _cfg_mus["playlist"] = []
+            mod_configuracion.guardar_config_musica(_cfg_mus)
+    except Exception:
+        pass
     E.config_interfaz_previa = mod_configuracion.cargar_config_interfaz()
 
     E.tamano_icono_actual = E.config_interfaz_previa.get("tamano_icono", C.TAMANO_ICONO_POR_DEFECTO)
