@@ -15,6 +15,7 @@ from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs.audio import musica as mod_musica
 from consola_obs.audio import rutas_obs as mod_rutas_obs
+from consola_obs.ui import dibujo as mod_ui_dibujo
 
 ALTURA_MINI = 82
 INTERVALO_REFRESCO_MS = 250
@@ -52,11 +53,38 @@ def _necesita_tema(snap):
     return False
 
 
+def _icono_barra(nombre):
+    """Icono SVG de la barra a 18px (None si no se pudo: se cae al
+    emoji de texto). La referencia vive en _w para que Tk no lo
+    libere."""
+    try:
+        foto = mod_ui_dibujo._imagen_svg_menu("menu/" + nombre, 18)
+    except Exception:
+        foto = None
+    if foto is not None:
+        _w.setdefault("imgs", []).append(foto)
+    return foto
+
+
 def _boton_transporte(padre, texto, comando, ancho=3):
     boton = tk.Button(
         padre, text=texto, width=ancho, bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 11), cursor="hand2",
+        command=comando,
+    )
+    boton.pack(side="left", padx=1)
+    return boton
+
+
+def _boton_icono(padre, svg, texto_respaldo, comando):
+    """Botón solo-icono de 34x28 (o de texto si el SVG faltó)."""
+    foto = _icono_barra(svg)
+    if foto is None:
+        return _boton_transporte(padre, texto_respaldo, comando)
+    boton = tk.Button(
+        padre, image=foto, width=34, height=28, bg="#242d3d",
+        activebackground="#2f3a4d", relief="flat", bd=0, cursor="hand2",
         command=comando,
     )
     boton.pack(side="left", padx=1)
@@ -186,14 +214,17 @@ def _refrescar_mini_player():
             _w["titulo"].config(text=texto, fg="white")
         else:
             _w["titulo"].config(text="Sin música — 🎵 Elegí un tema…", fg="#828da6")
-        _w["play"].config(text="⏸" if snap["estado"] == "SONANDO" else "▶")
+        if snap["estado"] == "SONANDO" and _w.get("img_pause") is not None:
+            _w["play"].config(image=_w["img_pause"], text="", width=34, height=28)
+        else:
+            _w["play"].config(image="", text="▶", width=3, height=28)
         dur = float(snap.get("duracion_ms") or 0.0)
         cur = float(snap.get("cursor_ms") or 0.0)
         _w["tiempos"].config(
             text=f"{mod_musica.formatear_ms(cur)} / {mod_musica.formatear_ms(dur)}"
         )
         _dibujar_progreso(cur / dur if dur > 0 else 0.0)
-        _w["repetir"].config(fg=(E.color_acento() if snap.get("repetir") else "#5b6478"))
+        _w["repetir"].config(bg=("#3b4a63" if snap.get("repetir") else "#242d3d"))
     except Exception:
         pass
     try:
@@ -227,12 +258,16 @@ def construir_mini_player():
     fila = tk.Frame(marco, bg=E.color_barra_titulo())
     fila.pack(side="top", fill="x", padx=8, pady=(6, 2))
 
+    # Play/pausa: icono de pausa SVG sonando (no hay triángulo de
+    # play en el set, así que en pausa se usa el ▶ de texto).
     _w["play"] = _boton_transporte(fila, "▶", _alternar_playpausa)
-    _boton_transporte(fila, "⏹", _detener)
-    _boton_transporte(fila, "↻", _reiniciar)
-    _boton_transporte(fila, "⏮", _anterior)
-    _boton_transporte(fila, "⏭", _siguiente)
-    _w["repetir"] = _boton_transporte(fila, "🔁", _alternar_repetir)
+    _w["img_pause"] = _icono_barra("menu_barra_pause.svg")
+    _boton_icono(fila, "menu_barra_stop.svg", "⏹", _detener)
+    _boton_icono(fila, "menu_barra_reiniciar.svg", "↻", _reiniciar)
+    _boton_icono(fila, "menu_barra_anterior.svg", "⏮", _anterior)
+    _boton_icono(fila, "menu_barra_siguiente.svg", "⏭", _siguiente)
+    # Repetir usa el shuffle del set (el motor no tiene aleatorio).
+    _w["repetir"] = _boton_icono(fila, "menu_barra_repetir.svg", "🔁", _alternar_repetir)
 
     _w["titulo"] = tk.Label(
         fila, text="Sin música — 🎵 Elegí un tema…", bg=E.color_barra_titulo(),
@@ -242,12 +277,18 @@ def construir_mini_player():
 
     _w["tiempos"] = tk.Label(
         fila, text="00:00 / 00:00", bg=E.color_barra_titulo(),
-        fg=COLOR_TIEMPO, font=(E.FUENTE_UI, 8),
+        fg=COLOR_TIEMPO, font=(E.FUENTE_UI, 8, "bold"),
     )
     _w["tiempos"].pack(side="left", padx=(0, 6))
 
+    _foto_nota = _icono_barra("menu_barra_nota.svg")
+    if _foto_nota is None:
+        texto_biblio, img_biblio = "🎵 Elegir tema…", ""
+    else:
+        texto_biblio, img_biblio = "Elegir tema…", _foto_nota
     tk.Button(
-        fila, text="🎵 Elegir tema…", bg="#242d3d", fg="white",
+        fila, text=texto_biblio, image=img_biblio, compound="left",
+        bg="#242d3d", fg="white",
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=_elegir_tema_provisorio,
