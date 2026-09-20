@@ -591,10 +591,33 @@ def _pintar_tabla_biblio():
     biblioteca = _p.get("biblioteca", {})
     filtro = (_p.get("busqueda", "").strip().lower()
               if isinstance(_p.get("busqueda"), str) else "")
-    temas = _temas_de_tab(biblioteca, _p.get("tab") or "Recientes")
     if filtro:
+        # Búsqueda GLOBAL por título en toda la biblioteca,
+        # no solo la pestaña actual.
+        temas = []
+        try:
+            for carpeta in sorted(biblioteca):
+                temas.extend(biblioteca[carpeta])
+        except Exception:
+            pass
         temas = [t for t in temas if filtro in _titulo_rel(t).lower()]
+    else:
+        temas = _temas_de_tab(biblioteca, _p.get("tab") or "Recientes")
     _p["rels_biblio"] = _filas_tabla(_p["tree_biblio"], _vista_biblio_ordenada(temas))
+    if not temas:
+        try:
+            if not biblioteca:
+                msg = "Poné mp3 en assets/Musica/<carpeta>/"
+            elif filtro:
+                msg = f"Sin resultados para '{_p.get('busqueda', '').strip()}'."
+            elif (_p.get("tab") or "Recientes") == "Recientes":
+                msg = "Todavía no hay recientes."
+            else:
+                msg = "Carpeta vacía."
+            _p["tree_biblio"].insert("", "end", iid="vacia",
+                                     values=("", msg, "", "", ""))
+        except Exception:
+            pass
 
 
 def _pintar_tabla_playlist():
@@ -1185,14 +1208,3 @@ def _construir_panel():
     _barra_bib_x.pack(side="bottom", fill="x")
     _p["tree_biblio"].configure(xscrollcommand=_barra_bib_x.set)
     _atajos_arbol(_p["tree_biblio"], "biblio")
-
-
-def _al_buscar_panel(event=None):
-    if not _panel_vivo():
-        return
-    try:
-        _p["busqueda"] = _p["entrada_busqueda"].get()
-    except Exception:
-        _p["busqueda"] = ""
-    _pintar_tabla_biblio()
-    _asegurar_duraciones()
