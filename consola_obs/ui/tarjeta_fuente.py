@@ -1570,6 +1570,11 @@ def _actualizar_en_hilo():
         print(f"No se pudo preparar la fuente de efectos: {e}")
 
     try:
+        mod_obs_cliente.preparar_fuente_musica()
+    except Exception as e:
+        print(f"No se pudo preparar la fuente de música: {e}")
+
+    try:
         mod_obs_cliente.asegurar_fuentes_principales_en_todas_las_escenas()
     except Exception as e:
         print(f"No se pudo asegurar las fuentes principales en todas las escenas: {e}")

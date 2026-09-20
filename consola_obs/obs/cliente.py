@@ -501,6 +501,107 @@ def preparar_fuente_efectos():
             )
 
 
+def preparar_fuente_musica():
+    """Espejo de preparar_fuente_efectos para la música de fondo
+    (Fase 1 del plan de música): crea la fuente 'Musica'
+    (ffmpeg_source, sin loop propio) si falta y la asegura presente en
+    todas las escenas, arrancando detenida y vacía. El programa es el
+    dueño del transporte (qué tema suena y en qué momento); OBS solo
+    ejecuta. Serializada con _lock_sincronizar_escenas por el mismo
+    motivo que la de efectos (evitar duplicados si dos hilos la piden
+    a la vez, por ejemplo al crear una escena nueva)."""
+    if not E.conectado:
+        return
+
+    with E._lock_sincronizar_escenas:
+        try:
+            escenas = [
+                mod_obs_eventos._valor(e, "scene_name", "sceneName")
+                for e in E.cliente_obs.get_scene_list().scenes
+            ]
+            escenas = [e for e in escenas if e]
+
+            if not escenas:
+                return
+
+            entradas = [
+                mod_obs_eventos._valor(i, "input_name", "inputName")
+                for i in E.cliente_obs.get_input_list().inputs
+            ]
+
+            if C.NOMBRE_FUENTE_MUSICA not in entradas:
+                E.cliente_obs.create_input(
+                    escenas[0],
+                    C.NOMBRE_FUENTE_MUSICA,
+                    "ffmpeg_source",
+                    C.AJUSTES_FUENTE_MUSICA,
+                    True
+                )
+                try:
+                    E.cliente_obs.trigger_media_input_action(
+                        C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                    )
+                except Exception:
+                    pass
+            else:
+                try:
+                    E.cliente_obs.set_input_settings(
+                        C.NOMBRE_FUENTE_MUSICA,
+                        {
+                            "local_file": "",
+                            "looping": False,
+                            "restart_on_activate": False,
+                            "close_when_inactive": False,
+                        },
+                        True
+                    )
+                except Exception as e:
+                    print(f"No se pudo ajustar la fuente de música: {e}")
+
+            for escena in escenas:
+                try:
+                    items = E.cliente_obs.get_scene_item_list(
+                        escena
+                    ).scene_items
+
+                    nombres_en_escena = [
+                        mod_obs_eventos._valor(it, "source_name", "sourceName")
+                        for it in items
+                    ]
+
+                    if C.NOMBRE_FUENTE_MUSICA not in nombres_en_escena:
+                        E.cliente_obs.create_scene_item(
+                            escena,
+                            C.NOMBRE_FUENTE_MUSICA,
+                            True
+                        )
+                        try:
+                            E.cliente_obs.trigger_media_input_action(
+                                C.NOMBRE_FUENTE_MUSICA,
+                                "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                            )
+                        except Exception:
+                            pass
+
+                except Exception as e:
+                    print(
+                        f"No se pudo agregar la fuente de música a "
+                        f"'{escena}': {e}"
+                    )
+
+            try:
+                E.cliente_obs.trigger_media_input_action(
+                    C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            print(
+                f"No se pudo preparar la fuente de música: {e}"
+            )
+
+
 def preparar_fuentes_en_todas_las_escenas():
     """OBSOLETA a propósito: antes esto forzaba TODAS las fuentes de
     audio a existir en TODAS las escenas, lo cual era invasivo (tocaba

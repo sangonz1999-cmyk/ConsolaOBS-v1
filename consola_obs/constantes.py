@@ -47,6 +47,15 @@ NOMBRE_FUENTE_EFECTOS = "Soundboard_Efectos"
 ETIQUETA_FUENTE_EFECTOS = "Efectos De Sonido"
 NUM_BOTONES_SOUNDBOARD_INICIAL = 12
 
+# Fuente de música de fondo para el stream (Fase 1 del plan de
+# música): el programa es el dueño del transporte (biblioteca, cola,
+# play/pausa/seek) y OBS solo ejecuta con esta fuente tonta
+# (ffmpeg_source, sin loop propio para no pelear con la detección de
+# fin de tema del programa). Igual que la de efectos, vive en todas
+# las escenas y arranca detenida y vacía.
+NOMBRE_FUENTE_MUSICA = "Musica"
+ETIQUETA_FUENTE_MUSICA = "Música"
+
 # ============================================================
 # SECCIÓN DE CALIBRACIÓN DEL MEDIDOR DE VOLUMEN
 # ============================================================
@@ -267,6 +276,20 @@ UMBRAL_ARRASTRE_PX = 6
 AJUSTES_FUENTE_EFECTOS = {
     "local_file": "",
     "is_local_file": True,
+    "restart_on_activate": False,
+    "close_when_inactive": False,
+}
+
+
+# Ajustes de fábrica de la fuente de música (ver NOMBRE_FUENTE_MUSICA):
+# SIN loop propio a propósito. Si OBS repitiera el tema por su cuenta,
+# el estado nunca llegaría a ENDED y el programa no detectaría el fin
+# para avanzar la cola solo. La repetición (si se quiere) la maneja el
+# programa re-lanzando temas, no OBS.
+AJUSTES_FUENTE_MUSICA = {
+    "local_file": "",
+    "is_local_file": True,
+    "looping": False,
     "restart_on_activate": False,
     "close_when_inactive": False,
 }
