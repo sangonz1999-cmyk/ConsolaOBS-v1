@@ -75,7 +75,8 @@ def guardar_config_interfaz(datos_nuevos):
 def cargar_config_musica():
     """Biblioteca de música: recientes + repetir + playlist actual +
     caché de duraciones. Si no existe o está rota, valores de fábrica."""
-    fabrica = {"recientes": [], "repetir": True, "playlist": [], "duraciones": {}}
+    fabrica = {"recientes": [], "repetir": True, "mezclar": False,
+               "playlist": [], "duraciones": {}}
     # Reintentos de lectura: un guardado concurrente (o el antivirus)
     # puede negar el acceso un instante en Windows (Errno 13).
     datos = None
@@ -97,6 +98,8 @@ def cargar_config_musica():
         fabrica["recientes"] = []
     if not isinstance(fabrica.get("repetir"), bool):
         fabrica["repetir"] = True
+    if not isinstance(fabrica.get("mezclar"), bool):
+        fabrica["mezclar"] = False
     if not isinstance(fabrica.get("playlist"), list):
         fabrica["playlist"] = []
     if not isinstance(fabrica.get("duraciones"), dict):

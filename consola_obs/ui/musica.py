@@ -143,11 +143,12 @@ def _siguiente():
     mod_musica.siguiente()
 
 
-def _alternar_repetir():
+def _alternar_modo():
+    """El botón recorre repetir -> mezclar -> apagado -> repetir."""
     if not _necesita_conexion():
         return
     try:
-        mod_musica.alternar_repetir()
+        mod_musica.alternar_modo()
     except Exception:
         pass
     _refrescar_mini_player()
@@ -250,7 +251,22 @@ def _refrescar_mini_player():
             text=f"{mod_musica.formatear_ms(cur)} / {mod_musica.formatear_ms(dur)}"
         )
         _dibujar_progreso(cur / dur if dur > 0 else 0.0)
-        _w["repetir"].config(bg=(E.color_acento() if snap.get("repetir") else "#242d3d"))
+        modo = snap.get("modo") or ("repetir" if snap.get("repetir") else "off")
+        if modo == "mezclar" and _w.get("img_mezclar") is not None:
+            _w["repetir"].config(image=_w["img_mezclar"], text="",
+                                 width=34, height=28, bg=E.color_acento())
+        elif modo == "mezclar":
+            _w["repetir"].config(image="", text="🔀", width=3, height=28,
+                                 bg=E.color_acento(), fg="white")
+        elif modo == "repetir":
+            _w["repetir"].config(image="", text="🔁", width=3, height=28,
+                                 bg=E.color_acento(), fg="white")
+        elif _w.get("img_mezclar") is not None:
+            _w["repetir"].config(image=_w["img_mezclar"], text="",
+                                 width=34, height=28, bg="#242d3d")
+        else:
+            _w["repetir"].config(image="", text="🔁", width=3, height=28,
+                                 bg="#242d3d", fg="white")
     except Exception:
         pass
     try:
@@ -297,8 +313,18 @@ def construir_mini_player():
     _boton_icono(fila, "menu_barra_reiniciar.svg", "↻", _reiniciar)
     _boton_icono(fila, "menu_barra_anterior.svg", "⏮", _anterior)
     _boton_icono(fila, "menu_barra_siguiente.svg", "⏭", _siguiente)
-    # Repetir usa el shuffle del set (el motor no tiene aleatorio).
-    _w["repetir"] = _boton_icono(fila, "menu_barra_repetir.svg", "🔁", _alternar_repetir)
+    # Modo (repetir/mezclar/off): el icono shuffle es para mezclar;
+    # repetir usa el emoji para distinguirse.
+    _w["img_mezclar"] = _icono_barra("menu_barra_repetir.svg")
+    if _w["img_mezclar"] is None:
+        _w["repetir"] = _boton_transporte(fila, "🔁", _alternar_modo)
+    else:
+        _w["repetir"] = tk.Button(
+            fila, image=_w["img_mezclar"], width=34, height=28, bg="#242d3d",
+            activebackground="#2f3a4d", relief="flat", bd=0, cursor="hand2",
+            command=_alternar_modo,
+        )
+        _w["repetir"].pack(side="left", padx=1)
 
     _w["titulo"] = tk.Label(
         fila, text="Sin música — abrí la 🎵 Biblioteca", bg=E.color_barra_titulo(),

@@ -384,8 +384,48 @@ def repetir():
         return True
 
 
+def mezclar():
+    """Aleatorio real (no solo el icono): True = el siguiente tema se
+    elige al azar sin repetir el actual."""
+    try:
+        return bool(_config().get("mezclar", False))
+    except Exception:
+        return False
+
+
+def modo():
+    """Modo de reproducción: repetir, mezclar u off."""
+    try:
+        if mezclar():
+            return "mezclar"
+        return "repetir" if repetir() else "off"
+    except Exception:
+        return "repetir"
+
+
+def alternar_modo():
+    """El botón recorre repetir -> mezclar -> apagado -> repetir.
+    Mezclar implica no frenar nunca (siempre hay siguiente)."""
+    try:
+        actual = modo()
+        cfg = _config()
+        if actual == "repetir":
+            cfg["mezclar"] = True
+        elif actual == "mezclar":
+            cfg["mezclar"] = False
+            cfg["repetir"] = False
+        else:
+            cfg["repetir"] = True
+        mod_configuracion.guardar_config_musica(cfg)
+        return modo()
+    except Exception as e:
+        print(f"No se pudo cambiar el modo: {e}")
+        return modo()
+
+
 def alternar_repetir():
-    """Invierte repetir-lista y devuelve el nuevo valor (Fase 3)."""
+    """Invierte repetir-lista y devuelve el nuevo valor (compat: lo
+    usa el ciclo del botón cuando sale de apagado)."""
     try:
         cfg = _config()
         cfg["repetir"] = not bool(cfg.get("repetir", True))
@@ -403,13 +443,16 @@ def estado_actual():
             "rel": _sesion["rel"],
             "titulo": os.path.splitext(os.path.basename(_sesion["rel"]))[0] if _sesion["rel"] else None,
             "estado": _sesion["estado"],
-            "cursor_ms": float(_sesion["cursor_ms"] or 0.0),
-            "duracion_ms": float(_sesion["duracion_ms"] or 0.0),
-            "repetir": repetir(),
-        }
+                "cursor_ms": float(_sesion["cursor_ms"] or 0.0),
+                "duracion_ms": float(_sesion["duracion_ms"] or 0.0),
+                "repetir": repetir(),
+                "mezclar": mezclar(),
+                "modo": modo(),
+            }
     except Exception:
         return {"rel": None, "titulo": None, "estado": "DETENIDA",
-                "cursor_ms": 0.0, "duracion_ms": 0.0, "repetir": True}
+                "cursor_ms": 0.0, "duracion_ms": 0.0, "repetir": True,
+                "mezclar": False, "modo": "repetir"}
 
 
 def _hacer_reproducir(rel, token):
@@ -540,21 +583,43 @@ def _indice_sano():
     return None
 
 
-def _avanzar(auto):
-    """Pasa al siguiente tema de la cola (con vuelta si repetir).
-    auto=True viene del fin natural; manual siempre avanza."""
-    if not _cola:
-        return
-    if auto and not repetir():
-        _sesion["estado"] = "DETENIDA"
-        return
+def _indice_siguiente():
+    """Índice del próximo tema o None (frenar). Con mezclar elige al
+    azar sin repetir el actual; si no, el siguiente con vuelta."""
+    n = len(_cola)
+    if n == 0:
+        return None
+    if _mezclar_activo() and n > 1:
+        import random as _r
+        base = _indice_sano()
+        candidatos = [i for i in range(n) if i != base]
+        return _r.choice(candidatos) if candidatos else 0
     base = _indice_sano()
     if base is None:
-        if not auto:
-            base = -1
-        else:
-            return
-    siguiente = (base + 1) % len(_cola)
+        base = -1
+    return (base + 1) % n
+
+
+def _mezclar_activo():
+    try:
+        return bool(mezclar())
+    except Exception:
+        return False
+
+
+def _avanzar(auto):
+    """Avanza (fin natural con auto=True, manual con False). Con
+    mezclar nunca frena; sin repetir ni mezclar, el fin natural frena
+    pero el manual da la vuelta igual."""
+    if not _cola:
+        return
+    if auto and not (repetir() or _mezclar_activo()):
+        _sesion["estado"] = "DETENIDA"
+        return
+    siguiente = _indice_siguiente()
+    if siguiente is None:
+        _sesion["estado"] = "DETENIDA"
+        return
     _sesion["indice_cola"] = siguiente
     _sesion["token"] += 1
     if auto:
