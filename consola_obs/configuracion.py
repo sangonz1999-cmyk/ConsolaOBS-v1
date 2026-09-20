@@ -96,13 +96,21 @@ def cargar_config_musica():
 
 
 def guardar_config_musica(datos):
-    # Escritura atómica (tmp + replace): el hilo de duraciones y la UI
-    # escriben este JSON a la vez, y un open("w") directo dejaba al
-    # otro con el archivo truncado a la mitad (parse vacío).
-    try:
-        ruta_tmp = R.ARCHIVO_MUSICA + ".tmp"
-        with open(ruta_tmp, "w", encoding="utf-8") as f:
-            json.dump(datos, f, ensure_ascii=False, indent=2)
-        os.replace(ruta_tmp, R.ARCHIVO_MUSICA)
-    except Exception as e:
-        print(f"No se pudo guardar la configuración de música: {e}")
+    """Escritura atómica (tmp + replace) con reintentos: el hilo de
+    duraciones y la UI escriben este JSON a la vez, y en Windows el
+    replace puede chocar con un lock transitorio (antivirus, etc. ->
+    WinError 5). Devuelve True si quedó guardado."""
+    import time as _t
+    for intento in range(6):
+        try:
+            ruta_tmp = R.ARCHIVO_MUSICA + ".tmp"
+            with open(ruta_tmp, "w", encoding="utf-8") as f:
+                json.dump(datos, f, ensure_ascii=False, indent=2)
+            os.replace(ruta_tmp, R.ARCHIVO_MUSICA)
+            return True
+        except Exception as e:
+            if intento >= 5:
+                print(f"No se pudo guardar la configuración de música: {e}")
+                return False
+            _t.sleep(0.05 * (2 ** intento))
+    return False

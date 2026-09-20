@@ -108,11 +108,14 @@ def duracion_cacheada(rel):
     archivo cambió). Para pintar la tabla sin congelar la UI; el hilo
     de relleno del panel usa duracion_de()."""
     try:
-        caché = _config().get("duraciones") or {}
+        mem = _dur_mem.get(rel)
         ruta_abs = _absoluta_si_rel(rel)
         firma = _firma_archivo(ruta_abs)
         if firma is None:
             return None
+        if isinstance(mem, dict) and mem.get("firma") == firma and mem.get("ms"):
+            return float(mem["ms"])
+        caché = _config().get("duraciones") or {}
         vieja = caché.get(rel)
         if isinstance(vieja, dict) and vieja.get("firma") == firma and vieja.get("ms"):
             return float(vieja["ms"])
@@ -121,9 +124,45 @@ def duracion_cacheada(rel):
         return None
 
 
+# Duraciones decodificadas pendientes de persistir + último flush.
+# Sin esto, abrir la biblioteca con cientos de temas disparaba un
+# guardado de JSON por tema y los writes chocaban entre sí y con el
+# antivirus (WinError 5 en Windows).
+_dur_mem = {}
+_flush_dur = {"t": 0.0}
+INTERVALO_FLUSH_DURACIONES_SEG = 5.0
+
+
+def _flush_duraciones(forzar=False):
+    """Vuelca las duraciones pendientes al JSON (con debounce de 5 s,
+    o ya si forzar=True). Devuelve True si no quedó nada pendiente."""
+    if not _dur_mem:
+        return True
+    try:
+        ahora = time.monotonic()
+    except Exception:
+        ahora = 0.0
+    if not forzar and (ahora - _flush_dur.get("t", 0.0)) < INTERVALO_FLUSH_DURACIONES_SEG:
+        return False
+    try:
+        cfg = _config()
+        caché = cfg.get("duraciones") or {}
+        caché.update(_dur_mem)
+        cfg["duraciones"] = caché
+        if mod_configuracion.guardar_config_musica(cfg):
+            _dur_mem.clear()
+            _flush_dur["t"] = ahora
+            return True
+        return False
+    except Exception as e:
+        print(f"No se pudo persistir duraciones: {e}")
+        return False
+
+
 def duracion_de(rel):
     """Duración en ms con caché persistente (config): la primera vez
-    decodifica, después sale del JSON. None si no se pudo."""
+    decodifica, después sale del JSON. El guardado va con debounce
+    para no aporrear el disco. None si no se pudo."""
     try:
         ms = duracion_cacheada(rel)
         if ms:
@@ -133,11 +172,8 @@ def duracion_de(rel):
             return None
         ms = leer_duracion_local(ruta_abs)
         if ms:
-            cfg = _config()
-            caché = cfg.get("duraciones") or {}
-            caché[rel] = {"ms": ms, "firma": _firma_archivo(ruta_abs)}
-            cfg["duraciones"] = caché
-            mod_configuracion.guardar_config_musica(cfg)
+            _dur_mem[rel] = {"ms": ms, "firma": _firma_archivo(ruta_abs)}
+            _flush_duraciones()
             return float(ms)
         return None
     except Exception:

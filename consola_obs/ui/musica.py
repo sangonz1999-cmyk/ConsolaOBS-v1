@@ -160,6 +160,10 @@ def _alternar_panel_biblioteca():
         except Exception:
             pass
         _p["visible"] = False
+        try:
+            mod_musica._flush_duraciones(forzar=True)
+        except Exception:
+            pass
     else:
         try:
             _p["marco"].pack(side="bottom", fill="x")
@@ -331,9 +335,10 @@ _p = {"marco": None, "visible": False, "tab": "Recientes", "tabs": [],
 _dnd = {"origen": None, "iid": None, "x0": 0, "y0": 0, "activo": False}
 
 COLUMNAS_TABLA = ("n", "titulo", "album", "fecha", "dur")
+COLUMNAS_PLAYLIST = ("n", "titulo", "album")
 TITULOS_TABLA = {"n": "#", "titulo": "Título", "album": "Álbum",
                  "fecha": "Agregado", "dur": "🕒"}
-ANCHOS_TABLA = {"n": 36, "titulo": 200, "album": 120, "fecha": 92, "dur": 56}
+ANCHOS_TABLA = {"n": 36, "titulo": 260, "album": 120, "fecha": 92, "dur": 56}
 
 
 def _panel_vivo():
@@ -366,18 +371,22 @@ def _estilo_tablas():
         pass
 
 
-def _crear_tabla(padre):
-    tree = ttk.Treeview(padre, columns=COLUMNAS_TABLA, show="headings",
+def _crear_tabla(padre, compacta=False):
+    """Tabla estilo Spotify. Compacta (playlist: sin fecha ni duración)
+    o completa (biblioteca, con scroll horizontal)."""
+    columnas = COLUMNAS_PLAYLIST if compacta else COLUMNAS_TABLA
+    tree = ttk.Treeview(padre, columns=columnas, show="headings",
                         style="Musica.Treeview", selectmode="browse")
-    for col in COLUMNAS_TABLA:
+    for col in columnas:
         tree.heading(col, text=TITULOS_TABLA[col])
-        tree.column(col, width=ANCHOS_TABLA[col], stretch=(col == "titulo"),
+        tree.column(col, width=ANCHOS_TABLA[col],
+                    stretch=(compacta and col == "titulo"),
                     anchor="w" if col == "titulo" else "center")
     tree.tag_configure("sonando", background=COLOR_FILA_SONANDO)
     return tree
 
 
-def _filas_tabla(tree, rels):
+def _filas_tabla(tree, rels, compacta=False):
     """Llena la tabla; devuelve la lista tal cual (para mapear iid)."""
     try:
         for iid in tree.get_children():
@@ -386,11 +395,15 @@ def _filas_tabla(tree, rels):
         return []
     for i, rel in enumerate(rels):
         try:
-            dur = mod_musica.duracion_cacheada(rel)
-            tree.insert("", "end", iid=str(i), values=(
-                i + 1, _titulo_rel(rel), mod_musica.album_de_rel(rel),
-                mod_musica.fecha_de_archivo(mod_musica.ruta_absoluta(rel)),
-                mod_musica.formatear_ms(dur) if dur else "--:--"))
+            if compacta:
+                tree.insert("", "end", iid=str(i), values=(
+                    i + 1, _titulo_rel(rel), mod_musica.album_de_rel(rel)))
+            else:
+                dur = mod_musica.duracion_cacheada(rel)
+                tree.insert("", "end", iid=str(i), values=(
+                    i + 1, _titulo_rel(rel), mod_musica.album_de_rel(rel),
+                    mod_musica.fecha_de_archivo(mod_musica.ruta_absoluta(rel)),
+                    mod_musica.formatear_ms(dur) if dur else "--:--"))
         except Exception:
             pass
     return list(rels)
@@ -459,7 +472,9 @@ def _pintar_tabla_biblio():
 def _pintar_tabla_playlist():
     if not _panel_vivo():
         return
-    _p["rels_playlist"] = _filas_tabla(_p["tree_playlist"], mod_musica.playlist_actual())
+    _p["rels_playlist"] = _filas_tabla(_p["tree_playlist"],
+                                       mod_musica.playlist_actual(),
+                                       compacta=True)
     _resaltar_playlist()
 
 
@@ -536,6 +551,8 @@ def _actualizar_duracion_fila(gen, rel, ms):
             if rel in rels and arbol is not None:
                 iid = str(rels.index(rel))
                 vals = list(arbol.item(iid, "values"))
+                if len(vals) < 5:
+                    continue
                 vals[4] = texto
                 arbol.item(iid, values=vals)
         except Exception:
@@ -769,7 +786,13 @@ def _atajos_arbol(tree, cual):
     tree.bind("<ButtonPress-1>", lambda e: _dnd_press(cual, e))
     tree.bind("<B1-Motion>", _dnd_move)
     tree.bind("<ButtonRelease-1>", _dnd_release)
+    # Ruedita: scroll vertical (en la playlist reemplaza a la
+    # scrollbar, que se sacó a pedido).
+    tree.bind("<MouseWheel>",
+              lambda e, t=tree: t.yview_scroll(int(-1 * (e.delta / 120)), "units"))
     if cual == "biblio":
+        tree.bind("<Shift-MouseWheel>",
+                  lambda e, t=tree: t.xview_scroll(int(-1 * (e.delta / 120)), "units"))
         tree.bind("<Double-Button-1>",
                   lambda e: _reproducir_vista_biblio(_indice_bajo_puntero(tree, e)))
         tree.bind("<Return>", lambda e: _reproducir_vista_biblio(_indice_foco(tree)))
@@ -844,24 +867,27 @@ def _construir_panel():
     cuerpo = tk.Frame(marco, bg=E.color_barra_titulo())
     cuerpo.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
 
-    col_izq = tk.Frame(cuerpo, bg=E.color_barra_titulo())
-    col_izq.pack(side="left", fill="both", expand=True, padx=(0, 4))
+    # Divisor movible entre playlist y biblioteca (se arrastra a
+    # gusto como el divisor principal de la ventana).
+    divisor = tk.PanedWindow(cuerpo, orient="horizontal", bg="#1b2230",
+                             sashwidth=8, sashrelief="flat", bd=0,
+                             opaqueresize=True)
+    divisor.pack(fill="both", expand=True)
+    _p["divisor"] = divisor
+
+    col_izq = tk.Frame(divisor, bg=E.color_barra_titulo())
+    divisor.add(col_izq, minsize=200, stretch="always")
     tk.Label(col_izq, text="▶ Playlist actual", bg=E.color_barra_titulo(),
              fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(fill="x")
     marco_tree_pls = tk.Frame(col_izq, bg=E.color_barra_titulo())
     marco_tree_pls.pack(fill="both", expand=True)
-    _p["tree_playlist"] = _crear_tabla(marco_tree_pls)
+    _p["tree_playlist"] = _crear_tabla(marco_tree_pls, compacta=True)
     _p["tree_playlist"].pack(side="left", fill="both", expand=True)
-    _barra_pls = ttk.Scrollbar(marco_tree_pls, orient="vertical",
-                               command=_p["tree_playlist"].yview,
-                               style="Discreta.Vertical.TScrollbar")
-    _barra_pls.pack(side="left", fill="y")
-    _p["tree_playlist"].configure(yscrollcommand=_barra_pls.set)
-    _p["tree_playlist"].tag_configure("sonando", background=COLOR_FILA_SONANDO)
+    # Sin scrollbar vertical: con la ruedita alcanza.
     _atajos_arbol(_p["tree_playlist"], "playlist")
 
-    col_der = tk.Frame(cuerpo, bg=E.color_barra_titulo())
-    col_der.pack(side="left", fill="both", expand=True, padx=(4, 0))
+    col_der = tk.Frame(divisor, bg=E.color_barra_titulo())
+    divisor.add(col_der, minsize=260, stretch="always")
     tk.Label(col_der, text="Biblioteca", bg=E.color_barra_titulo(),
              fg="white", font=(E.FUENTE_UI, 9, "bold"), anchor="w").pack(fill="x")
     marco_tree_bib = tk.Frame(col_der, bg=E.color_barra_titulo())
@@ -873,6 +899,11 @@ def _construir_panel():
                                style="Discreta.Vertical.TScrollbar")
     _barra_bib.pack(side="left", fill="y")
     _p["tree_biblio"].configure(yscrollcommand=_barra_bib.set)
+    _barra_bib_x = ttk.Scrollbar(marco_tree_bib, orient="horizontal",
+                                 command=_p["tree_biblio"].xview,
+                                 style="Discreta.Horizontal.TScrollbar")
+    _barra_bib_x.pack(side="bottom", fill="x")
+    _p["tree_biblio"].configure(xscrollcommand=_barra_bib_x.set)
     _atajos_arbol(_p["tree_biblio"], "biblio")
 
 

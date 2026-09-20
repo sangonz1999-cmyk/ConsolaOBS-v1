@@ -1028,6 +1028,7 @@ def al_cerrar():
         # cargada sin UI que la controle.
         from consola_obs.audio import musica as mod_audio_musica
         mod_audio_musica.detener_y_vaciar_musica()
+        mod_audio_musica._flush_duraciones(forzar=True)
     except Exception:
         pass
     try:
