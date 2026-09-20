@@ -31,6 +31,11 @@ _sesion = {
     "rel": None, "archivo": None, "indice_cola": None,
     "estado": "DETENIDA", "crudo": None,
     "cursor_ms": 0.0, "duracion_ms": 0.0, "token": 0,
+    # Confirmación post-seek: {"destino": ms, "t": monotonic}. Mientras
+    # está vigente (2 s), el sondeo solo acepta lo que confirme el
+    # destino e ignora los ceros/nulos transitorios que OBS manda al
+    # buscar en pausa (si no, la barra se borra).
+    "seek_pendiente": None,
 }
 _cola = []
 _sondeo = {"en_marcha": False}
@@ -176,6 +181,7 @@ def _hacer_reproducir(rel, token):
     _sesion["estado"] = "SONANDO"
     _sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
     _sesion["cursor_ms"] = 0.0
+    _sesion["seek_pendiente"] = None
     if not es_absoluta:
         _tocar_reciente(rel)
     asegurar_sondeo()
@@ -309,7 +315,12 @@ def reiniciar():
 
 
 def seek_ms(milisegundos):
-    """Salta al momento exacto (clic en la barra, Fase 3)."""
+    """Salta al momento exacto (clic en la barra, Fase 3). Muestra el
+    destino en el acto (update optimista: la UI lo levanta en el
+    próximo refresco, esté sonando o en pausa) y abre una ventana de
+    confirmación de 2 s donde el sondeo solo acepta lo que confirme
+    el destino; los ceros/nulos transitorios que OBS manda al buscar
+    en pausa se ignoran para que la barra no se borre."""
     if not E.conectado or not _sesion.get("archivo"):
         return
     try:
@@ -318,6 +329,8 @@ def seek_ms(milisegundos):
             destino = min(destino, float(_sesion["duracion_ms"]))
     except Exception:
         return
+    _sesion["cursor_ms"] = destino
+    _sesion["seek_pendiente"] = {"destino": destino, "t": time.monotonic()}
     _en_hilo(_hacer_seek, destino)
 
 
@@ -342,12 +355,32 @@ def _sondear_una_vez():
     try:
         cursor = mod_obs_eventos._valor(respuesta, "media_cursor", "mediaCursor")
         duracion = mod_obs_eventos._valor(respuesta, "media_duration", "mediaDuration")
-        if cursor is not None:
-            _sesion["cursor_ms"] = float(cursor)
-        if duracion is not None:
-            _sesion["duracion_ms"] = float(duracion)
+        cursor = float(cursor) if cursor is not None else None
+        duracion = float(duracion) if duracion is not None else None
     except Exception:
+        cursor, duracion = None, None
+    # Duración: nunca pisar un valor conocido con 0/None (OBS los
+    # manda transitorios al buscar en pausa).
+    if duracion is not None and duracion > 0:
+        _sesion["duracion_ms"] = duracion
+    elif not _sesion.get("duracion_ms"):
+        _sesion["duracion_ms"] = 0.0
+    # Cursor: ventana de confirmación post-seek (2 s). Ahí solo vale
+    # lo que confirme el destino; el resto se ignora para que la
+    # barra no se borre al buscar en pausa. Vencida, se confía en OBS.
+    ahora = time.monotonic()
+    pend = _sesion.get("seek_pendiente")
+    if pend is not None and (ahora - pend.get("t", 0)) >= 2.0:
+        _sesion["seek_pendiente"] = None
+        pend = None
+    if cursor is None:
         pass
+    elif pend is not None:
+        if abs(cursor - pend["destino"]) < 2000.0:
+            _sesion["cursor_ms"] = cursor
+            _sesion["seek_pendiente"] = None
+    else:
+        _sesion["cursor_ms"] = cursor
     if not crudo:
         return
     _sesion["crudo"] = crudo
@@ -392,6 +425,7 @@ def detener_y_vaciar_musica():
     _sesion["crudo"] = None
     _sesion["cursor_ms"] = 0.0
     _sesion["duracion_ms"] = 0.0
+    _sesion["seek_pendiente"] = None
     if not E.conectado:
         return
     try:
