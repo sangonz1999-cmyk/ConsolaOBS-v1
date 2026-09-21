@@ -277,13 +277,16 @@ def _cargar_y_disparar(indice, accion, token):
     # se mide y cachea para cuando se prenda.
     ruta = datos["archivo"]
     nivel_db = datos.get("nivel_db")
-    if not isinstance(nivel_db, (int, float)) or datos.get("nivel_archivo") != ruta:
+    if (not isinstance(nivel_db, (int, float))
+            or datos.get("nivel_archivo") != ruta
+            or datos.get("nivel_version") != mod_nivelacion.NIVEL_VERSION):
         try:
             nivel_db = mod_nivelacion.ganancia_db_para(ruta)
         except Exception:
             nivel_db = 0.0
         datos["nivel_db"] = nivel_db
         datos["nivel_archivo"] = ruta
+        datos["nivel_version"] = mod_nivelacion.NIVEL_VERSION
         try:
             mod_configuracion.guardar_config_soundboard()
         except Exception:
