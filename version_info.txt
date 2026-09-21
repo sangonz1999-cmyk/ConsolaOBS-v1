@@ -6,8 +6,8 @@
 # y autor en vez de salir como archivo anónimo.
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 0, 0),
-    prodvers=(1, 1, 0, 0),
+    filevers=(1, 1, 1, 0),
+    prodvers=(1, 1, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -22,12 +22,12 @@ VSVersionInfo(
           '040904B0',
           [StringStruct('CompanyName', 'ConsolaOBS'),
            StringStruct('FileDescription', 'ConsolaOBS - Panel de control de audio para OBS Studio'),
-           StringStruct('FileVersion', '1.1.0'),
+           StringStruct('FileVersion', '1.1.1'),
            StringStruct('InternalName', 'ConsolaOBS'),
            StringStruct('LegalCopyright', 'ConsolaOBS'),
            StringStruct('OriginalFilename', 'ConsolaOBS.exe'),
            StringStruct('ProductName', 'ConsolaOBS'),
-           StringStruct('ProductVersion', '1.1.0')])
+           StringStruct('ProductVersion', '1.1.1')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
