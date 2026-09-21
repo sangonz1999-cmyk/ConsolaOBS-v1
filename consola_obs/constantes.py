@@ -45,6 +45,9 @@ ESCALA_BASE = 0.78
 
 NOMBRE_FUENTE_EFECTOS = "Soundboard_Efectos"
 ETIQUETA_FUENTE_EFECTOS = "Efectos De Sonido"
+# Filtro Gain propio para la nivelación (ver audio/nivelacion.py):
+# con ESTE filtro se compensa cada pad, sin tocar el fader del usuario.
+NOMBRE_FILTRO_NIVEL = "Nivelador ConsolaOBS"
 NUM_BOTONES_SOUNDBOARD_INICIAL = 12
 
 # Fuente de música de fondo para el stream (Fase 1 del plan de

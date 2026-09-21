@@ -8,6 +8,7 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 - **Soundboard**: pads con sonido e imagen; clic reproduce, clic de nuevo detiene con fundido; menú contextual y drag & drop.
 - **Detección de carpetas**: los audios nuevos de `assets/Sondidos_pad/` se convierten solos en pads (entran primeros en la fila) con su imagen gemela de `assets/Imagenes_pad/`.
 - **Audio local**: cada efecto suena en OBS y a la vez en los parlantes de la PC (miniaudio), con on/off en Ajustes → Audio.
+- **Nivelación de efectos**: todos los pads suenan al mismo volumen (se mide el pico una vez y se compensa por pad, en parlantes y en OBS vía filtro Gain propio), con on/off en Ajustes → Audio.
 - **Tipografías**: selector en Ajustes → Apariencia ("Tipografia de obs" = Open Sans por defecto, Predeterminada + las de `assets/fuentes/`), se aplica a toda la interfaz.
 - **Editor de filtros** de audio de OBS en vivo (compresor, EQ, etc.).
 - **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.

@@ -7,6 +7,7 @@ from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
 from consola_obs.obs import eventos as mod_obs_eventos
+from consola_obs.audio import nivelacion as mod_nivelacion
 from consola_obs.audio import rutas_obs as mod_rutas_obs
 from consola_obs.ui import soundboard as mod_ui_soundboard
 
@@ -97,10 +98,10 @@ def _apagar_pad_si_desconectado(token):
         pass
 
 
-def _reproducir_local(ruta, token):
+def _reproducir_local(ruta, token, ganancia_lineal=1.0):
     """Reproduce el archivo por la salida de audio de la PC (parlantes /
     auriculares) con miniaudio, en paralelo a OBS. Corre en su propio
-    hilo.
+    hilo. ganancia_lineal es la nivelación del pad (1.0 = sin tocar).
 
     OJO: device.start() NO bloquea (arranca y vuelve enseguida), así
     que hay que quedarse esperando a que el stream se agote o a que lo
@@ -150,6 +151,8 @@ def _reproducir_local(ruta, token):
                 trozo = next(flujo)
             except StopIteration:
                 return
+            if ganancia_lineal != 1.0:
+                trozo = _aplicar_ganancia(trozo, ganancia_lineal)
             while True:
                 if cancelado.is_set():
                     break
@@ -167,6 +170,8 @@ def _reproducir_local(ruta, token):
                     break
                 try:
                     trozo = flujo.send(pedido) if pedido else next(flujo)
+                    if ganancia_lineal != 1.0:
+                        trozo = _aplicar_ganancia(trozo, ganancia_lineal)
                 except StopIteration:
                     break
         finally:
@@ -228,15 +233,63 @@ def _reproducir_local(ruta, token):
 def cambiar_escuchar_en_pc(valor):
     """Se llama desde el combobox 'Escuchar acá' del menú de ajustes."""
     E.escuchar_en_pc = (valor == "Sí")
+
     mod_configuracion.guardar_config_interfaz({"escuchar_en_pc": E.escuchar_en_pc})
+
     if not E.escuchar_en_pc:
         _detener_local()
 
 
+def cambiar_nivelar_efectos(valor):
+    """Se llama desde el combobox 'Nivelar efectos' del menú de ajustes."""
+    E.nivelar_efectos = (valor == "Sí")
+    mod_configuracion.guardar_config_interfaz({"nivelar_efectos": E.nivelar_efectos})
+
+
+def _asegurar_filtro_nivel(db):
+    """Pone el filtro Gain propio en la fuente de efectos con los dB
+    del pad que suena (lo crea si falta). No toca el fader del usuario:
+    la compensación vive solo en este filtro."""
+    try:
+        E.cliente_obs.get_source_filter(C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FILTRO_NIVEL)
+    except Exception:
+        try:
+            E.cliente_obs.create_source_filter(
+                C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FILTRO_NIVEL,
+                "gain_filter", {"db": 0.0})
+        except Exception as e:
+            print(f"No se pudo crear el filtro de nivelación: {e}")
+            return
+    try:
+        E.cliente_obs.set_source_filter_settings(
+            C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FILTRO_NIVEL,
+            {"db": float(db)}, True)
+    except Exception as e:
+        print(f"No se pudo aplicar la nivelación ({db} dB): {e}")
 def _cargar_y_disparar(indice, accion, token):
     datos = E.config_soundboard.get(str(indice))
     if not datos or not datos.get("archivo"):
         return
+
+    # Nivelación (ver audio/nivelacion.py): se mide el pico una sola
+    # vez por archivo y se guarda en el pad; si cambió el archivo se
+    # vuelve a medir. Con la nivelación apagada se usa 0 dB pero igual
+    # se mide y cachea para cuando se prenda.
+    ruta = datos["archivo"]
+    nivel_db = datos.get("nivel_db")
+    if not isinstance(nivel_db, (int, float)) or datos.get("nivel_archivo") != ruta:
+        try:
+            nivel_db = mod_nivelacion.ganancia_db_para(ruta)
+        except Exception:
+            nivel_db = 0.0
+        datos["nivel_db"] = nivel_db
+        datos["nivel_archivo"] = ruta
+        try:
+            mod_configuracion.guardar_config_soundboard()
+        except Exception:
+            pass
+    if not bool(getattr(E, "nivelar_efectos", True)):
+        nivel_db = 0.0
 
     # El audio local sale siempre que esté habilitado, haya o no
     # conexión a OBS: es independiente del trigger de OBS de abajo.
@@ -244,7 +297,8 @@ def _cargar_y_disparar(indice, accion, token):
     if suena_local:
         threading.Thread(
             target=_reproducir_local,
-            args=(datos["archivo"], token),
+            args=(datos["archivo"], token,
+                  mod_nivelacion.lineal_desde_db(nivel_db)),
             daemon=True
         ).start()
 
@@ -271,6 +325,7 @@ def _cargar_y_disparar(indice, accion, token):
             },
             True
         )
+        _asegurar_filtro_nivel(nivel_db)
         E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}")

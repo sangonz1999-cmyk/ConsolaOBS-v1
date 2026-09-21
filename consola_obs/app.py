@@ -192,6 +192,10 @@ def main():
     E.escuchar_en_pc = E.config_interfaz_previa.get("escuchar_en_pc", True)
     if not isinstance(E.escuchar_en_pc, bool):
         E.escuchar_en_pc = str(E.escuchar_en_pc).lower() in ("1", "true", "sí", "si")
+    # Nivelación de efectos (todos los pads al mismo volumen).
+    E.nivelar_efectos = E.config_interfaz_previa.get("nivelar_efectos", True)
+    if not isinstance(E.nivelar_efectos, bool):
+        E.nivelar_efectos = str(E.nivelar_efectos).lower() in ("1", "true", "sí", "si")
 
     try:
         E._ico = os.path.join(R.CARPETA_ICONOS, "app_icon.ico")
@@ -590,6 +594,20 @@ def main():
     E.selector_escuchar.bind(
         "<<ComboboxSelected>>",
         lambda e: mod_audio_reproduccion.cambiar_escuchar_en_pc(E.variable_escuchar.get())
+    )
+
+    E.variable_nivelar = tk.StringVar(value="Sí" if E.nivelar_efectos else "No")
+    E.selector_nivelar = ttk.Combobox(
+        mod_ui_cabecera._fila_menu("Nivelar efectos"),
+        textvariable=E.variable_nivelar,
+        values=["Sí", "No"],
+        state="readonly",
+        style="Discreta.TCombobox"
+    )
+    E.selector_nivelar.pack(side="left", fill="x", expand=True)
+    E.selector_nivelar.bind(
+        "<<ComboboxSelected>>",
+        lambda e: mod_audio_reproduccion.cambiar_nivelar_efectos(E.variable_nivelar.get())
     )
 
     tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")
