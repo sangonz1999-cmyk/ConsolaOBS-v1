@@ -438,9 +438,20 @@ def main():
     # D:\ConsolaOBS\assets). En la misma PC se ignora.
     E.entrada_base_obs = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Carpeta OBS"))
     E.entrada_base_obs.insert(0, E.config_interfaz_previa.get("carpeta_base_obs", ""))
+    # Guardado en vivo: antes solo se guardaba al conectar, así que si
+    # se escribía con la sesión ya conectada el texto quedaba de
+    # adorno y el remoto recibía rutas rotas en silencio.
+    def _guardar_base_obs_sola(*_args):
+        try:
+            mod_configuracion.guardar_config_interfaz(
+                {"carpeta_base_obs": (E.entrada_base_obs.get() or "").strip()})
+        except Exception:
+            pass
+    E.entrada_base_obs.bind("<FocusOut>", _guardar_base_obs_sola)
+    E.entrada_base_obs.bind("<Return>", _guardar_base_obs_sola)
     E._etiqueta_base_obs = tk.Label(
         E.barra,
-        text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC)",
+        text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se guarda sola.",
         bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
         wraplength=300, justify="left",
     )

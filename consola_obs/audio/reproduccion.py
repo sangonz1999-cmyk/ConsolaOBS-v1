@@ -409,6 +409,16 @@ def _iniciar_reproduccion(indice):
     reproducción anterior, ese fundido se va a dar cuenta -por el
     token- de que ya no es el vigente y se va a cancelar solo sin
     tocar este sonido nuevo."""
+    # Freno automático remoto: sin base útil el OBS de la otra PC
+    # recibiría una ruta inexistente (silencio en el stream aunque el
+    # pad se ilumine y suene local). base_obs_lista_o_avisar ya mostró
+    # el arreglo; acá solo se frena sin tocar la sesión.
+    try:
+        base_ok = mod_rutas_obs.base_obs_lista_o_avisar()
+    except Exception:
+        base_ok = True
+    if not base_ok:
+        return
     E._sesion_reproduccion["token"] += 1
     token = E._sesion_reproduccion["token"]
     E._sesion_reproduccion["inicio"] = time.time()

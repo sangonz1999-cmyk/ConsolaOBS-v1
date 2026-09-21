@@ -166,6 +166,14 @@ def conectar_obs():
             mod_red.log_conexion(paso, f"OK obs={_vobs} websocket={_vws} (auth correcta)")
         except Exception:
             mod_red.log_conexion(paso, "OK (sin detalle de version)")
+        # Plataforma del OBS (windows/linux/macos): sirve para validar
+        # la Carpeta OBS (una ruta D:\... en un OBS Linux nunca anda).
+        try:
+            E.plataforma_obs = str(getattr(_ver, "platform", "") or "").strip().lower()
+        except Exception:
+            E.plataforma_obs = ""
+        if getattr(E, "plataforma_obs", ""):
+            mod_red.log_conexion(paso, f"plataforma OBS: {E.plataforma_obs}")
 
         paso = "EVENTCLIENT_CONNECT"
         mod_red.log_conexion(paso, f"conectando EventClient a {host}:{puerto} ...")
@@ -219,6 +227,7 @@ def conectar_obs():
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
     E.host_conectado = host
+    E._aviso_base_obs_mostrado = False
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
@@ -244,6 +253,7 @@ def desconectar_obs():
 
     E.conectado = False
     E.host_conectado = None
+    E.plataforma_obs = ""
 
     for cliente in (E.cliente_obs, E.cliente_eventos):
         try:
