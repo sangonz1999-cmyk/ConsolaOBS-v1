@@ -227,7 +227,14 @@ def conectar_obs():
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
     E.host_conectado = host
-    E._aviso_base_obs_mostrado = False
+    E._base_aprendida_intentada = False
+    E._base_obs_dudosa = False
+    try:
+        refrescar = getattr(E, "refrescar_hint_base_obs", None)
+        if refrescar:
+            refrescar()
+    except Exception:
+        pass
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)

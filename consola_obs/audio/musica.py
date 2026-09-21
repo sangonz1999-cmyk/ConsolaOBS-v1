@@ -466,11 +466,9 @@ def _hacer_reproducir(rel, token):
         print("Sin conexión: conectate a OBS para la música.")
         return False
     try:
-        base_ok = mod_rutas_obs.base_obs_lista_o_avisar()
+        mod_rutas_obs.intentar_aprender_base()
     except Exception:
-        base_ok = True
-    if not base_ok:
-        return False
+        pass
     try:
         es_absoluta = os.path.isabs(rel)
     except Exception:

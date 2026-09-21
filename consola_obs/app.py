@@ -16,6 +16,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
+from consola_obs.audio import rutas_obs as mod_rutas_obs
 from consola_obs.audio import fuentes as mod_audio_fuentes
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
@@ -421,6 +422,44 @@ def main():
     E._cerrar_menu.bind("<Leave>", lambda e: E._cerrar_menu.config(fg="#6f7d99"))
 
 
+    def _refrescar_hint_base_obs():
+        # Hint inline (sin carteles): si el OBS es remoto y la base no
+        # sirve, la etiqueta lo dice en ámbar; si la base puesta no
+        # produce audio allá (verificado por sondeo), también.
+        try:
+            etiqueta = E._etiqueta_base_obs
+        except Exception:
+            return
+        try:
+            motivo = mod_rutas_obs.motivo_base_obs()
+        except Exception:
+            motivo = None
+        try:
+            dudosa = bool(getattr(E, "_base_obs_dudosa", False) and E.conectado)
+        except Exception:
+            dudosa = False
+        try:
+            if motivo:
+                etiqueta.config(
+                    text=f"Carpeta OBS {motivo}: el stream queda mudo. "
+                         "Corregila acá arriba (se guarda sola).",
+                    fg="#ffb84d",
+                )
+            elif dudosa:
+                etiqueta.config(
+                    text="La Carpeta OBS puesta no produce audio en ese OBS "
+                         "(el archivo no aparece allá). Revisala.",
+                    fg="#ffb84d",
+                )
+            else:
+                etiqueta.config(
+                    text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se guarda sola.",
+                    fg="#8fa0bd",
+                )
+        except Exception:
+            pass
+    E.refrescar_hint_base_obs = _refrescar_hint_base_obs
+
     mod_ui_cabecera._seccion_menu("CONEXIÓN")
 
     E.entrada_host = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Host"))
@@ -445,6 +484,10 @@ def main():
         try:
             mod_configuracion.guardar_config_interfaz(
                 {"carpeta_base_obs": (E.entrada_base_obs.get() or "").strip()})
+        except Exception:
+            pass
+        try:
+            _refrescar_hint_base_obs()
         except Exception:
             pass
     E.entrada_base_obs.bind("<FocusOut>", _guardar_base_obs_sola)

@@ -259,9 +259,11 @@ ENTRADAS_DE_AUDIO_PERMITIDAS = [
     ("Captura de audio de aplicación (BETA)", "windowaudio.svg",
      ["wasapi_process_output_capture"]),
     ("Captura de entrada audio", "microphone.svg",
-     ["wasapi_input_capture", "coreaudio_input_capture", "pulse_input_capture"]),
+     ["wasapi_input_capture", "coreaudio_input_capture", "pulse_input_capture",
+      "pipewire_audio_input_capture"]),
     ("Captura de salida de audio", "windowaudio.svg",
-     ["wasapi_output_capture", "coreaudio_output_capture", "pulse_output_capture"]),
+     ["wasapi_output_capture", "coreaudio_output_capture", "pulse_output_capture",
+      "pipewire_audio_output_capture"]),
     ("Multimedia", "media.svg",
      ["ffmpeg_source"]),
 ]

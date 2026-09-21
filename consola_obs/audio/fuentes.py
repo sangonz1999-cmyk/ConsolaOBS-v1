@@ -8,16 +8,94 @@ la ventana de Propiedades de la Fase 2 para configurarla, tal como
 hace OBS cuando agregás una fuente desde el "+" de una escena.
 """
 
+import sys
 import tkinter as tk
 
 from tkinter import messagebox, simpledialog, ttk
 
 from consola_obs import estado as E
+from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import filtros as mod_audio_filtros
 from consola_obs.audio import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+
+
+def _plataforma_obs_efectiva():
+    """Plataforma del OBS al que estamos conectados (remoto: la que
+    informó al conectar; misma PC: la local), en minúsculas."""
+    try:
+        if E.conectado and not mod_red.es_localhost(E.host_conectado or "localhost"):
+            return str(getattr(E, "plataforma_obs", "") or "").lower()
+    except Exception:
+        pass
+    try:
+        p = str(sys.platform or "").lower()
+    except Exception:
+        return ""
+    if p.startswith("win"):
+        return "windows"
+    if p.startswith("darwin"):
+        return "macos"
+    return "linux"
+
+
+def _primer_kind_para_obs(candidatos):
+    """Primer candidato acorde a la plataforma del OBS (para cuando no
+    se pudo leer la kind list: antes se ofrecía wasapi primero en
+    todos lados y en un OBS Linux eso era error 605 seguro)."""
+    if not candidatos:
+        return None
+    plat = _plataforma_obs_efectiva()
+    if "mac" in plat or "darwin" in plat:
+        marcas = ("coreaudio",)
+    elif "linux" in plat:
+        marcas = ("pulse", "pipewire")
+    elif "win" in plat:
+        marcas = ("wasapi",)
+    else:
+        return candidatos[0]
+    for marca in marcas:
+        for kind in candidatos:
+            if marca in kind:
+                return kind
+    return candidatos[0]
+
+
+def _crear_fuente_con_reintento(escena, nombre_final, kind_pedido):
+    """Crea la fuente; si OBS rechaza el kind (605: no soportado en
+    esa versión/plataforma), reintenta solo con los otros kinds del
+    mismo grupo que SÍ informa GetInputKindList. Devuelve el kind con
+    el que se creó. Si nada anda, relanza el último error."""
+    ultimo_error = None
+    try:
+        E.cliente_obs.create_input(escena, nombre_final, kind_pedido, None, True)
+        return kind_pedido
+    except Exception as e:
+        ultimo_error = e
+        if "605" not in str(e):
+            raise
+    try:
+        respuesta = E.cliente_obs.get_input_kind_list()
+        ofrecidos = set(mod_obs_eventos._valor(respuesta, "input_kinds", "inputKinds") or [])
+    except Exception:
+        raise ultimo_error
+    grupo = None
+    for _nombre, _icono, candidatos in E.ENTRADAS_DE_AUDIO_PERMITIDAS:
+        if kind_pedido in candidatos:
+            grupo = candidatos
+            break
+    if grupo:
+        for alternativo in grupo:
+            if alternativo == kind_pedido or alternativo not in ofrecidos:
+                continue
+            try:
+                E.cliente_obs.create_input(escena, nombre_final, alternativo, None, True)
+                return alternativo
+            except Exception as e2:
+                ultimo_error = e2
+    raise ultimo_error
 
 
 def _tipos_de_entrada_disponibles(kinds_que_ofrece_obs, incluir_todos=False):
@@ -103,7 +181,7 @@ def tipos_de_audio_para_menu():
         kinds = mod_obs_eventos._valor(respuesta_kinds, "input_kinds", "inputKinds") or []
     except Exception as e:
         print(f"No se pudo leer la lista de tipos de fuente: {e}")
-        return [(n, i, ks[0]) for n, i, ks in E.ENTRADAS_DE_AUDIO_PERMITIDAS]
+        return [(n, i, _primer_kind_para_obs(ks)) for n, i, ks in E.ENTRADAS_DE_AUDIO_PERMITIDAS]
 
     return _tipos_de_entrada_disponibles(kinds, incluir_todos=False)
 
@@ -152,10 +230,19 @@ def agregar_fuente_de_tipo(kind, nombre_sugerido):
 
     try:
         # inputSettings en None = nace con los ajustes de fábrica de su
-        # tipo, igual que al crearla desde OBS.
-        E.cliente_obs.create_input(escena, nombre_final, kind, None, True)
+        # tipo, igual que al crearla desde OBS. Si el kind pedido no va
+        # en este OBS (típico 605: menú armado contra otro OBS), se
+        # reintenta solo con los del mismo grupo que este OBS sí trae.
+        kind_final = _crear_fuente_con_reintento(escena, nombre_final, kind)
     except Exception as e:
-        messagebox.showerror("Error", f"No se pudo crear la fuente.\n\n{e}")
+        if "605" in str(e):
+            messagebox.showerror(
+                "Tipo no soportado",
+                f"Este OBS no trae ningún tipo compatible con '{nombre_sugerido}'.\n"
+                 "Probá con otro tipo (ej Multimedia) o revisá los plugins del OBS.",
+            )
+        else:
+            messagebox.showerror("Error", f"No se pudo crear la fuente.\n\n{e}")
         return
 
     mod_ui_tarjeta.actualizar()
@@ -351,8 +438,9 @@ def abrir_selector_nueva_fuente():
             # inputSettings en None = la fuente nace con los ajustes de
             # fábrica de su tipo, igual que al crearla desde OBS; los
             # ajustes reales se tocan enseguida en la ventana de
-            # Propiedades que se abre a continuación.
-            E.cliente_obs.create_input(escena, nombre_final, kind, None, True)
+            # Propiedades que se abre a continuación. Con reintento por
+            # si el kind listado no se puede crear (605).
+            _crear_fuente_con_reintento(escena, nombre_final, kind)
         except Exception as e:
             etiqueta_error.config(text=f"No se pudo crear la fuente.\n{e}")
             return

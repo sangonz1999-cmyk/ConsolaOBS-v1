@@ -13,9 +13,8 @@ cero cambio de comportamiento.
 import os
 import re
 
-from tkinter import messagebox
-
 from consola_obs import estado as E
+from consola_obs import constantes as C
 from consola_obs import rutas as R
 from consola_obs import configuracion as mod_configuracion
 from consola_obs import red as mod_red
@@ -85,75 +84,125 @@ def _es_ruta_absoluta_obs(base):
     return bool(re.match(r"^[A-Za-z]:", b))
 
 
-def base_obs_lista_o_avisar():
-    """True si se puede mandar audio al OBS (misma PC, o remoto con
-    base útil). Si el OBS está en otra PC y la base falta o tiene un
-    formato imposible para el sistema del OBS, avisa UNA vez por
-    sesión con el arreglo exacto y devuelve False: así no se manda
-    una ruta rota en silencio (el pad se ilumina y suena local pero
-    en el stream hay silencio). Nunca lanza."""
+def _base_valida_para_obs(base, plataforma):
+    """None si la base sirve para ese OBS; si no, el motivo corto."""
+    if not base:
+        return "está vacía"
+    if not _es_ruta_absoluta_obs(base):
+        return "no es una ruta absoluta"
+    if "linux" in plataforma or "darwin" in plataforma or "mac" in plataforma:
+        if not base.startswith("/"):
+            return "el OBS está en Linux/macOS y no empieza con /"
+    elif "win" in plataforma:
+        if not (base.startswith("\\") or re.match(r"^[A-Za-z]:", base)):
+            return "el OBS está en Windows y no parece ruta Windows (ej D:\\...)"
+    return None
+
+
+def _plataforma_obs():
+    try:
+        return str(getattr(E, "plataforma_obs", "") or "").lower()
+    except Exception:
+        return ""
+
+
+def motivo_base_obs():
+    """Motivo corto si el OBS remoto no tiene base útil; None si todo
+    bien (misma PC, sin conexión o base válida). Sin carteles: es para
+    el hint del menú. Nunca lanza."""
     try:
         if not E.conectado:
-            return True
+            return None
         try:
             remoto = obs_en_otra_pc()
         except Exception:
             remoto = False
         if not remoto:
-            return True
-        base = base_obs()
+            return None
+        return _base_valida_para_obs(base_obs(), _plataforma_obs())
+    except Exception:
+        return None
+
+
+def intentar_aprender_base():
+    """Auto-detecta la base remota desde las fuentes que YA existen en
+    el OBS: si alguna tiene cargado un archivo con pinta de assets
+    (carpeta 'assets' en la ruta) y con formato válido para el sistema
+    de ese OBS, se adopta su carpeta y se guarda sola. Una vez por
+    sesión, en silencio. Devuelve True si aprendió algo."""
+    try:
         try:
-            plataforma = str(getattr(E, "plataforma_obs", "") or "").lower()
+            if bool(getattr(E, "_base_aprendida_intentada", False)):
+                return False
         except Exception:
-            plataforma = ""
-        if "linux" in plataforma or "darwin" in plataforma or "mac" in plataforma:
-            es_linux = True
-        elif "win" in plataforma:
-            es_linux = False
-        else:
-            es_linux = None  # no se informó: solo se exige absoluta
-        if not base:
-            motivo = "está vacía"
-        elif not _es_ruta_absoluta_obs(base):
-            motivo = "no es una ruta absoluta"
-        elif es_linux is True and not base.startswith("/"):
-            motivo = "el OBS está en Linux/macOS y no empieza con /"
-        elif es_linux is False and not (
-                base.startswith("\\")
-                or re.match(r"^[A-Za-z]:", base)):
-            motivo = "el OBS está en Windows y no parece ruta Windows (ej D:\\...)"
-        else:
-            return True
+            pass
         try:
-            ya = bool(getattr(E, "_aviso_base_obs_mostrado", False))
+            E._base_aprendida_intentada = True
         except Exception:
-            ya = False
-        if not ya:
+            pass
+        if not E.conectado:
+            return False
+        try:
+            remoto = obs_en_otra_pc()
+        except Exception:
+            remoto = False
+        if not remoto:
+            return False
+        if base_obs():
+            return False
+        try:
+            cliente = E.cliente_obs
+        except Exception:
+            return False
+        if cliente is None:
+            return False
+        plataforma = _plataforma_obs()
+        for nombre in (C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FUENTE_MUSICA):
             try:
-                E._aviso_base_obs_mostrado = True
+                respuesta = cliente.get_input_settings(nombre)
+            except Exception:
+                continue
+            try:
+                ajustes = None
+                if isinstance(respuesta, dict):
+                    ajustes = respuesta.get("input_settings") or respuesta.get("inputSettings")
+                else:
+                    ajustes = getattr(respuesta, "input_settings", None)
+                if ajustes is None and not isinstance(respuesta, dict):
+                    ajustes = getattr(respuesta, "inputSettings", None)
+                archivo = (ajustes or {}).get("local_file", "") if isinstance(ajustes, dict) else ""
+            except Exception:
+                continue
+            try:
+                normal = str(archivo or "").replace("\\", "/")
+            except Exception:
+                continue
+            if not normal:
+                continue
+            cortado = normal.lower().rfind("/assets/")
+            if cortado < 0:
+                continue
+            base = normal[:cortado + len("/assets/")]
+            if _base_valida_para_obs(base, plataforma) is not None:
+                continue
+            try:
+                mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": base})
+            except Exception:
+                return False
+            try:
+                mod_red.log_conexion("BASE_OBS", f"aprendida sola desde '{nombre}': {base}")
             except Exception:
                 pass
             try:
-                mod_red.log_conexion("BASE_OBS", f"bloqueado por base inválida ({motivo}): {base!r}")
+                refrescar = getattr(E, "refrescar_hint_base_obs", None)
+                if refrescar:
+                    refrescar()
             except Exception:
                 pass
-            try:
-                messagebox.showerror(
-                    "Falta la Carpeta OBS",
-                    f"El OBS está en otra PC y la Carpeta OBS {motivo}.\n\n"
-                    f"Actual: {base or '(vacía)'}\n\n"
-                    "Sin eso el sonido sale acá pero en el stream hay silencio.\n\n"
-                    "Arreglo: en el menú CONEXIÓN → Carpeta OBS escribí la "
-                    "ruta de la carpeta assets TAL COMO SE VE EN LA PC DEL "
-                    "OBS (en esa PC: abrir la carpeta assets y copiar la "
-                    "ruta completa; en Linux empieza con /home/). "
-                    "Se guarda sola al salir del campo.",
-                )
-            except Exception:
-                pass
+            return True
         return False
     except Exception:
-        return True
+        return False
 
 
 def resolver_para_obs(ruta_local):

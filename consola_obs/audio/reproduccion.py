@@ -6,6 +6,7 @@ from tkinter import messagebox
 from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
+from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import nivelacion as mod_nivelacion
 from consola_obs.audio import rutas_obs as mod_rutas_obs
@@ -28,6 +29,11 @@ _fade_obs["listo"].set()
 # _consultar_estado_reproduccion): una sola lectura puede ser un eco
 # viejo del RESTART todavía no aplicado.
 _fin_confirmado = {"token": None, "rachas": 0}
+# Racha de sondeos sin duración ni reproducción en un OBS remoto con
+# archivo mandado: si llega al umbral, el archivo no existe allá
+# (base mal puesta). Solo marca la sospecha para el hint, no frena.
+_sospecha_base = {"token": None, "rachas": 0}
+_UMBRAL_SOSPECHA_BASE = 10
 
 
 def nota_volumen_usuario(db):
@@ -409,16 +415,14 @@ def _iniciar_reproduccion(indice):
     reproducción anterior, ese fundido se va a dar cuenta -por el
     token- de que ya no es el vigente y se va a cancelar solo sin
     tocar este sonido nuevo."""
-    # Freno automático remoto: sin base útil el OBS de la otra PC
-    # recibiría una ruta inexistente (silencio en el stream aunque el
-    # pad se ilumine y suene local). base_obs_lista_o_avisar ya mostró
-    # el arreglo; acá solo se frena sin tocar la sesión.
+    # Intento silencioso de auto-detectar la base remota (una vez por
+    # sesión): si el OBS ya tiene algún archivo con pinta de assets,
+    # se adopta su carpeta. Nunca frena ni avisa: el sonido local
+    # siempre sale y al remoto se le manda el mejor esfuerzo.
     try:
-        base_ok = mod_rutas_obs.base_obs_lista_o_avisar()
+        mod_rutas_obs.intentar_aprender_base()
     except Exception:
-        base_ok = True
-    if not base_ok:
-        return
+        pass
     E._sesion_reproduccion["token"] += 1
     token = E._sesion_reproduccion["token"]
     E._sesion_reproduccion["inicio"] = time.time()
@@ -700,6 +704,42 @@ def _consultar_estado_reproduccion():
         return
     if E._sesion_reproduccion.get("token") == token:
         E._sesion_reproduccion["ultimo_estado_obs"] = estado
+    # Verificación automática de la base remota: mandamos archivo a
+    # otro OBS y tras varios sondeos no hay duración ni reproducción.
+    # Solo marca la sospecha (hint del menú + log), nunca frena.
+    try:
+        if (E._sesion_reproduccion.get("token") == token
+                and E._sesion_reproduccion.get("archivo")
+                and mod_rutas_obs.obs_en_otra_pc()):
+            hay_senal = (estado == "OBS_MEDIA_STATE_PLAYING"
+                         or (dur_ms and float(dur_ms) > 0))
+            if hay_senal:
+                E._base_obs_dudosa = False
+                _sospecha_base["token"] = None
+                _sospecha_base["rachas"] = 0
+            else:
+                if _sospecha_base.get("token") == token:
+                    _sospecha_base["rachas"] += 1
+                else:
+                    _sospecha_base["token"] = token
+                    _sospecha_base["rachas"] = 1
+                if _sospecha_base["rachas"] == _UMBRAL_SOSPECHA_BASE:
+                    E._base_obs_dudosa = True
+                    try:
+                        mod_red.log_conexion(
+                            "BASE_OBS",
+                            "el OBS remoto no reproduce ni informa duración "
+                            "con la base actual (el archivo no existe allá)")
+                    except Exception:
+                        pass
+                    try:
+                        refrescar = getattr(E, "refrescar_hint_base_obs", None)
+                        if refrescar:
+                            refrescar()
+                    except Exception:
+                        pass
+    except Exception:
+        pass
     # Respaldo de duración desde OBS (por si el decode local falló):
     # viene en ms. Sólo vale si el archivo que OBS tiene cargado es el
     # de ESTA sesión: si no, sería la duración del efecto anterior
