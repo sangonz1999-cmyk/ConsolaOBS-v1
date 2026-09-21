@@ -124,6 +124,67 @@ def motivo_base_obs():
         return None
 
 
+def _leer_archivo_actual(nombre_fuente):
+    """El local_file que la fuente tiene AHORA en OBS ('' si no hay).
+    Nunca lanza."""
+    try:
+        cliente = E.cliente_obs
+    except Exception:
+        return ""
+    if cliente is None:
+        return ""
+    try:
+        respuesta = cliente.get_input_settings(nombre_fuente)
+    except Exception:
+        return ""
+    try:
+        ajustes = None
+        if isinstance(respuesta, dict):
+            ajustes = respuesta.get("input_settings") or respuesta.get("inputSettings")
+        else:
+            ajustes = getattr(respuesta, "input_settings", None)
+        if ajustes is None and not isinstance(respuesta, dict):
+            ajustes = getattr(respuesta, "inputSettings", None)
+        if isinstance(ajustes, dict):
+            return str(ajustes.get("local_file") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _aprender_base_de(archivo):
+    """Adopta la base desde un archivo con pinta de assets (segmento
+    '/assets/') con formato válido para el OBS remoto. Guarda sola.
+    Devuelve True si aprendió. Nunca lanza."""
+    try:
+        normal = str(archivo or "").replace("\\", "/")
+    except Exception:
+        return False
+    if not normal:
+        return False
+    cortado = normal.lower().rfind("/assets/")
+    if cortado < 0:
+        return False
+    base = normal[:cortado + len("/assets/")]
+    if _base_valida_para_obs(base, _plataforma_obs()) is not None:
+        return False
+    try:
+        mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": base})
+    except Exception:
+        return False
+    try:
+        mod_red.log_conexion("BASE_OBS", f"aprendida sola: {base}")
+    except Exception:
+        pass
+    try:
+        refrescar = getattr(E, "refrescar_hint_base_obs", None)
+        if refrescar:
+            refrescar()
+    except Exception:
+        pass
+    return True
+
+
 def intentar_aprender_base():
     """Auto-detecta la base remota desde las fuentes que YA existen en
     el OBS: si alguna tiene cargado un archivo con pinta de assets
@@ -150,56 +211,9 @@ def intentar_aprender_base():
             return False
         if base_obs():
             return False
-        try:
-            cliente = E.cliente_obs
-        except Exception:
-            return False
-        if cliente is None:
-            return False
-        plataforma = _plataforma_obs()
         for nombre in (C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FUENTE_MUSICA):
-            try:
-                respuesta = cliente.get_input_settings(nombre)
-            except Exception:
-                continue
-            try:
-                ajustes = None
-                if isinstance(respuesta, dict):
-                    ajustes = respuesta.get("input_settings") or respuesta.get("inputSettings")
-                else:
-                    ajustes = getattr(respuesta, "input_settings", None)
-                if ajustes is None and not isinstance(respuesta, dict):
-                    ajustes = getattr(respuesta, "inputSettings", None)
-                archivo = (ajustes or {}).get("local_file", "") if isinstance(ajustes, dict) else ""
-            except Exception:
-                continue
-            try:
-                normal = str(archivo or "").replace("\\", "/")
-            except Exception:
-                continue
-            if not normal:
-                continue
-            cortado = normal.lower().rfind("/assets/")
-            if cortado < 0:
-                continue
-            base = normal[:cortado + len("/assets/")]
-            if _base_valida_para_obs(base, plataforma) is not None:
-                continue
-            try:
-                mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": base})
-            except Exception:
-                return False
-            try:
-                mod_red.log_conexion("BASE_OBS", f"aprendida sola desde '{nombre}': {base}")
-            except Exception:
-                pass
-            try:
-                refrescar = getattr(E, "refrescar_hint_base_obs", None)
-                if refrescar:
-                    refrescar()
-            except Exception:
-                pass
-            return True
+            if _aprender_base_de(_leer_archivo_actual(nombre)):
+                return True
         return False
     except Exception:
         return False
@@ -222,3 +236,35 @@ def resolver_para_obs(ruta_local):
         return os.path.join(base, relativizar(ruta_local)).replace(os.sep, "/")
     except Exception:
         return ruta_local
+
+
+def ruta_para_enviar(nombre_fuente, ruta_local):
+    """(ruta, hay_que_fijar): qué mandar al OBS para esa fuente.
+    En remoto, si la fuente YA tiene un archivo válido para el sistema
+    del OBS (ej lo pusiste a mano con Examinar) y lo que calcularíamos
+    nosotros es inválido allá (típico: sin base saldría D:/... en un
+    Linux), NO se pisa: se usa el que ya está (y se aprende la base de
+    él). Si lo nuestro vale, se fija como siempre. Nunca lanza."""
+    try:
+        if not E.conectado:
+            return ruta_local, True
+        try:
+            remoto = obs_en_otra_pc()
+        except Exception:
+            remoto = False
+        if not remoto:
+            return resolver_para_obs(ruta_local), True
+        plataforma = _plataforma_obs()
+        nuestra = resolver_para_obs(ruta_local)
+        actual = _leer_archivo_actual(nombre_fuente)
+        if (actual
+                and _base_valida_para_obs(actual, plataforma) is None
+                and _base_valida_para_obs(nuestra, plataforma) is not None):
+            _aprender_base_de(actual)
+            return actual, False
+        return nuestra, True
+    except Exception:
+        try:
+            return resolver_para_obs(ruta_local), True
+        except Exception:
+            return ruta_local, True

@@ -475,17 +475,20 @@ def _hacer_reproducir(rel, token):
         es_absoluta = False
     ruta_abs = rel if es_absoluta else _absoluta(rel)
     try:
-        E.cliente_obs.set_input_settings(
-            C.NOMBRE_FUENTE_MUSICA,
-            {
-                "local_file": mod_rutas_obs.resolver_para_obs(ruta_abs),
-                "is_local_file": True,
-                "looping": False,
-                "restart_on_activate": False,
-                "close_when_inactive": False,
-            },
-            True
-        )
+        ruta_obs, fijar_archivo = mod_rutas_obs.ruta_para_enviar(
+            C.NOMBRE_FUENTE_MUSICA, ruta_abs)
+        if fijar_archivo:
+            E.cliente_obs.set_input_settings(
+                C.NOMBRE_FUENTE_MUSICA,
+                {
+                    "local_file": ruta_obs,
+                    "is_local_file": True,
+                    "looping": False,
+                    "restart_on_activate": False,
+                    "close_when_inactive": False,
+                },
+                True
+            )
         E.cliente_obs.trigger_media_input_action(
             C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
         )

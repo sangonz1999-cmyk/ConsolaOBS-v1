@@ -174,6 +174,24 @@ def conectar_obs():
             E.plataforma_obs = ""
         if getattr(E, "plataforma_obs", ""):
             mod_red.log_conexion(paso, f"plataforma OBS: {E.plataforma_obs}")
+        # Lista de tipos de fuente que trae ese OBS: sirve para elegir
+        # kinds creables sin adivinar (y para diagnosticar 605).
+        try:
+            _rk = nuevo_cliente.get_input_kind_list()
+            _ks = None
+            try:
+                _ks = list(getattr(_rk, "input_kinds", None) or [])
+            except Exception:
+                _ks = None
+            if not _ks:
+                try:
+                    _ks = list(_rk.get("inputKinds", []) or [])
+                except Exception:
+                    _ks = None
+            if _ks:
+                mod_red.log_conexion(paso, f"kinds OBS ({len(_ks)}): {sorted(str(k) for k in _ks)}")
+        except Exception as e:
+            mod_red.log_conexion(paso, f"kinds OBS: no se pudieron listar ({e!r})")
 
         paso = "EVENTCLIENT_CONNECT"
         mod_red.log_conexion(paso, f"conectando EventClient a {host}:{puerto} ...")

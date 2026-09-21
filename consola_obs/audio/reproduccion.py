@@ -363,18 +363,23 @@ def _cargar_y_disparar(indice, accion, token):
             print(f"No se pudo fijar el volumen base del efecto: {e}")
         # La ruta se traduce si el OBS está en otra PC (Fase 2 música):
         # en la misma PC llega intacta, en otra se antepone la carpeta
-        # base configurada. El audio local de abajo siempre usa la
-        # ruta de ESTA pc, sin traducir.
-        E.cliente_obs.set_input_settings(
-            C.NOMBRE_FUENTE_EFECTOS,
-            {
-                "local_file": mod_rutas_obs.resolver_para_obs(datos["archivo"]),
-                "is_local_file": True,
-                "restart_on_activate": False,
-                "close_when_inactive": False,
-            },
-            True
-        )
+        # base configurada. Si la fuente ya tiene un archivo válido
+        # para ese OBS (puesto a mano) y lo nuestro no vale allá, no se
+        # pisa: se usa el que está. El audio local de abajo siempre usa
+        # la ruta de ESTA pc, sin traducir.
+        ruta_obs, fijar_archivo = mod_rutas_obs.ruta_para_enviar(
+            C.NOMBRE_FUENTE_EFECTOS, datos["archivo"])
+        if fijar_archivo:
+            E.cliente_obs.set_input_settings(
+                C.NOMBRE_FUENTE_EFECTOS,
+                {
+                    "local_file": ruta_obs,
+                    "is_local_file": True,
+                    "restart_on_activate": False,
+                    "close_when_inactive": False,
+                },
+                True
+            )
         _asegurar_filtro_nivel(nivel_db)
         E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
     except Exception as e:
