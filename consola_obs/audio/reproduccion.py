@@ -15,6 +15,31 @@ _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
 DURACION_FUNDIDO_LOCAL_SEG = 2.0
 
+# Coordinación fundido <-> reproducción nueva (bugs de volumen pisado
+# y de segundo sonido mudo): el fundido avisa cuando está activo y
+# cuando termina. Una reproducción nueva espera a que termine (corto)
+# y recién ahí fija el volumen base y dispara: nunca corren pisados.
+# vol_base_db es el nivel del fader del usuario, al que SIEMPRE se
+# vuelve tras un fundido (nunca un intermedio a medio fundir).
+_fade_obs = {"activo": False, "listo": None, "vol_base_db": None}
+_fade_obs["listo"] = threading.Event()
+_fade_obs["listo"].set()
+# Racha de lecturas terminales seguidas para apagar la luz (ver
+# _consultar_estado_reproduccion): una sola lectura puede ser un eco
+# viejo del RESTART todavía no aplicado.
+_fin_confirmado = {"token": None, "rachas": 0}
+
+
+def nota_volumen_usuario(db):
+    """El usuario movió el fader de efectos (acá o en OBS): ese es el
+    nivel base al que se vuelve tras cada fundido. Durante un fundido
+    no vale (ahí manda el fundido)."""
+    try:
+        if not _fade_obs.get("activo"):
+            _fade_obs["vol_base_db"] = float(db)
+    except Exception:
+        pass
+
 
 def _aplicar_ganancia(trozo, ganancia):
     """Multiplica las muestras por la ganancia (0.0 a 1.0), con saturación
@@ -314,6 +339,22 @@ def _cargar_y_disparar(indice, accion, token):
         return
 
     try:
+        # Sincronización con un fundido en curso (si lo hay): se lo
+        # espera (corto) para no pisarse el volumen a medias, y recién
+        # ahí se fija el nivel base del usuario y se dispara. Sin esto,
+        # disparar en medio de un fundido dejaba al sonido nuevo
+        # sonando bajito o en silencio (segundo sonido mudo).
+        try:
+            _fade_obs["listo"].wait(timeout=1.5)
+        except Exception:
+            pass
+        try:
+            base = _fade_obs.get("vol_base_db")
+            if base is not None:
+                E.cliente_obs.set_input_volume(
+                    C.NOMBRE_FUENTE_EFECTOS, vol_db=float(base))
+        except Exception as e:
+            print(f"No se pudo fijar el volumen base del efecto: {e}")
         # La ruta se traduce si el OBS está en otra PC (Fase 2 música):
         # en la misma PC llega intacta, en otra se antepone la carpeta
         # base configurada. El audio local de abajo siempre usa la
@@ -395,11 +436,22 @@ def _fundido_y_detener(indice, token, duracion=2.0, pasos=20):
     """Baja el volumen de la fuente de efectos desde su nivel actual
     hasta silencio en 'duracion' segundos y, al llegar abajo, detiene
     el medio. Al final (llegue a terminar o se cancele en el camino)
-    siempre deja el volumen tal cual estaba antes de fundir, para que
-    la próxima reproducción de cualquier pad vuelva a sonar al nivel
-    normal del fader. El pad se apaga recién en ese momento -mientras
-    dura el fundido, el sonido técnicamente sigue activo en OBS, así
-    que la luz se mantiene prendida hasta el STOP final."""
+    siempre deja el volumen en el nivel BASE del usuario (nunca en un
+    intermedio a medio fundir, que era lo que dejaba todo bajo cuando
+    se encadenaban fundidos). El pad se apaga recién en ese momento
+    -mientras dura el fundido, el sonido técnicamente sigue activo en
+    OBS, así que la luz se mantiene prendida hasta el STOP final."""
+    _fade_obs["listo"].clear()
+    cadena = _fade_obs.get("activo")
+    _fade_obs["activo"] = True
+    try:
+        return _fundido_y_detener_cuerpo(indice, token, duracion, pasos, cadena)
+    finally:
+        _fade_obs["activo"] = False
+        _fade_obs["listo"].set()
+
+
+def _fundido_y_detener_cuerpo(indice, token, duracion, pasos, cadena):
     if not E.conectado:
         # Sin OBS no hay fundido de aquel lado, pero el local sí se
         # desvanece igual; la luz se apaga cuando termina (~2 s).
@@ -417,6 +469,14 @@ def _fundido_y_detener(indice, token, duracion=2.0, pasos=20):
     except Exception as e:
         print(f"No se pudo leer el volumen para el fundido: {e}")
         vol_inicial = 0.0
+
+    if not cadena:
+        # Cabeza de cadena: este nivel es el del usuario y es al que
+        # se vuelve siempre (los fundidos encadenados no lo pisan).
+        try:
+            _fade_obs["vol_base_db"] = float(vol_inicial)
+        except Exception:
+            pass
 
     # El fundido local arranca en paralelo al de OBS (misma duración y
     # misma curva en dB, para que se callen juntos sin delay).
@@ -444,23 +504,32 @@ def _fundido_y_detener(indice, token, duracion=2.0, pasos=20):
         time.sleep(intervalo)
 
     if not cancelado:
-        try:
-            E.cliente_obs.trigger_media_input_action(
-                C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
-            )
-            # El STOP es async: OBS tarda un pelín en aplicarlo de
-            # verdad. Si devolviéramos el volumen ya mismo, hay una
-            # ventana breve en la que el sonido -que técnicamente
-            # sigue reproduciéndose todavía- se escucha de golpe a
-            # volumen normal antes de cortar. Por eso se espera a que
-            # OBS confirme que ya se detuvo (o, como red de
-            # contención, hasta un segundo) antes de restaurar.
-            _esperar_a_que_se_detenga(token)
-        except Exception as e:
-            print(f"Error deteniendo el efecto tras el fundido: {e}")
+        # Re-chequeo final: el sleep anterior pudo haber dejado pasar
+        # una reproducción nueva; sin esto el STOP mataba al sonido
+        # nuevo recién arrancado (segundo sonido mudo).
+        if E._sesion_reproduccion.get("token") != token:
+            cancelado = True
+        else:
+            try:
+                E.cliente_obs.trigger_media_input_action(
+                    C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                )
+                # El STOP es async: OBS tarda un pelín en aplicarlo de
+                # verdad. Si devolviéramos el volumen ya mismo, hay una
+                # ventana breve en la que el sonido -que técnicamente
+                # sigue reproduciéndose todavía- se escucha de golpe a
+                # volumen normal antes de cortar. Por eso se espera a que
+                # OBS confirme que ya se detuvo (o, como red de
+                # contención, hasta un segundo) antes de restaurar.
+                _esperar_a_que_se_detenga(token)
+            except Exception as e:
+                print(f"Error deteniendo el efecto tras el fundido: {e}")
 
     try:
-        E.cliente_obs.set_input_volume(C.NOMBRE_FUENTE_EFECTOS, vol_db=vol_inicial)
+        base = _fade_obs.get("vol_base_db")
+        if base is None:
+            base = vol_inicial
+        E.cliente_obs.set_input_volume(C.NOMBRE_FUENTE_EFECTOS, vol_db=float(base))
     except Exception as e:
         print(f"No se pudo restaurar el volumen tras el fundido: {e}")
 
@@ -523,6 +592,14 @@ def detener_y_vaciar_efectos():
     _detener_local()
     if not E.conectado:
         return
+    try:
+        _fade_obs["listo"].wait(timeout=0.5)
+        base = _fade_obs.get("vol_base_db")
+        if base is not None:
+            E.cliente_obs.set_input_volume(
+                C.NOMBRE_FUENTE_EFECTOS, vol_db=float(base))
+    except Exception:
+        pass
     try:
         E.cliente_obs.trigger_media_input_action(
             C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
@@ -603,11 +680,13 @@ def _consultar_estado_reproduccion():
         print(f"No se pudo consultar el estado del efecto: {e}")
         return
     # Respaldo de duración desde OBS (por si el decode local falló):
-    # viene en ms y se guarda en segundos. Sólo vale si el archivo
-    # que OBS tiene cargado es el de ESTA sesión: si no, sería la
-    # duración del efecto anterior todavía en transición.
+    # viene en ms. Sólo vale si el archivo que OBS tiene cargado es el
+    # de ESTA sesión: si no, sería la duración del efecto anterior
+    # todavía en transición. Se queda con la MAYOR (una duración local
+    # más corta que la real es lo que cortaba la barra antes de
+    # tiempo, con el sonido todavía sonando).
     try:
-        if dur_ms and not E._sesion_reproduccion.get("duracion"):
+        if dur_ms and float(dur_ms) > 0:
             if E._sesion_reproduccion.get("token") == token and float(dur_ms) > 0:
                 try:
                     info_fx = E.cliente_obs.get_input_settings(C.NOMBRE_FUENTE_EFECTOS)
@@ -622,15 +701,35 @@ def _consultar_estado_reproduccion():
                 except Exception:
                     ok = False
                 if ok:
-                    E._sesion_reproduccion["duracion"] = float(dur_ms) / 1000.0
+                    previa = E._sesion_reproduccion.get("duracion") or 0
+                    E._sesion_reproduccion["duracion"] = max(float(previa), float(dur_ms) / 1000.0)
     except Exception:
         pass
     if estado in C.ESTADOS_MEDIA_DETENIDO:
+        # Una sola lectura terminal puede ser un eco viejo (el RESTART
+        # recién mandado todavía no aplicado en OBS): recién a la
+        # TERCERA seguida se da por terminado de verdad. Sin esto la
+        # luz (y la barra) se cortaban solas con el audio sonando.
         if E._sesion_reproduccion.get("token") == token:
+            if _fin_confirmado.get("token") == token:
+                _fin_confirmado["rachas"] += 1
+            else:
+                _fin_confirmado["token"] = token
+                _fin_confirmado["rachas"] = 1
+            if _fin_confirmado["rachas"] < 3:
+                return
+            _fin_confirmado["rachas"] = 0
             # Fin natural con la sesión todavía vigente: se vacía la
             # fuente para que ese archivo no suene solo al abrir OBS.
             _vaciar_fuente_efectos()
+        else:
+            _fin_confirmado["token"] = None
+            _fin_confirmado["rachas"] = 0
+            return
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+    else:
+        _fin_confirmado["token"] = None
+        _fin_confirmado["rachas"] = 0
 
 
 def _programar_refresco_reproduccion():

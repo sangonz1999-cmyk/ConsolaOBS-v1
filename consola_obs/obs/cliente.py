@@ -1,6 +1,16 @@
 from tkinter import messagebox
 import obsws_python as obs
 
+try:
+    # obsws-python loguea con traceback CADA request fallido, aunque
+    # lo manejemos bien (como los 600 esperables de filtros/principales
+    # inexistentes): se silencia al cargar la capa OBS. Nuestros
+    # diagnósticos propios (prints, messagebox, conexion.log) siguen.
+    import logging
+    logging.getLogger("obsws_python").setLevel(logging.CRITICAL)
+except Exception:
+    pass
+
 from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
@@ -338,6 +348,29 @@ def _asegurar_fuente_en_todas_las_escenas(nombre_fuente):
             escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName") for e in E.cliente_obs.get_scene_list().scenes]
         except Exception as e:
             print(f"No se pudieron listar las escenas: {e}")
+            return
+
+        # La fuente tiene que EXISTIR como input para poder meterla en
+        # escenas: si se borró/renombró fuera (caso típico: un principal
+        # viejo como 'Audio escritorio'), cada create_scene_item
+        # devolvía 600 spameando el log en cada conexión. Se poda de
+        # principales con aviso, una sola vez.
+        try:
+            entradas = [mod_obs_eventos._valor(i, "input_name", "inputName")
+                        for i in E.cliente_obs.get_input_list().inputs]
+        except Exception as e:
+            print(f"No se pudieron listar las entradas: {e}")
+            return
+        if nombre_fuente not in entradas:
+            print(f"'{nombre_fuente}' no existe en OBS: no se puede asegurar en escenas.")
+            if nombre_fuente in E.fuentes_principales:
+                E.fuentes_principales.discard(nombre_fuente)
+                try:
+                    mod_configuracion.guardar_config_interfaz(
+                        {"fuentes_principales": sorted(E.fuentes_principales)})
+                except Exception:
+                    pass
+                print(f"'{nombre_fuente}' se quitó de fuentes principales.")
             return
 
         for escena in escenas:

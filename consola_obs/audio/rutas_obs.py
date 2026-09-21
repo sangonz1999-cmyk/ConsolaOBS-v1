@@ -69,15 +69,17 @@ def obs_en_otra_pc():
 def resolver_para_obs(ruta_local):
     """Ruta tal como hay que mandársela a OBS en set_input_settings:
     directa si misma PC (o sin base configurada), traducida
-    (base_obs + relativa) si el OBS está en otra PC. Nunca lanza."""
+    (base_obs + relativa) si el OBS está en otra PC. Siempre con
+    barras '/' (las acepta OBS en Windows y son obligatorias en
+    Linux). Nunca lanza."""
     try:
         if not ruta_local:
             return ruta_local
         if not obs_en_otra_pc():
-            return ruta_local
+            return str(ruta_local).replace(os.sep, "/")
         base = base_obs()
         if not base:
-            return ruta_local
-        return os.path.join(base, relativizar(ruta_local))
+            return str(ruta_local).replace(os.sep, "/")
+        return os.path.join(base, relativizar(ruta_local)).replace(os.sep, "/")
     except Exception:
         return ruta_local

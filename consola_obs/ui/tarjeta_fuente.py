@@ -698,6 +698,14 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             else:
                 E.cliente_obs.set_input_volume(nombre, vol_db=db)
                 etiqueta_db.config(text=f"{db:.1f} dB", fg=col_db_activo)
+            if nombre == C.NOMBRE_FUENTE_EFECTOS:
+                # El fader movido a mano es el nivel base al que vuelve
+                # cada fundido (import lazy: audio importa UI).
+                try:
+                    from consola_obs.audio import reproduccion as mod_audio_reproduccion
+                    mod_audio_reproduccion.nota_volumen_usuario(db)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"Error cambiando volumen de {nombre}: {e}")
 
