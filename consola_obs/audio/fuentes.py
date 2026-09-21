@@ -9,6 +9,7 @@ hace OBS cuando agregás una fuente desde el "+" de una escena.
 """
 
 import sys
+import time
 import tkinter as tk
 
 from tkinter import messagebox, simpledialog, ttk
@@ -20,6 +21,11 @@ from consola_obs.audio import filtros as mod_audio_filtros
 from consola_obs.audio import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+
+
+class _ListaNoLeida(Exception):
+    """No se pudo leer la kind list del OBS (enlace caído/lento). No
+    es lo mismo que 'no trae el tipo': distingue el cartel."""
 
 
 def _plataforma_obs_efectiva():
@@ -42,7 +48,7 @@ def _plataforma_obs_efectiva():
 
 
 def _primer_kind_para_obs(candidatos):
-    """Primer candidato acorde a la plataforma del OBS (para cuando no
+    """Candidatos ordenados según la plataforma del OBS (para cuando no
     se pudo leer la kind list: antes se ofrecía wasapi primero en
     todos lados y en un OBS Linux eso era error 605 seguro)."""
     if not candidatos:
@@ -51,16 +57,45 @@ def _primer_kind_para_obs(candidatos):
     if "mac" in plat or "darwin" in plat:
         marcas = ("coreaudio",)
     elif "linux" in plat:
-        marcas = ("pulse", "pipewire")
+        marcas = ("pulse", "pipewire", "jack")
     elif "win" in plat:
         marcas = ("wasapi",)
     else:
         return candidatos[0]
-    for marca in marcas:
-        for kind in candidatos:
+
+    def _rango(kind):
+        for i, marca in enumerate(marcas):
             if marca in kind:
-                return kind
-    return candidatos[0]
+                return (i, candidatos.index(kind))
+        return (len(marcas), candidatos.index(kind))
+
+    try:
+        return sorted(candidatos, key=_rango)[0]
+    except Exception:
+        return candidatos[0]
+
+
+def _leer_kinds_obs(intentos=3):
+    """Kind list del OBS con reintentos (el enlace remoto a veces
+    pierde una): lista o None si ni así se pudo leer. Nunca lanza."""
+    ultimo = None
+    for intento in range(max(1, intentos)):
+        try:
+            respuesta = E.cliente_obs.get_input_kind_list()
+            kinds = mod_obs_eventos._valor(respuesta, "input_kinds", "inputKinds") or []
+            return list(kinds)
+        except Exception as e:
+            ultimo = e
+            try:
+                if intento < intentos - 1:
+                    time.sleep(0.4)
+            except Exception:
+                pass
+    try:
+        print(f"No se pudo leer la lista de tipos de fuente: {ultimo}")
+    except Exception:
+        pass
+    return None
 
 
 def _crear_fuente_con_reintento(escena, nombre_final, kind_pedido):
@@ -76,11 +111,12 @@ def _crear_fuente_con_reintento(escena, nombre_final, kind_pedido):
         ultimo_error = e
         if "605" not in str(e):
             raise
-    try:
-        respuesta = E.cliente_obs.get_input_kind_list()
-        ofrecidos = set(mod_obs_eventos._valor(respuesta, "input_kinds", "inputKinds") or [])
-    except Exception:
-        raise ultimo_error
+    # 605: buscar alternativas del mismo grupo entre lo que el OBS dice tener
+    ofrecidos = _leer_kinds_obs()
+    if ofrecidos is None:
+        raise _ListaNoLeida(
+            "No se pudo leer la lista de tipos de este OBS. Reintentá en unos segundos.")
+    ofrecidos = set(ofrecidos)
     grupo = None
     for _nombre, _icono, candidatos in E.ENTRADAS_DE_AUDIO_PERMITIDAS:
         if kind_pedido in candidatos:
@@ -173,14 +209,10 @@ def tipos_de_audio_para_menu():
     clic derecho. Devuelve (nombre_amigable, archivo_svg, kind).
 
     Si por lo que sea no se puede preguntar (justo se cayó la conexión),
-    se devuelve el catálogo entero con su primer kind: el menú se puede
-    dibujar igual y, si ese tipo no existiera de verdad, OBS avisa al
-    intentar crear la fuente."""
-    try:
-        respuesta_kinds = E.cliente_obs.get_input_kind_list()
-        kinds = mod_obs_eventos._valor(respuesta_kinds, "input_kinds", "inputKinds") or []
-    except Exception as e:
-        print(f"No se pudo leer la lista de tipos de fuente: {e}")
+    se devuelve el catálogo ordenado por plataforma: el menú se puede
+    dibujar igual y al crear se reintenta solo con lo que el OBS traiga."""
+    kinds = _leer_kinds_obs()
+    if kinds is None:
         return [(n, i, _primer_kind_para_obs(ks)) for n, i, ks in E.ENTRADAS_DE_AUDIO_PERMITIDAS]
 
     return _tipos_de_entrada_disponibles(kinds, incluir_todos=False)
@@ -234,6 +266,9 @@ def agregar_fuente_de_tipo(kind, nombre_sugerido):
         # en este OBS (típico 605: menú armado contra otro OBS), se
         # reintenta solo con los del mismo grupo que este OBS sí trae.
         kind_final = _crear_fuente_con_reintento(escena, nombre_final, kind)
+    except _ListaNoLeida as e:
+        messagebox.showerror("Sin respuesta del OBS", str(e))
+        return
     except Exception as e:
         if "605" in str(e):
             messagebox.showerror(
@@ -259,12 +294,18 @@ def abrir_selector_nueva_fuente():
         return
 
     try:
-        respuesta_kinds = E.cliente_obs.get_input_kind_list()
-        kinds = mod_obs_eventos._valor(respuesta_kinds, "input_kinds", "inputKinds") or []
+        kinds = _leer_kinds_obs()
     except Exception as e:
         messagebox.showerror(
             "Error",
             f"No se pudo obtener la lista de tipos de fuente disponibles.\n\n{e}",
+        )
+        return
+    if kinds is None:
+        messagebox.showerror(
+            "Sin respuesta del OBS",
+            "No se pudo leer la lista de tipos de fuente de este OBS.\n"
+            "Reintentá en unos segundos.",
         )
         return
 
