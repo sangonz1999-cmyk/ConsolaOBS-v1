@@ -58,6 +58,32 @@ El programa anda: todo lo específico de Windows tiene respaldo en otros sistema
 - Audio local necesita servidor de sonido (PulseAudio/PipeWire); sin eso los efectos igual salen al stream pero no por parlantes.
 - La regla automática de firewall y el `.exe` son solo Windows; la ruedita del mouse anda en los tres sistemas.
 
+## Guía de conexión (OBS en otra PC)
+
+Cómo funciona el programa: la consola **manda órdenes y rutas**, y el **OBS reproduce el audio desde SU propio disco**. Los archivos de sonido nunca viajan por la red: por eso tienen que existir en las dos PCs.
+
+- **Misma PC:** no hay que configurar nada.
+- **Otra PC:** 4 pasos, una sola vez:
+  1. Copiá la carpeta `assets` (o el zip de OBS) a la PC del OBS.
+  2. En esa PC: OBS Studio abierto, WebSocket activado (puerto `4455`, con contraseña) y puerto permitido (`sudo ufw allow 4455/tcp` en Linux).
+  3. En la consola, menú CONEXIÓN: Host = IP de la PC del OBS, Puerto `4455`, Contraseña.
+  4. En el mismo menú, **Carpeta OBS** = la ruta de la carpeta `assets` **tal como se ve EN LA PC DEL OBS** (se guarda sola al salir del campo).
+
+Qué ruta poner según el sistema del OBS (solo hasta `assets`, sin el nombre del archivo):
+
+| OBS en... | Ejemplo válido | Cómo obtenerla |
+|---|---|---|
+| Windows | `D:\ConsolaOBS\assets` | Barra del Explorador, parado en la carpeta assets |
+| Linux | `/home/usuario/.../assets` | Terminal parado en assets: `pwd` (siempre empieza con `/`; jamás `D:` ni `C:`, Linux no tiene discos con letra) |
+| macOS | `/Users/usuario/.../assets` | Terminal parado en assets: `pwd` |
+
+Reglas:
+
+- Si la ruta no corresponde al sistema del OBS (ej `D:\...` en un OBS Linux), el pad se ilumina y suena local pero el stream queda mudo.
+- No renombres archivos ni carpetas del lado del OBS: en Linux las mayúsculas importan (`Documents` no es `documentos`).
+- Atajo: si en el OBS ponés un archivo bien a mano (Propiedades → Examinar), el programa lo detecta, lo usa y aprende la carpeta solo.
+- Diagnóstico rápido: pad que se ilumina + suena acá pero no en el stream = la Carpeta OBS está mal o vacía.
+
 ## Música en el stream
 
 Música de fondo para el directo, controlada toda desde el programa (OBS solo ejecuta con la fuente `Música`).
@@ -66,7 +92,7 @@ Música de fondo para el directo, controlada toda desde el programa (OBS solo ej
 - Mini player al pie de fuentes: play/pausa, stop, reiniciar, anterior (con más de 3 s reinicia el tema), siguiente, modo (repetir/aleatorio/apagado), título, tiempos y barra clickeable (salta al momento exacto).
 - Botón Biblioteca (▲/▼): panel con la playlist actual a la izquierda y la biblioteca a la derecha (pestañas, buscador en toda la biblioteca, ordenar por columnas). Drag & drop o clic derecho para armarla; clic en un tema lo reproduce; doble clic en una pestaña suena la carpeta sin tocar la playlist; botón ⇄ intercambia entre playlist y carpeta retomando cada una donde iba.
 - El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
-- Si el OBS está en otra PC: copiá los mp3 también allá (zip de OBS) y completá UNA vez Ajustes → Conexión → "Carpeta OBS" con la ruta de `assets\` del otro lado.
+- Si el OBS está en otra PC: ver "Guía de conexión" más arriba (copiar los mp3 allá + Carpeta OBS una vez).
 
 ## Instalar Git y clonar el repo (Windows)
 
