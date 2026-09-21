@@ -1110,12 +1110,19 @@ def _atajos_arbol(tree, cual):
     tree.bind("<B1-Motion>", _dnd_move)
     tree.bind("<ButtonRelease-1>", _dnd_release)
     # Ruedita: scroll vertical (en la playlist reemplaza a la
-    # scrollbar, que se sacó a pedido).
+    # scrollbar, que se sacó a pedido). Botón-4/5 es la rueda en
+    # Linux/X11 (no trae delta); en Windows nunca llegan.
     tree.bind("<MouseWheel>",
               lambda e, t=tree: t.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+    tree.bind("<Button-4>", lambda e, t=tree: t.yview_scroll(-1, "units"))
+    tree.bind("<Button-5>", lambda e, t=tree: t.yview_scroll(1, "units"))
     if cual == "biblio":
         tree.bind("<Shift-MouseWheel>",
                   lambda e, t=tree: t.xview_scroll(int(-1 * (e.delta / 120)), "units"))
+        tree.bind("<Shift-Button-4>",
+                  lambda e, t=tree: t.xview_scroll(-1, "units"))
+        tree.bind("<Shift-Button-5>",
+                  lambda e, t=tree: t.xview_scroll(1, "units"))
         tree.bind("<Double-Button-1>",
                   lambda e: _reproducir_vista_biblio(_indice_bajo_puntero(tree, e)))
         tree.bind("<Return>", lambda e: _reproducir_vista_biblio(_indice_foco(tree)))

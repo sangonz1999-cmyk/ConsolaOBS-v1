@@ -676,14 +676,27 @@ def _rueda_fuentes_horizontal(event):
     E.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
 
 
+class _Delta:
+    """Evento falso con solo .delta, para la rueda de Linux/X11
+    (Botón-4/5 no trae delta como MouseWheel de Windows)."""
+
+
 def _activar_rueda_fuentes(event):
     E.canvas.bind_all("<MouseWheel>", _rueda_fuentes_vertical)
     E.canvas.bind_all("<Shift-MouseWheel>", _rueda_fuentes_horizontal)
+    E.canvas.bind_all("<Button-4>", lambda e: _rueda_fuentes_vertical(_Delta(120)))
+    E.canvas.bind_all("<Button-5>", lambda e: _rueda_fuentes_vertical(_Delta(-120)))
+    E.canvas.bind_all("<Shift-Button-4>", lambda e: _rueda_fuentes_horizontal(_Delta(120)))
+    E.canvas.bind_all("<Shift-Button-5>", lambda e: _rueda_fuentes_horizontal(_Delta(-120)))
 
 
 def _desactivar_rueda_fuentes(event):
     E.canvas.unbind_all("<MouseWheel>")
     E.canvas.unbind_all("<Shift-MouseWheel>")
+    E.canvas.unbind_all("<Button-4>")
+    E.canvas.unbind_all("<Button-5>")
+    E.canvas.unbind_all("<Shift-Button-4>")
+    E.canvas.unbind_all("<Shift-Button-5>")
 
 
 def actualizar_scroll_soundboard(event=None):
@@ -709,10 +722,14 @@ def _rueda_soundboard(event):
 
 def _activar_rueda_soundboard(event):
     E.canvas_sb.bind_all("<MouseWheel>", _rueda_soundboard)
+    E.canvas_sb.bind_all("<Button-4>", lambda e: _rueda_soundboard(_Delta(120)))
+    E.canvas_sb.bind_all("<Button-5>", lambda e: _rueda_soundboard(_Delta(-120)))
 
 
 def _desactivar_rueda_soundboard(event):
     E.canvas_sb.unbind_all("<MouseWheel>")
+    E.canvas_sb.unbind_all("<Button-4>")
+    E.canvas_sb.unbind_all("<Button-5>")
 
 
 def _nombre_diseno_actual():

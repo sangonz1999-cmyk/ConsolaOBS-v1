@@ -11,6 +11,16 @@ en una ventana y la consola no se cierra sola antes de poder leerlo.
 import sys
 
 PYTHON_MINIMA = (3, 9)
+_ES_LINUX = sys.platform.startswith("linux")
+_ES_MAC = sys.platform == "darwin"
+
+
+def _instalar_facil():
+    if _ES_LINUX:
+        return "Opción fácil: bash instalar.sh (hace todo solo)."
+    if _ES_MAC:
+        return "Opción fácil: pip install -r requirements.txt en una terminal."
+    return "Opción fácil: doble clic en instalar.bat (hace todo solo)."
 
 
 def _preflight():
@@ -27,17 +37,22 @@ def _preflight():
     try:
         import tkinter  # noqa: F401
     except Exception:
+        if _ES_LINUX:
+            ayuda_tk = ("En Linux tkinter no viene con pip: instalalo del sistema,\n"
+                        "ej: sudo apt install python3-tk  (Debian/Ubuntu).")
+        else:
+            ayuda_tk = ("Reinstala Python tildando 'tcl/tk and IDLE' en el instalador.")
         errores.append(
             "A este Python le falta tkinter (la interfaz grafica).\n"
-            "Reinstala Python tildando 'tcl/tk and IDLE' en el instalador."
+            + ayuda_tk
         )
     try:
         import obsws_python  # noqa: F401
     except Exception:
         errores.append(
             "Falta la dependencia 'obsws-python' (conexion con OBS).\n"
-            "Opcion facil: doble clic en instalar.bat (hace todo solo).\n"
-            "O en una terminal, en esta misma carpeta:\n"
+            + _instalar_facil() + "\n"
+            + "O en una terminal, en esta misma carpeta:\n"
             "  pip install -r requirements.txt"
         )
     # Opcionales: el programa anda igual sin ellos (con menos calidad

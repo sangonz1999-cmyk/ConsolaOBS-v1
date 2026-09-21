@@ -48,6 +48,20 @@ python main.py
 
 Con doble clic en `compilar.bat` se genera `ConsolaOBS.exe` en la misma carpeta (con el icono de `assets/iconos/`).
 
+## Probar un sonido sin abrir el programa
+
+`python probar_sonido.py --listar` muestra los efectos y `python probar_sonido.py 3` (o parte del nombre) lo reproduce por los parlantes, sin consola ni OBS. Si acá suena y en el stream no, el problema está en OBS/rutas; si acá tampoco, es audio local (parlantes, drivers, miniaudio).
+
+## Linux (y macOS)
+
+El programa anda: todo lo específico de Windows tiene respaldo en otros sistemas. Diferencias:
+
+- `tkinter` no viene con pip: `sudo apt install python3-tk` (Debian/Ubuntu) o equivalente.
+- Instalación: `bash instalar.sh` (después `python3 main.py`). El `.exe` es solo Windows; en Linux se usa desde código (opcional: generar binario con `pip install pyinstaller`).
+- OBS Studio con WebSocket v5 igual que en Windows; si no conecta, abrí el puerto: `sudo ufw allow 4455/tcp`.
+- Audio local necesita servidor de sonido (PulseAudio/PipeWire); sin eso los efectos igual salen al stream pero no por parlantes.
+- La regla automática de firewall y el `.exe` son solo Windows; la ruedita del mouse anda en los tres sistemas.
+
 ## Música en el stream
 
 Música de fondo para el directo, controlada toda desde el programa (OBS solo ejecuta con la fuente `Música`).
