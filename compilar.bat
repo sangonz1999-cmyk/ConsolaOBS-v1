@@ -10,7 +10,7 @@ REM  Poner este archivo en la RAIZ del proyecto (junto a main.py)
 REM  y doble clic cada vez que cambies el codigo.
 REM ============================================================
 
-cd /d "%~dp0"
+cd /d "%~dp0."
 
 REM Python: se prefiere el lanzador 'py', con 'python' como respaldo
 REM (en algunas PCs recien instaladas solo existe uno de los dos).
@@ -25,7 +25,7 @@ if errorlevel 1 (
     echo ======================================================
     echo  NO SE ENCONTRO PYTHON.
     echo  Instala Python 3.9 o mas nuevo desde https://www.python.org/downloads/
-    echo  (tilda "Add python.exe to PATH" durante la instalacion)
+    echo  Tilda "Add python.exe to PATH" durante la instalacion
     echo  y despues corre de nuevo este archivo.
     echo ======================================================
     pause
@@ -86,7 +86,7 @@ if exist "%~dp0requirements.txt" (
     echo Instalando dependencias del programa...
     %PY% -m pip install -r "%~dp0requirements.txt"
     if errorlevel 1 (
-        echo  AVISO: algo fallo instalando requirements.txt (sigo igual).
+        echo  AVISO: algo fallo instalando requirements.txt, sigo igual.
     )
 )
 echo.

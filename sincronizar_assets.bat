@@ -8,7 +8,7 @@ REM  los agrega, commitea y pushea. Si no hay nada nuevo,
 REM  no hace nada.
 REM ============================================================
 
-cd /d "%~dp0"
+cd /d "%~dp0."
 
 if exist "assets\Sondidos_pad" git add "assets\Sondidos_pad"
 if exist "assets\Imagenes_pad" git add "assets\Imagenes_pad"

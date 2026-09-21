@@ -9,7 +9,7 @@ REM    - doble clic en main.py (modo prueba), o
 REM    - doble clic en compilar.bat (genera ConsolaOBS.exe)
 REM ============================================================
 
-cd /d "%~dp0"
+cd /d "%~dp0."
 
 REM Python: se prefiere el lanzador 'py', con 'python' como respaldo.
 where py >nul 2>nul
@@ -23,7 +23,7 @@ if errorlevel 1 (
     echo ======================================================
     echo  NO SE ENCONTRO PYTHON.
     echo  Instala Python 3.9 o mas nuevo desde https://www.python.org/downloads/
-    echo  (tilda "Add python.exe to PATH" durante la instalacion)
+    echo  Tilda "Add python.exe to PATH" durante la instalacion
     echo  y despues corre de nuevo este archivo.
     echo ======================================================
     pause
@@ -38,7 +38,7 @@ if not exist "%~dp0requirements.txt" (
     echo ======================================================
     echo  No se encontro requirements.txt junto a este archivo.
     echo  Asegurate de haber descomprimido TODO el .zip en una
-    echo  carpeta (no abrirlo desde adentro del .zip).
+    echo  carpeta, no abrirlo desde adentro del .zip.
     echo ======================================================
     pause
     exit /b 1
@@ -49,7 +49,7 @@ echo Instalando dependencias (puede tardar unos minutos)...
 if errorlevel 1 (
     echo ======================================================
     echo  ALGO FALLO instalando las dependencias.
-    echo  Probalo a mano en una terminal (PowerShell) en esta carpeta:
+    echo  Probalo a mano en una terminal PowerShell en esta carpeta:
     echo    %PY% -m pip install -r requirements.txt
     echo  y pasa el mensaje de error que salga arriba.
     echo ======================================================
