@@ -414,6 +414,7 @@ def _iniciar_reproduccion(indice):
     E._sesion_reproduccion["inicio"] = time.time()
     E._sesion_reproduccion["deteniendo"] = False
     E._sesion_reproduccion["duracion"] = None
+    E._sesion_reproduccion["ultimo_estado_obs"] = None
     try:
         ruta = (E.config_soundboard.get(str(indice)) or {}).get("archivo")
     except Exception:
@@ -621,9 +622,17 @@ def reproducir_sonido(indice):
     sesion = E._sesion_reproduccion
     if sesion.get("indice") == indice:
         # Segundo clic sobre el pad que suena: fundido de 2 segundos.
+        # Pero si lo último que informó OBS es terminal (el sonido ya
+        # terminó y la luz todavía no se apagó, ventana más grande en
+        # remoto por latencia), NO es un fundido: es "tocar de nuevo"
+        # y arranca fresco. Sin esto el clic bajaba el volumen 2 s en
+        # vez de sonar (y no sonaba nada).
         # Mientras se está apagando se ignoran más clics, hasta que el
         # sonido termine: si no, el spam de clics re-dispara sesiones y
         # el audio se buguea. Vale conectado a OBS o no.
+        if sesion.get("ultimo_estado_obs") in C.ESTADOS_MEDIA_DETENIDO:
+            _iniciar_reproduccion(indice)
+            return
         if sesion.get("deteniendo"):
             return
         sesion["deteniendo"] = True
@@ -679,6 +688,8 @@ def _consultar_estado_reproduccion():
     except Exception as e:
         print(f"No se pudo consultar el estado del efecto: {e}")
         return
+    if E._sesion_reproduccion.get("token") == token:
+        E._sesion_reproduccion["ultimo_estado_obs"] = estado
     # Respaldo de duración desde OBS (por si el decode local falló):
     # viene en ms. Sólo vale si el archivo que OBS tiene cargado es el
     # de ESTA sesión: si no, sería la duración del efecto anterior
@@ -696,8 +707,10 @@ def _consultar_estado_reproduccion():
                     cargado = None
                 try:
                     esperado = E._sesion_reproduccion.get("archivo")
-                    ok = bool(cargado and esperado and mod_ui_soundboard._normalizar_ruta(
-                        cargado) == mod_ui_soundboard._normalizar_ruta(esperado))
+                    esperado_obs = (mod_rutas_obs.resolver_para_obs(esperado)
+                                    if esperado else None)
+                    ok = bool(cargado and esperado_obs and mod_ui_soundboard._normalizar_ruta(
+                        cargado) == mod_ui_soundboard._normalizar_ruta(esperado_obs))
                 except Exception:
                     ok = False
                 if ok:
