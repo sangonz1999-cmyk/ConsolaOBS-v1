@@ -249,6 +249,7 @@ def conectar_obs():
     E.host_conectado = host
     E._base_aprendida_intentada = False
     E._base_obs_dudosa = False
+    E._base_adoptada = False
     try:
         refrescar = getattr(E, "refrescar_hint_base_obs", None)
         if refrescar:
@@ -258,13 +259,26 @@ def conectar_obs():
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
-    try:
-        _base_obs = E.entrada_base_obs.get().strip()
-    except Exception:
-        _base_obs = ""
-    mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": _base_obs})
+    _guardar_base_obs_del_campo()
     actualizar_estado_conexion()
     mod_ui_tarjeta.actualizar()
+
+
+def _guardar_base_obs_del_campo():
+    """Guarda la Carpeta OBS del campo, pero NUNCA pisa una base buena
+    con un campo vacío (eso borraba lo aprendido solo con reconectar).
+    Devuelve lo guardado o None."""
+    try:
+        texto = (E.entrada_base_obs.get() or "").strip()
+    except Exception:
+        return None
+    if not texto:
+        return None
+    try:
+        mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": texto})
+    except Exception:
+        return None
+    return texto
 
 
 def desconectar_obs():

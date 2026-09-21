@@ -174,6 +174,10 @@ def _aprender_base_de(archivo):
     except Exception:
         return False
     try:
+        E._base_adoptada = True
+    except Exception:
+        pass
+    try:
         mod_red.log_conexion("BASE_OBS", f"aprendida sola: {base}")
     except Exception:
         pass

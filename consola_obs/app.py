@@ -439,7 +439,15 @@ def main():
         except Exception:
             dudosa = False
         try:
-            if motivo:
+            if motivo == "está vacía":
+                # Sin alarma falsa: con ruta manual adoptada el stream
+                # anda igual; el texto es condicional, no sentencia.
+                etiqueta.config(
+                    text="Si el OBS remoto queda mudo, poné acá la ruta de "
+                         "assets de esa PC (se guarda sola).",
+                    fg="#8fa0bd",
+                )
+            elif motivo:
                 etiqueta.config(
                     text=f"Carpeta OBS {motivo}: el stream queda mudo. "
                          "Corregila acá arriba (se guarda sola).",
@@ -481,9 +489,16 @@ def main():
     # se escribía con la sesión ya conectada el texto quedaba de
     # adorno y el remoto recibía rutas rotas en silencio.
     def _guardar_base_obs_sola(*_args):
+        # Vacío no se guarda: pisaría una base buena con nada (así se
+        # "rompía solo" al reconectar con el campo vacío).
         try:
-            mod_configuracion.guardar_config_interfaz(
-                {"carpeta_base_obs": (E.entrada_base_obs.get() or "").strip()})
+            texto = (E.entrada_base_obs.get() or "").strip()
+        except Exception:
+            return
+        if not texto:
+            return
+        try:
+            mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": texto})
         except Exception:
             pass
         try:
