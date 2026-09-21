@@ -492,6 +492,13 @@ def _hacer_reproducir(rel, token):
         E.cliente_obs.trigger_media_input_action(
             C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
         )
+        try:
+            tok = _sesion.get("token")
+            mod_rutas_obs.reintentar_si_no_arranca(
+                C.NOMBRE_FUENTE_MUSICA,
+                lambda: _sesion.get("token") == tok)
+        except Exception:
+            pass
     except Exception as e:
         print(f"No se pudo reproducir la música {rel}: {e}")
         return False

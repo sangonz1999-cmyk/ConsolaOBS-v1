@@ -12,6 +12,7 @@ cero cambio de comportamiento.
 """
 import os
 import re
+import threading
 
 from consola_obs import estado as E
 from consola_obs import constantes as C
@@ -268,3 +269,68 @@ def ruta_para_enviar(nombre_fuente, ruta_local):
             return resolver_para_obs(ruta_local), True
         except Exception:
             return ruta_local, True
+
+
+def reintentar_si_no_arranca(nombre_fuente, sigue_vigente, espera_seg=2.5):
+    """Hilo: si el OBS remoto no arranca el medio (ni PLAYING ni ENDED
+    ni duración en ~espera_seg), manda un RESTART más y lo anota en el
+    log. Cubre la carrera set→restart en enlaces con latencia (el
+    restart llegaba antes de que OBS aplicara el archivo y era
+    silencio). En misma PC no hace nada. Nunca lanza."""
+    def _hilo():
+        try:
+            import time as _t
+            fin = _t.time() + espera_seg
+            while _t.time() < fin:
+                try:
+                    if not sigue_vigente():
+                        return
+                    respuesta = E.cliente_obs.get_media_input_status(nombre_fuente)
+                except Exception:
+                    return
+                estado = None
+                dur = 0
+                try:
+                    if isinstance(respuesta, dict):
+                        estado = respuesta.get("media_state") or respuesta.get("mediaState")
+                        dur = respuesta.get("media_duration") or respuesta.get("mediaDuration") or 0
+                    else:
+                        estado = getattr(respuesta, "media_state", None)
+                        dur = getattr(respuesta, "media_duration", 0) or 0
+                except Exception:
+                    pass
+                try:
+                    hay = (estado == "OBS_MEDIA_STATE_PLAYING"
+                           or estado == "OBS_MEDIA_STATE_ENDED"
+                           or (dur and float(dur) > 0))
+                except Exception:
+                    hay = False
+                if hay:
+                    return
+                _t.sleep(0.3)
+            try:
+                if not sigue_vigente():
+                    return
+                E.cliente_obs.trigger_media_input_action(
+                    nombre_fuente, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
+            except Exception:
+                return
+            try:
+                mod_red.log_conexion("BASE_OBS",
+                                     f"re-disparo a '{nombre_fuente}' por falta de arranque")
+            except Exception:
+                pass
+        except Exception:
+            pass
+    try:
+        if not E.conectado:
+            return
+        try:
+            remoto = obs_en_otra_pc()
+        except Exception:
+            remoto = False
+        if not remoto:
+            return
+        threading.Thread(target=_hilo, daemon=True).start()
+    except Exception:
+        pass

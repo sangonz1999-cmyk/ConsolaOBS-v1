@@ -200,12 +200,14 @@ def conectar_obs():
             subs=(
                 obs.Subs.LOW_VOLUME | obs.Subs.INPUTVOLUMEMETERS |
                 obs.Subs.INPUTS | obs.Subs.SCENES | obs.Subs.SCENEITEMS |
-                obs.Subs.FILTERS
+                obs.Subs.FILTERS | obs.Subs.MEDIAINPUTS
             )
         )
         mod_red.log_conexion(paso, "OK")
         paso = "REGISTRO_CALLBACKS"
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_meters)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_media_input_playback_started)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_media_input_playback_ended)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_created)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_program_scene_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_enable_state_changed)

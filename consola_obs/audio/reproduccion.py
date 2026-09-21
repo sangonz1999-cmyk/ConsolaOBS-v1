@@ -382,6 +382,14 @@ def _cargar_y_disparar(indice, accion, token):
             )
         _asegurar_filtro_nivel(nivel_db)
         E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
+        # En remoto el restart puede llegar antes de que OBS aplique el
+        # archivo nuevo (latencia): si no arranca, se re-dispara solo.
+        try:
+            mod_rutas_obs.reintentar_si_no_arranca(
+                C.NOMBRE_FUENTE_EFECTOS,
+                lambda: E._sesion_reproduccion.get("token") == token)
+        except Exception:
+            pass
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}")
         E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))

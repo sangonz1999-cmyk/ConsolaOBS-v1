@@ -412,3 +412,74 @@ def on_source_filter_list_reindexed(datos):
 
 def on_source_filter_name_changed(datos):
     _quizas_refrescar_dialogo_filtros(datos)
+
+
+def on_media_input_playback_started(datos):
+    """Arrancó un medio en OBS (lo tocó el pad, la música o alguien
+    desde OBS): reflejarlo en la consola. En efectos no se prende
+    ningún pad (una fuente, muchos pads: ambiguo); en música sí se
+    marca sonando y se refresca el mini player."""
+    nombre = _valor(datos, "input_name", "inputName")
+    if not nombre:
+        return
+    if nombre != C.NOMBRE_FUENTE_MUSICA:
+        return
+
+    def _hacer():
+        try:
+            from consola_obs.audio import musica as mod_audio_musica
+            from consola_obs.ui import musica as mod_ui_musica
+            mod_audio_musica._sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
+            mod_audio_musica._sesion["estado"] = "SONANDO"
+            mod_ui_musica._refrescar_mini_player()
+        except Exception:
+            pass
+    try:
+        E.ventana.after(0, _hacer)
+    except Exception:
+        pass
+
+
+def on_media_input_playback_ended(datos):
+    """Terminó un medio en OBS por la causa que sea (fin natural,
+    stop desde OBS, etc.): apagar el pad / marcar la música. El avance
+    automático de música lo sigue manejando el sondeo (no se duplica).
+    El apagado del pad usa el token vigente: si ya empezó otro sonido,
+    no toca nada."""
+    nombre = _valor(datos, "input_name", "inputName")
+    if not nombre:
+        return
+    if nombre == C.NOMBRE_FUENTE_EFECTOS:
+        try:
+            sesion = E._sesion_reproduccion
+            indice = sesion.get("indice")
+            token = sesion.get("token")
+        except Exception:
+            return
+        if indice is None:
+            return
+
+        def _hacer():
+            try:
+                from consola_obs.ui import soundboard as mod_ui_soundboard
+                mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token)
+            except Exception:
+                pass
+        try:
+            E.ventana.after(0, _hacer)
+        except Exception:
+            pass
+    elif nombre == C.NOMBRE_FUENTE_MUSICA:
+        def _hacer_musica():
+            try:
+                from consola_obs.audio import musica as mod_audio_musica
+                from consola_obs.ui import musica as mod_ui_musica
+                mod_audio_musica._sesion["crudo"] = "OBS_MEDIA_STATE_ENDED"
+                mod_audio_musica._sesion["estado"] = "DETENIDA"
+                mod_ui_musica._refrescar_mini_player()
+            except Exception:
+                pass
+        try:
+            E.ventana.after(0, _hacer_musica)
+        except Exception:
+            pass
