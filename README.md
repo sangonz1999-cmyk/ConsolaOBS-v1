@@ -48,10 +48,6 @@ python main.py
 
 Con doble clic en `compilar.bat` se genera `ConsolaOBS.exe` en la misma carpeta (con el icono de `assets/iconos/`).
 
-## Probar un sonido sin abrir el programa
-
-`python probar_sonido.py --listar` muestra los efectos y `python probar_sonido.py 3` (o parte del nombre) lo reproduce por los parlantes, sin consola ni OBS. Si acá suena y en el stream no, el problema está en OBS/rutas; si acá tampoco, es audio local (parlantes, drivers, miniaudio).
-
 ## Linux (y macOS)
 
 El programa anda: todo lo específico de Windows tiene respaldo en otros sistemas. Diferencias:
