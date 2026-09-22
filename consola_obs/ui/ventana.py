@@ -1031,25 +1031,60 @@ def _al_redimensionar_ventana(event):
         pass
 
 
-def al_cerrar():
+# Tope para morir igual si algo se cuelga en el cierre (hilos no
+# daemon de terceros, sockets a medio cerrar, etc.): la limpieza de
+# red tiene esta ventana para terminar; después se fuerza la salida.
+_DEMORA_SALIDA_SEG = 8
+
+
+def _limpieza_cierre_en_hilo():
+    """STOP + vaciados + desconexión (puede tardar con enlaces lentos:
+    antes corría en el hilo UI y colgaba la ventana con '(No
+    responde)'). Sin tocar widgets: la ventana ya se destruyó."""
     try:
-        # STOP + vaciado de la fuente de efectos antes de desconectar:
-        # si no, el último sonido queda cargado y OBS lo reproduce solo
-        # al abrirse (import lazy para no ciclar imports con audio).
         from consola_obs.audio import reproduccion as mod_audio_reproduccion
         mod_audio_reproduccion.detener_y_vaciar_efectos()
     except Exception:
         pass
     try:
-        # Ídem música de fondo (Fase 5): no puede quedar sonando ni
-        # cargada sin UI que la controle.
-        from consola_obs.audio import musica as mod_audio_musica
-        mod_audio_musica.detener_y_vaciar_musica()
-        mod_audio_musica._flush_duraciones(forzar=True)
+        mod_obs_cliente._desconectar_solo_red()
+    except Exception:
+        pass
+
+
+def _vigilar_cierre():
+    try:
+        import time as _t
+        _t.sleep(_DEMORA_SALIDA_SEG)
     except Exception:
         pass
     try:
-        mod_obs_cliente.desconectar_obs()
+        import os as _os
+        _os._exit(0)
+    except Exception:
+        pass
+
+
+def al_cerrar():
+    try:
+        E._cerrando = True
+    except Exception:
+        pass
+    # 1) Local y rápido en el hilo UI: frenar los parlantes ya.
+    try:
+        from consola_obs.audio import reproduccion as mod_audio_reproduccion
+        mod_audio_reproduccion._detener_local()
+    except Exception:
+        pass
+    # 2) La red va en segundo plano (no se la espera).
+    try:
+        threading.Thread(target=_limpieza_cierre_en_hilo, daemon=True).start()
+    except Exception:
+        pass
+    # 3) Guardados locales (rápidos).
+    try:
+        from consola_obs.audio import musica as mod_audio_musica
+        mod_audio_musica._flush_duraciones(forzar=True)
     except Exception:
         pass
 
@@ -1072,4 +1107,16 @@ def al_cerrar():
     except Exception as e:
         print(f"No se pudo guardar la configuración de interfaz: {e}")
 
-    E.ventana.destroy()
+    # 4) Cerrar la ventana YA y garantizar la muerte del proceso.
+    try:
+        E.ventana.destroy()
+    except Exception:
+        pass
+    try:
+        threading.Thread(target=_vigilar_cierre, daemon=True).start()
+    except Exception:
+        try:
+            import os as _os
+            _os._exit(0)
+        except Exception:
+            pass

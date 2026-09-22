@@ -281,6 +281,42 @@ def _guardar_base_obs_del_campo():
     return texto
 
 
+def _desconectar_solo_red():
+    """Suelta los sockets y limpia referencias, SIN tocar widgets (para
+    el cierre de la app, que ya destruyó la ventana). Nunca lanza."""
+    try:
+        from consola_obs.audio import musica as mod_audio_musica
+        mod_audio_musica.detener_y_vaciar_musica()
+    except Exception:
+        pass
+    try:
+        E.conectado = False
+    except Exception:
+        pass
+    try:
+        E.host_conectado = None
+    except Exception:
+        pass
+    try:
+        E.plataforma_obs = ""
+    except Exception:
+        pass
+    for cliente in (E.cliente_obs, E.cliente_eventos):
+        try:
+            if cliente is not None:
+                cliente.disconnect()
+        except Exception:
+            pass
+    try:
+        E.cliente_obs = None
+    except Exception:
+        pass
+    try:
+        E.cliente_eventos = None
+    except Exception:
+        pass
+
+
 def desconectar_obs():
 
     try:

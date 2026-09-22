@@ -510,6 +510,11 @@ def _iniciar_reproduccion(indice):
     reproducción anterior, ese fundido se va a dar cuenta -por el
     token- de que ya no es el vigente y se va a cancelar solo sin
     tocar este sonido nuevo."""
+    try:
+        if getattr(E, "_cerrando", False):
+            return
+    except Exception:
+        pass
     # Intento silencioso de auto-detectar la base remota (una vez por
     # sesión): si el OBS ya tiene algún archivo con pinta de assets,
     # se adopta su carpeta. Nunca frena ni avisa: el sonido local
