@@ -13,3 +13,7 @@ config_*.json
 config/*.json
 .DS_Store
 Thumbs.db
+# Musica nueva: viaja en los zips del release, no en git (~1 GB)
+assets/Musica/Electronica/
+assets/Musica/Tranquila/
+assets/Musica/Variado/
