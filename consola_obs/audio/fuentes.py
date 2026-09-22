@@ -81,7 +81,10 @@ def _leer_kinds_obs(intentos=3):
     ultimo = None
     for intento in range(max(1, intentos)):
         try:
-            respuesta = E.cliente_obs.get_input_kind_list()
+            # OJO: la librería exige el argumento 'unversioned' (si se
+            # pide sin nada falla siempre con TypeError y la lista no
+            # llega nunca). True = incluye también los tipos de plugins.
+            respuesta = E.cliente_obs.get_input_kind_list(True)
             kinds = mod_obs_eventos._valor(respuesta, "input_kinds", "inputKinds") or []
             return list(kinds)
         except Exception as e:

@@ -177,7 +177,7 @@ def conectar_obs():
         # Lista de tipos de fuente que trae ese OBS: sirve para elegir
         # kinds creables sin adivinar (y para diagnosticar 605).
         try:
-            _rk = nuevo_cliente.get_input_kind_list()
+            _rk = nuevo_cliente.get_input_kind_list(True)
             _ks = None
             try:
                 _ks = list(getattr(_rk, "input_kinds", None) or [])
