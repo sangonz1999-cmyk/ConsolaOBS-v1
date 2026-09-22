@@ -105,6 +105,11 @@ def _ganancia_fundido(progreso, db_inicial=0.0):
 
 
 def _detener_local(token=None, fundido=False, db_inicial=0.0):
+    with _lock_local:
+        return _detener_local_cuerpo(token, fundido, db_inicial)
+
+
+def _detener_local_cuerpo(token=None, fundido=False, db_inicial=0.0):
     """Corta el sonido que esté saliendo por la PC. Si se pasa un token,
     sólo lo toca cuando sigue siendo la sesión vigente (para que el
     fundido de una sesión vieja no corte el sonido nuevo).
@@ -139,6 +144,32 @@ def _detener_local(token=None, fundido=False, db_inicial=0.0):
     except Exception:
         pass
     return False
+
+
+# Entrega atómica del parlante local: sin este candado, dos pads
+# rapidísimos se entrelazaban (uno frenaba "nada" mientras el otro aún
+# no guardaba su dispositivo) y quedaban 2-3 sonidos sonando a la vez,
+# imposibles de frenar. Reentrante porque _reproducir_local lo toma y
+# adentro llama a _detener_local, que también lo toma.
+_lock_local = threading.RLock()
+
+
+def _soltar_dispositivo_local(dispositivo):
+    """Saca el dispositivo del registro si es el vigente y lo cierra.
+    Idempotente: llamar dos veces no hace daño."""
+    try:
+        if _reproduccion_local.get("dispositivo") is dispositivo:
+            _reproduccion_local.pop("dispositivo", None)
+            _reproduccion_local["token"] = None
+            _reproduccion_local.pop("cancelar", None)
+            _reproduccion_local.pop("fundido_inicio", None)
+            _reproduccion_local.pop("fundido_db", None)
+    except Exception:
+        pass
+    try:
+        dispositivo.close()
+    except Exception:
+        pass
 
 
 def _apagar_pad_si_desconectado(token):
@@ -179,109 +210,111 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
                 pass
         _apagar_pad_si_desconectado(token)
         return
-    _detener_local()
-    try:
-        flujo = miniaudio.stream_file(ruta)
-    except Exception as e:
-        print(f"No se pudo abrir el audio local {ruta}: {e}")
-        _apagar_pad_si_desconectado(token)
-        return
-    try:
-        dispositivo = miniaudio.PlaybackDevice()
-    except Exception as e:
-        print(f"No se pudo abrir la salida de audio de la PC: {e}")
-        _apagar_pad_si_desconectado(token)
-        return
-    terminado = threading.Event()
-    cancelado = threading.Event()
-
-    def _flujo_envuelto():
-        # El primer yield vacío es el apretón de manos: miniaudio exige
-        # el generador ya arrancado (device.start le hace send() con la
-        # cantidad de frames que quiere) y arrancar con next() evita el
-        # TypeError sin consumir audio real del decodificador. Además,
-        # cada pedido del device se reenvía al decodificador tal cual,
-        # para darle siempre la cantidad exacta que pidió.
-        pedido = yield b""
+    # Entrega atómica: frenar el anterior, abrir, guardar y arrancar
+    # el nuevo pasan como una sola operación. Sin esto, dos pads
+    # rapidísimos se entrelazaban y quedaban sonidos huérfanos
+    # superpuestos (el bug de "3 sonidos a la vez").
+    with _lock_local:
+        _detener_local()
         try:
+            flujo = miniaudio.stream_file(ruta)
+        except Exception as e:
+            print(f"No se pudo abrir el audio local {ruta}: {e}")
+            _apagar_pad_si_desconectado(token)
+            return
+        try:
+            dispositivo = miniaudio.PlaybackDevice()
+        except Exception as e:
+            print(f"No se pudo abrir la salida de audio de la PC: {e}")
+            _apagar_pad_si_desconectado(token)
+            return
+        terminado = threading.Event()
+        cancelado = threading.Event()
+
+        def _flujo_envuelto():
+            # El primer yield vacío es el apretón de manos: miniaudio exige
+            # el generador ya arrancado (device.start le hace send() con la
+            # cantidad de frames que quiere) y arrancar con next() evita el
+            # TypeError sin consumir audio real del decodificador. Además,
+            # cada pedido del device se reenvía al decodificador tal cual,
+            # para darle siempre la cantidad exacta que pidió.
+            pedido = yield b""
             try:
-                trozo = next(flujo)
-            except StopIteration:
-                return
-            if ganancia_lineal != 1.0:
-                trozo = _aplicar_ganancia(trozo, ganancia_lineal)
-            while True:
-                if cancelado.is_set():
-                    break
-                inicio_fundido = _reproduccion_local.get("fundido_inicio")
-                if inicio_fundido is not None:
-                    progreso = (time.time() - inicio_fundido) / DURACION_FUNDIDO_LOCAL_SEG
-                    if progreso >= 1.0:
-                        break
-                    trozo = _aplicar_ganancia(
-                        trozo, _ganancia_fundido(
-                            progreso, _reproduccion_local.get("fundido_db", 0.0)))
                 try:
-                    pedido = yield trozo
-                except GeneratorExit:
-                    break
-                try:
-                    trozo = flujo.send(pedido) if pedido else next(flujo)
-                    if ganancia_lineal != 1.0:
-                        trozo = _aplicar_ganancia(trozo, ganancia_lineal)
+                    trozo = next(flujo)
                 except StopIteration:
-                    break
-        finally:
+                    return
+                if ganancia_lineal != 1.0:
+                    trozo = _aplicar_ganancia(trozo, ganancia_lineal)
+                while True:
+                    if cancelado.is_set():
+                        break
+                    inicio_fundido = _reproduccion_local.get("fundido_inicio")
+                    if inicio_fundido is not None:
+                        progreso = (time.time() - inicio_fundido) / DURACION_FUNDIDO_LOCAL_SEG
+                        if progreso >= 1.0:
+                            break
+                        trozo = _aplicar_ganancia(
+                            trozo, _ganancia_fundido(
+                                progreso, _reproduccion_local.get("fundido_db", 0.0)))
+                    try:
+                        pedido = yield trozo
+                    except GeneratorExit:
+                        break
+                    try:
+                        trozo = flujo.send(pedido) if pedido else next(flujo)
+                        if ganancia_lineal != 1.0:
+                            trozo = _aplicar_ganancia(trozo, ganancia_lineal)
+                    except StopIteration:
+                        break
+            finally:
+                try:
+                    flujo.close()
+                except Exception:
+                    pass
+                terminado.set()
+
+        generador = _flujo_envuelto()
+        try:
+            next(generador)
+        except StopIteration:
             try:
-                flujo.close()
+                dispositivo.close()
             except Exception:
                 pass
-            terminado.set()
-
-    generador = _flujo_envuelto()
-    try:
-        next(generador)
-    except StopIteration:
+            _apagar_pad_si_desconectado(token)
+            return
+        _reproduccion_local["dispositivo"] = dispositivo
+        _reproduccion_local["token"] = token
+        _reproduccion_local["cancelar"] = cancelado
+        _reproduccion_local.pop("fundido_inicio", None)
+        _reproduccion_local.pop("fundido_db", None)
+        if E._sesion_reproduccion.get("token") != token:
+            # La sesión se canceló mientras se abría el archivo (clic rapidísimo
+            # + fundido inmediato): no se arranca para no dejar un sonido huérfano.
+            _reproduccion_local.pop("dispositivo", None)
+            _reproduccion_local["token"] = None
+            _reproduccion_local.pop("cancelar", None)
+            try:
+                dispositivo.close()
+            except Exception:
+                pass
+            return
         try:
-            dispositivo.close()
-        except Exception:
-            pass
-        _apagar_pad_si_desconectado(token)
-        return
-    _reproduccion_local["dispositivo"] = dispositivo
-    _reproduccion_local["token"] = token
-    _reproduccion_local["cancelar"] = cancelado
-    _reproduccion_local.pop("fundido_inicio", None)
-    _reproduccion_local.pop("fundido_db", None)
-    if E._sesion_reproduccion.get("token") != token:
-        # La sesión se canceló mientras se abría el archivo (clic rapidísimo
-        # + fundido inmediato): no se arranca para no dejar un sonido huérfano.
-        _reproduccion_local.pop("dispositivo", None)
-        _reproduccion_local["token"] = None
-        _reproduccion_local.pop("cancelar", None)
-        try:
-            dispositivo.close()
-        except Exception:
-            pass
-        return
+            dispositivo.start(generador)
+        except Exception as e:
+            print(f"Error reproduciendo en la PC: {e}")
+            _soltar_dispositivo_local(dispositivo)
+            _apagar_pad_si_desconectado(token)
+            return
     try:
-        dispositivo.start(generador)
         while not terminado.wait(timeout=0.1):
             if cancelado.is_set():
                 break
     except Exception as e:
         print(f"Error reproduciendo en la PC: {e}")
     finally:
-        if _reproduccion_local.get("dispositivo") is dispositivo:
-            _reproduccion_local.pop("dispositivo", None)
-            _reproduccion_local["token"] = None
-            _reproduccion_local.pop("cancelar", None)
-            _reproduccion_local.pop("fundido_inicio", None)
-            _reproduccion_local.pop("fundido_db", None)
-        try:
-            dispositivo.close()
-        except Exception:
-            pass
+        _soltar_dispositivo_local(dispositivo)
         # Fin del audio local (natural, fundido o cancelado): sin OBS
         # nadie más va a apagar la luz del pad.
         _apagar_pad_si_desconectado(token)
