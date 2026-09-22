@@ -383,6 +383,26 @@ def actualizar_estado_conexion():
         E.boton_conectar.config(text="CONECTAR", bg=E.color_acento(), activebackground=E.color_acento_claro())
 
 
+def _sesion_efecto_activa():
+    """Hay un efecto sonando o apagándose (la sesión es dueña del
+    transporte): el refresco no debe tocarlo."""
+    try:
+        return E._sesion_reproduccion.get("indice") is not None
+    except Exception:
+        return False
+
+
+def _musica_ociosa():
+    """True si la música está detenida (se puede ordenar sin pisar
+    nada). Sonando/pausada/abriendo: manos afuera (vaciarle el archivo
+    la pausaría y perdería la posición)."""
+    try:
+        from consola_obs.audio import musica as mod_audio_musica
+        return mod_audio_musica._sesion.get("estado") == "DETENIDA"
+    except Exception:
+        return True
+
+
 def _asegurar_fuente_en_todas_las_escenas(nombre_fuente):
     """Se asegura de que 'nombre_fuente' esté presente Y ACTIVA en TODAS
     las escenas de OBS: si falta en alguna, se agrega; si está pero
@@ -544,18 +564,22 @@ def preparar_fuente_efectos():
                 except Exception:
                     pass
             else:
-                try:
-                    E.cliente_obs.set_input_settings(
-                        C.NOMBRE_FUENTE_EFECTOS,
-                        {
-                            "local_file": "",
-                            "restart_on_activate": False,
-                            "close_when_inactive": False,
-                        },
-                        True
-                    )
-                except Exception as e:
-                    print(f"No se pudo ajustar 'restart_on_activate': {e}")
+                # Fuente existente: solo se ordena a vacío si NO hay
+                # sesión activa (si no, mataríamos el efecto en curso
+                # cada vez que se refresca, ej al agregar una fuente).
+                if not _sesion_efecto_activa():
+                    try:
+                        E.cliente_obs.set_input_settings(
+                            C.NOMBRE_FUENTE_EFECTOS,
+                            {
+                                "local_file": "",
+                                "restart_on_activate": False,
+                                "close_when_inactive": False,
+                            },
+                            True
+                        )
+                    except Exception as e:
+                        print(f"No se pudo ajustar 'restart_on_activate': {e}")
 
             for escena in escenas:
                 try:
@@ -588,12 +612,13 @@ def preparar_fuente_efectos():
                         f"'{escena}': {e}"
                     )
 
-            try:
-                E.cliente_obs.trigger_media_input_action(
-                    C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
-                )
-            except Exception:
-                pass
+            if not _sesion_efecto_activa():
+                try:
+                    E.cliente_obs.trigger_media_input_action(
+                        C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                    )
+                except Exception:
+                    pass
 
         except Exception as e:
             print(
@@ -644,19 +669,24 @@ def preparar_fuente_musica():
                 except Exception:
                     pass
             else:
-                try:
-                    E.cliente_obs.set_input_settings(
-                        C.NOMBRE_FUENTE_MUSICA,
-                        {
-                            "local_file": "",
-                            "looping": False,
-                            "restart_on_activate": False,
-                            "close_when_inactive": False,
-                        },
-                        True
-                    )
-                except Exception as e:
-                    print(f"No se pudo ajustar la fuente de música: {e}")
+                # Fuente existente: solo se vacía si la música está
+                # detenida (vaciarla sonando la pausa y pierde la
+                # posición: era el bug de "agregar fuente corta la
+                # música").
+                if _musica_ociosa():
+                    try:
+                        E.cliente_obs.set_input_settings(
+                            C.NOMBRE_FUENTE_MUSICA,
+                            {
+                                "local_file": "",
+                                "looping": False,
+                                "restart_on_activate": False,
+                                "close_when_inactive": False,
+                            },
+                            True
+                        )
+                    except Exception as e:
+                        print(f"No se pudo ajustar la fuente de música: {e}")
 
             for escena in escenas:
                 try:
@@ -689,12 +719,13 @@ def preparar_fuente_musica():
                         f"'{escena}': {e}"
                     )
 
-            try:
-                E.cliente_obs.trigger_media_input_action(
-                    C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
-                )
-            except Exception:
-                pass
+            if _musica_ociosa():
+                try:
+                    E.cliente_obs.trigger_media_input_action(
+                        C.NOMBRE_FUENTE_MUSICA, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+                    )
+                except Exception:
+                    pass
 
         except Exception as e:
             print(

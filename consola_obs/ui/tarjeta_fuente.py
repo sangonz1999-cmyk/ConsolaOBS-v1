@@ -1613,9 +1613,12 @@ def _actualizar_en_hilo():
         print(f"No se pudo asegurar las fuentes principales en todas las escenas: {e}")
 
     try:
-        E.cliente_obs.trigger_media_input_action(
-            C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
-        )
+        # STOP de orden: solo sin sesión activa (con un efecto en curso
+        # lo mataría: era parte del bug de "agregar fuente corta todo").
+        if not mod_obs_cliente._sesion_efecto_activa():
+            E.cliente_obs.trigger_media_input_action(
+                C.NOMBRE_FUENTE_EFECTOS, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"
+            )
     except Exception:
         pass
 
