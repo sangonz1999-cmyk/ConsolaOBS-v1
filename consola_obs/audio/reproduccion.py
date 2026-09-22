@@ -16,15 +16,41 @@ _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
 DURACION_FUNDIDO_LOCAL_SEG = 2.0
 
-# Coordinación fundido <-> reproducción nueva (bugs de volumen pisado
-# y de segundo sonido mudo): el fundido avisa cuando está activo y
-# cuando termina. Una reproducción nueva espera a que termine (corto)
-# y recién ahí fija el volumen base y dispara: nunca corren pisados.
-# vol_base_db es el nivel del fader del usuario, al que SIEMPRE se
-# vuelve tras un fundido (nunca un intermedio a medio fundir).
+# Robo de voz ordenado (pads encimados): una sola sesión a la vez
+# toca la fuente compartida. El candado se toma con timeout y de todos
+# modos cada escritura re-chequea el token: si una sesión vieja llega
+# tarde, muere en silencio sin pisar al sonido nuevo (ni archivo viejo
+# re-fijado, ni trigger rancio, ni volumen a medias).
+_lock_envio_efecto = threading.Lock()
 _fade_obs = {"activo": False, "listo": None, "vol_base_db": None}
 _fade_obs["listo"] = threading.Event()
 _fade_obs["listo"].set()
+
+
+def _sesion_vigente(token):
+    try:
+        return E._sesion_reproduccion.get("token") == token
+    except Exception:
+        return False
+
+
+def _esperar_fade_o_aborto(token, tope=1.5):
+    """Espera a que no haya fundido en curso, pero aborta enseguida si
+    esta sesión ya fue superada (para no demorar un sonido nuevo)."""
+    try:
+        limite = time.time() + tope
+        while time.time() < limite:
+            if not _sesion_vigente(token):
+                return False
+            try:
+                if _fade_obs["listo"].is_set():
+                    return True
+            except Exception:
+                return True
+            time.sleep(0.05)
+    except Exception:
+        pass
+    return _sesion_vigente(token)
 # Racha de lecturas terminales seguidas para apagar la luz (ver
 # _consultar_estado_reproduccion): una sola lectura puede ser un eco
 # viejo del RESTART todavía no aplicado.
@@ -345,43 +371,66 @@ def _cargar_y_disparar(indice, accion, token):
         return
 
     try:
-        # Sincronización con un fundido en curso (si lo hay): se lo
-        # espera (corto) para no pisarse el volumen a medias, y recién
-        # ahí se fija el nivel base del usuario y se dispara. Sin esto,
-        # disparar en medio de un fundido dejaba al sonido nuevo
-        # sonando bajito o en silencio (segundo sonido mudo).
+        # Robo de voz: serializa el envío a la fuente compartida. Si el
+        # candado está ocupado (otra sesión mandando), se sigue igual
+        # tras el timeout: cada escritura re-chequea el token, así que
+        # lo peor que pasa son llamadas de más, nunca un pisotón.
         try:
-            _fade_obs["listo"].wait(timeout=1.5)
+            pudo = _lock_envio_efecto.acquire(timeout=2.5)
         except Exception:
-            pass
+            pudo = False
         try:
-            base = _fade_obs.get("vol_base_db")
-            if base is not None:
-                E.cliente_obs.set_input_volume(
-                    C.NOMBRE_FUENTE_EFECTOS, vol_db=float(base))
-        except Exception as e:
-            print(f"No se pudo fijar el volumen base del efecto: {e}")
-        # La ruta se traduce si el OBS está en otra PC (Fase 2 música):
-        # en la misma PC llega intacta, en otra se antepone la carpeta
-        # base configurada. Si la fuente ya tiene un archivo válido
-        # para ese OBS (puesto a mano) y lo nuestro no vale allá, no se
-        # pisa: se usa el que está. El audio local de abajo siempre usa
-        # la ruta de ESTA pc, sin traducir.
-        ruta_obs, fijar_archivo = mod_rutas_obs.ruta_para_enviar(
-            C.NOMBRE_FUENTE_EFECTOS, datos["archivo"])
-        if fijar_archivo:
-            E.cliente_obs.set_input_settings(
-                C.NOMBRE_FUENTE_EFECTOS,
-                {
-                    "local_file": ruta_obs,
-                    "is_local_file": True,
-                    "restart_on_activate": False,
-                    "close_when_inactive": False,
-                },
-                True
-            )
-        _asegurar_filtro_nivel(nivel_db)
-        E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
+            if not _sesion_vigente(token):
+                return
+            # Sincronización con un fundido en curso (si lo hay): se lo
+            # espera (corto y abortable) para no pisarse el volumen a
+            # medias, y recién ahí se fija el nivel base del usuario y
+            # se dispara. Sin esto, disparar en medio de un fundido
+            # dejaba al sonido nuevo sonando bajito o en silencio
+            # (segundo sonido mudo).
+            _esperar_fade_o_aborto(token)
+            if not _sesion_vigente(token):
+                return
+            try:
+                base = _fade_obs.get("vol_base_db")
+                if base is not None:
+                    E.cliente_obs.set_input_volume(
+                        C.NOMBRE_FUENTE_EFECTOS, vol_db=float(base))
+            except Exception as e:
+                print(f"No se pudo fijar el volumen base del efecto: {e}")
+            # La ruta se traduce si el OBS está en otra PC (Fase 2 música):
+            # en la misma PC llega intacta, en otra se antepone la carpeta
+            # base configurada. Si la fuente ya tiene un archivo válido
+            # para ese OBS (puesto a mano) y lo nuestro no vale allá, no se
+            # pisa: se usa el que está. El audio local de abajo siempre usa
+            # la ruta de ESTA pc, sin traducir.
+            ruta_obs, fijar_archivo = mod_rutas_obs.ruta_para_enviar(
+                C.NOMBRE_FUENTE_EFECTOS, datos["archivo"])
+            if fijar_archivo:
+                if not _sesion_vigente(token):
+                    return
+                E.cliente_obs.set_input_settings(
+                    C.NOMBRE_FUENTE_EFECTOS,
+                    {
+                        "local_file": ruta_obs,
+                        "is_local_file": True,
+                        "restart_on_activate": False,
+                        "close_when_inactive": False,
+                    },
+                    True
+                )
+            if not _sesion_vigente(token):
+                return
+            _asegurar_filtro_nivel(nivel_db)
+            if not _sesion_vigente(token):
+                return
+            E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
+        finally:
+            try:
+                if pudo:
+                    _lock_envio_efecto.release()
+            except Exception:
+                pass
         # En remoto el restart puede llegar antes de que OBS aplique el
         # archivo nuevo (latencia): si no arranca, se re-dispara solo.
         try:
@@ -797,7 +846,11 @@ def _consultar_estado_reproduccion():
             _fin_confirmado["rachas"] = 0
             # Fin natural con la sesión todavía vigente: se vacía la
             # fuente para que ese archivo no suene solo al abrir OBS.
-            _vaciar_fuente_efectos()
+            # Re-chequeo: entre la lectura y acá pudo arrancar un pad
+            # nuevo y vaciar le borraría SU archivo (sonido que no
+            # suena).
+            if E._sesion_reproduccion.get("token") == token:
+                _vaciar_fuente_efectos()
         else:
             _fin_confirmado["token"] = None
             _fin_confirmado["rachas"] = 0
