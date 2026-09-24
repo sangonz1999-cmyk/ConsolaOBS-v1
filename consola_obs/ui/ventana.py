@@ -273,8 +273,8 @@ def _programar_asentado_fuentes():
 
 
 def _asentar_fuentes_oculto():
-    """Reacomoda la grilla y fuerza el pintado SIN mostrar: el layout
-    queda fresco pero oculto hasta la soltada."""
+    """Reacomoda la grilla y fuerza el pintado SIN destapar: el layout
+    queda fresco pero tapado hasta la soltada."""
     try:
         E.ventana._timer_asentado_fuentes = None
     except Exception:
@@ -285,14 +285,16 @@ def _asentar_fuentes_oculto():
     except Exception:
         pass
     try:
-        E.ventana.update_idletasks()
+        # Congelado: pintar ahora es trabajo invisible, se saltea.
+        if not getattr(E, "_gesto_resize_congelado", False):
+            E.ventana.update_idletasks()
     except Exception:
         pass
 
 
 def _asentar_fuentes():
-    """Reacomoda la grilla de faders, fuerza el pintado completo y la
-    MUESTRA. Sólo para fin de gesto (soltada o clic de seguridad).
+    """Reacomoda la grilla de faders, fuerza el pintado completo y
+    destapa. Sólo para fin de gesto (soltada o clic de seguridad).
     Idempotente."""
     try:
         E.ventana._timer_asentado_fuentes = None
@@ -308,6 +310,7 @@ def _asentar_fuentes():
     except Exception:
         pass
     _destapar_fuentes()
+    _descongelar_gesto_resize()
 
 
 def _tapar_titulo_con_foto():
@@ -345,6 +348,37 @@ def _destapar_grillas():
             pass
     try:
         E.tapa_fuentes_puesta = False
+    except Exception:
+        pass
+
+
+def _congelar_gesto_resize():
+    """Congela el pintado de la ventana (sólo Windows; en otros es
+    no-op) la PRIMERA vez que se llama en un gesto de resize de borde.
+    Congelada, la ventana muestra el último cuadro intacto: ni los
+    repintados a medio armar de Tk ni el bitblt del sistema pueden
+    mostrar tiras rotas. Se libera en los caminos de salida (soltada,
+    vigilante, salir_modo_super): triple red de seguridad, nunca puede
+    quedar congelada."""
+    try:
+        if getattr(E, "_gesto_resize_congelado", False):
+            return
+        E._gesto_resize_congelado = True
+        if P._ES_WINDOWS:
+            P._congelar_pintado_ventana()
+        _log_fuentes("freeze on")
+    except Exception:
+        pass
+
+
+def _descongelar_gesto_resize():
+    try:
+        if not getattr(E, "_gesto_resize_congelado", False):
+            return
+        E._gesto_resize_congelado = False
+        if P._ES_WINDOWS:
+            P._descongelar_pintado_ventana()
+        _log_fuentes("freeze off")
     except Exception:
         pass
 
@@ -418,6 +452,13 @@ def salir_modo_super():
     except Exception:
         pass
     E._modo_super["timer"] = None
+    # Red de seguridad maestra: al salir del modo, soltar el freeze sí
+    # o sí (es barato si no estaba congelado). Así la ventana nunca
+    # puede quedar congelada.
+    try:
+        _descongelar_gesto_resize()
+    except Exception:
+        pass
     if not E._modo_super.get("activo"):
         return
     E._modo_super["activo"] = False
@@ -645,11 +686,10 @@ def construir_cuerpo():
     )
     E.canvas.configure(yscrollcommand=E.scrollbar_v.set, xscrollcommand=E.scrollbar_h.set)
 
-    E.canvas.grid(row=1, column=0, sticky="nsew")
-    E.scrollbar_v.grid(row=1, column=1, sticky="ns")
-    E.scrollbar_h.grid(row=2, column=0, sticky="ew")
-    _crear_bordes_fuentes()
-    E.marco_canvas.grid_rowconfigure(1, weight=1)
+    E.canvas.grid(row=0, column=0, sticky="nsew")
+    E.scrollbar_v.grid(row=0, column=1, sticky="ns")
+    E.scrollbar_h.grid(row=1, column=0, sticky="ew")
+    E.marco_canvas.grid_rowconfigure(0, weight=1)
     E.marco_canvas.grid_columnconfigure(0, weight=1)
     E.scrollbar_v.grid_remove()
     E.scrollbar_h.grid_remove()
@@ -816,31 +856,6 @@ def construir_cuerpo():
         mod_ui_musica.construir_mini_player()
     except Exception as e:
         print(f"No se pudo construir el mini player de música: {e}")
-
-
-def _crear_bordes_fuentes():
-    """Franjas fijas de aire arriba y abajo del área scrolleable de
-    faders (filas 0 y 3 de la grilla del marco; el canvas va en la 1).
-    El contenido desliza POR DEBAJO de ellas, así que siempre se ve un
-    pequeño espacio de fondo antes del borde, en cualquier estado de
-    scroll. No participan del layout scrolleable: imposible que generen
-    bucles como los overlays que sí lo tocaban."""
-    try:
-        marco = E.marco_canvas
-        fondo = E.color_fondo_panel()
-        alto = MARGEN_BORDES_FUENTES
-    except Exception:
-        return
-    try:
-        E.borde_sup_fuentes = tk.Frame(marco, bg=fondo, height=alto)
-        E.borde_sup_fuentes.grid(row=0, column=0, sticky="ew")
-    except Exception:
-        pass
-    try:
-        E.borde_inf_fuentes = tk.Frame(marco, bg=fondo, height=alto)
-        E.borde_inf_fuentes.grid(row=3, column=0, sticky="ew")
-    except Exception:
-        pass
 
 
 def actualizar_scroll(event=None):
@@ -1229,6 +1244,7 @@ def _al_redimensionar_ventana(event):
         return
     E.ventana._ult_geom = tam
     entrar_modo_super("ventana")
+    _congelar_gesto_resize()
     try:
         timer = getattr(E.ventana, "_timer_resize_vivo", None)
         if timer is not None:
