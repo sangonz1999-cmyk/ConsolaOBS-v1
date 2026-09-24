@@ -299,13 +299,32 @@ def _reubicar_fuentes(forzar=False):
 
 
 def _al_redimensionar_fuentes(event=None):
-    """Reacomoda la grilla en vivo durante el arrastre (throttle corto
-    de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
-    nada (ver _reubicar). La tapa con foto (como en pads) oculta los
-    estados intermedios hasta que hay quietud."""
+    """Si cambió el TAMAÑO (resize real): se congela con la tapa y el
+    reacomodo se difiere entero al asentado (quietud/soltada). Reacomodar
+    en vivo cada 15ms era lo que se veía cortado: cada tarjeta cambia de
+    tamaño, recorta texto y redibuja degradados, carísimo por evento
+    (los pads son celdas fijas y por eso no se notaba). Sin cambio de
+    tamaño (scrollbars, contenido): reacomodo barato inmediato como
+    antes, sin tapa."""
     mod_ui_ventana.entrar_modo_super()
-    mod_ui_ventana._tapar_fuentes_con_foto()
-    mod_ui_ventana._programar_asentado_fuentes()
+    try:
+        tam = None
+        if event is not None and getattr(event, "width", 0) > 1:
+            tam = (event.width, event.height)
+    except Exception:
+        tam = None
+    try:
+        cambio = tam is not None and E._ultimo_tamano_canvas_fuentes.get("valor") != tam
+    except Exception:
+        cambio = False
+    if cambio:
+        try:
+            E._ultimo_tamano_canvas_fuentes["valor"] = tam
+        except Exception:
+            pass
+        mod_ui_ventana._tapar_fuentes_con_foto()
+        mod_ui_ventana._programar_asentado_fuentes()
+        return
     if E._trabajo_redimension_fuentes["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
     E._trabajo_redimension_fuentes["id"] = E.ventana.after(15, _aplicar_redimension_fuentes)

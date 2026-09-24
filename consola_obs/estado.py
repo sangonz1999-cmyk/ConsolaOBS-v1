@@ -201,6 +201,10 @@ _modo_super = {"activo": False, "timer": None, "origen": None}
 
 
 _trabajo_redimension_fuentes = {"id": None}
+# Último tamaño visto del canvas de fuentes: si un <Configure> no
+# cambia el tamaño (scrollbars, contenido), se reacomoda barato en
+# vivo; si cambia (resize real), se congela y se difiere al asentado.
+_ultimo_tamano_canvas_fuentes = {"valor": None}
 
 _arrastre_fuente = {
     "nombre": None, "arrastrando": False,
