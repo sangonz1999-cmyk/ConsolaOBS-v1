@@ -193,15 +193,218 @@ def _ancho_celda_fuentes():
 
 def _fila_col_fuente(nombre):
     """Posición (fila, columna) de una fuente dentro de la grilla, según
-    el orden en que fue apareciendo y la cantidad de columnas que entran
-    en el ancho actual. Las fuentes se acomodan en varias filas, en vez
-    de una sola fila larga con scroll horizontal, para que entren todas
-    en pantalla."""
+    el orden VISIBLE (manual + criterio) y la cantidad de columnas que
+    entran en el ancho actual. Las tarjetas se acomodan en varias filas,
+    en vez de una sola fila larga con scroll horizontal, para que entren
+    todas en pantalla."""
     if nombre not in E.orden_fuentes:
         E.orden_fuentes.append(nombre)
-    idx = E.orden_fuentes.index(nombre)
+    try:
+        idx = orden_visible_fuentes().index(nombre)
+    except Exception:
+        idx = E.orden_fuentes.index(nombre)
     columnas = max(1, E.columnas_fuentes)
     return idx // columnas, idx % columnas
+
+
+MODOS_ORDEN_FUENTES = (
+    ("manual", "Orden manual"),
+    ("alfabetico", "Alfabético"),
+    ("activas", "Activas primero"),
+    ("escena", "Escena actual primero"),
+    ("favoritos", "Favoritos primero"),
+    ("colores", "Con colores primero"),
+)
+
+
+def _fuente_sonando_ahora(nombre):
+    """True si la fuente tiene nivel real y fresco (ventana de 2 s):
+    así el orden 'activas' no se queda pegado a picos viejos."""
+    try:
+        pico = float((E.niveles_actuales or {}).get(nombre) or 0.0)
+    except Exception:
+        return False
+    if pico <= 0.005:
+        return False
+    try:
+        ultima = float((E.ultima_actualizacion_nivel or {}).get(nombre, 0.0))
+    except Exception:
+        return False
+    try:
+        import time as _t
+        return (_t.monotonic() - ultima) < 2.0
+    except Exception:
+        return False
+
+
+def _nombre_mostrado_fuente(nombre):
+    try:
+        widgets = E.fuentes.get(nombre) or {}
+        return str(widgets.get("nombre_visible") or nombre)
+    except Exception:
+        return str(nombre)
+
+
+def orden_visible_fuentes():
+    """Orden manual + criterio + ocultas: la lista a dibujar. Estable
+    (los empates conservan el orden manual del drag & drop). Las
+    ocultas (Fase 3) van siempre al fondo sin importar el criterio, o
+    se excluyen si el toggle está apagado. Nunca lanza."""
+    try:
+        base = [n for n in (E.orden_fuentes or [])]
+    except Exception:
+        base = []
+    try:
+        ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+    except Exception:
+        ocultas = set()
+    visibles = [n for n in base if n not in ocultas]
+    ocult_lista = [n for n in base if n in ocultas]
+    try:
+        modo = getattr(E, "orden_fuentes_modo", "manual") or "manual"
+    except Exception:
+        modo = "manual"
+    if modo == "alfabetico":
+        visibles = sorted(visibles, key=lambda n: _nombre_mostrado_fuente(n).lower())
+    elif modo == "activas":
+        visibles = sorted(visibles, key=lambda n: 0 if _fuente_sonando_ahora(n) else 1)
+    elif modo == "escena":
+        try:
+            actual = set(E.escena_actual_nombres or set())
+        except Exception:
+            actual = set()
+        visibles = sorted(visibles, key=lambda n: 0 if n in actual else 1)
+    elif modo == "favoritos":
+        try:
+            favs = set(E.fuentes_principales or set())
+        except Exception:
+            favs = set()
+        visibles = sorted(visibles, key=lambda n: 0 if n in favs else 1)
+    elif modo == "colores":
+        try:
+            con_color = set((E.colores_fuentes or {}).keys())
+        except Exception:
+            con_color = set()
+        visibles = sorted(visibles, key=lambda n: 0 if n in con_color else 1)
+    try:
+        mostrar = bool(getattr(E, "mostrar_ocultas", True))
+    except Exception:
+        mostrar = True
+    if mostrar:
+        visibles = visibles + [n for n in ocult_lista]
+    return visibles
+
+
+def _guardar_orden_fuentes():
+    try:
+        mod_configuracion.guardar_config_interfaz({
+            "orden_fuentes_modo": getattr(E, "orden_fuentes_modo", "manual"),
+            "mostrar_ocultas": bool(getattr(E, "mostrar_ocultas", True)),
+            "fuentes_ocultas": sorted(getattr(E, "fuentes_ocultas", set()) or set()),
+        })
+    except Exception:
+        pass
+
+
+def fijar_modo_orden_fuentes(modo):
+    try:
+        if modo not in [c for c, _t in MODOS_ORDEN_FUENTES]:
+            return
+        E.orden_fuentes_modo = modo
+        _guardar_orden_fuentes()
+        _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _alternar_mostrar_ocultas():
+    try:
+        E.mostrar_ocultas = not bool(getattr(E, "mostrar_ocultas", True))
+        _guardar_orden_fuentes()
+        _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _programar_reorden_activas():
+    """Loop de 1 s (barato): si el modo es 'activas' y cambió quién
+    suena, reubica. Se arranca una sola vez (bandera en E)."""
+    try:
+        if getattr(E, "_reorden_activas_en_marcha", False):
+            return
+        E._reorden_activas_en_marcha = True
+        E.ventana.after(1000, _reorden_activas_tick)
+    except Exception:
+        pass
+
+
+def _reorden_activas_tick():
+    try:
+        # La bandera ya está prendida: sólo reprogramar el próximo.
+        E._reorden_activas_en_marcha = True
+        E.ventana.after(1000, _reorden_activas_tick)
+    except Exception:
+        return
+    try:
+        if getattr(E, "orden_fuentes_modo", "manual") != "activas":
+            return
+        firma = tuple(n for n in (E.orden_fuentes or []) if _fuente_sonando_ahora(n))
+        if firma != getattr(_reorden_activas_tick, "ultima", None):
+            _reorden_activas_tick.ultima = firma
+            _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _items_menu_orden_fuentes():
+    """([radios], toggle) del menú ☰, testeable sin Tk. El separador lo
+    pone quien arma el tk.Menu."""
+    try:
+        modo = getattr(E, "orden_fuentes_modo", "manual") or "manual"
+    except Exception:
+        modo = "manual"
+    radios = []
+    for clave, texto in MODOS_ORDEN_FUENTES:
+        radios.append((("● " if clave == modo else "○ ") + texto,
+                       lambda c=clave: fijar_modo_orden_fuentes(c)))
+    try:
+        mostrar = bool(getattr(E, "mostrar_ocultas", True))
+    except Exception:
+        mostrar = True
+    toggle = (("☑ " if mostrar else "☐ ") + "Mostrar fuentes ocultas",
+              _alternar_mostrar_ocultas)
+    return radios, toggle
+
+
+def _abrir_menu_orden_fuentes(event=None):
+    """Menú del botón ☰: criterio de orden + toggle de ocultas."""
+    try:
+        menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
+                       activebackground="#323b4c", activeforeground="white")
+    except Exception:
+        return
+    try:
+        radios, toggle = _items_menu_orden_fuentes()
+    except Exception:
+        return
+    for texto, accion in radios:
+        try:
+            menu.add_command(label=texto, command=accion)
+        except Exception:
+            pass
+    try:
+        menu.add_separator()
+    except Exception:
+        pass
+    try:
+        menu.add_command(label=toggle[0], command=toggle[1])
+    except Exception:
+        pass
+    try:
+        if event is not None:
+            menu.tk_popup(event.x_root, event.y_root)
+    except Exception:
+        pass
 
 
 def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
@@ -276,18 +479,17 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
-    # La clave incluye el orden: reordenar (drag & drop) no cambia ni
-    # columnas ni ancho, y sin esto el early return de abajo se tragaba
-    # el reorden y la grilla nunca se movía (la lista se guardaba bien,
-    # pero las tarjetas quedaban en su lugar).
-    clave_grilla = (columnas, ancho_celda, tuple(E.orden_fuentes))
+    # La clave incluye el orden VISIBLE (manual + criterio + ocultas):
+    # cambiar el criterio reordena aunque la lista manual no cambie.
+    orden = orden_visible_fuentes()
+    clave_grilla = (columnas, ancho_celda, tuple(orden))
     # Si no cambió ni la cantidad de columnas ni el ancho, las posiciones
     # son idénticas: no hay nada que mover.
     if (not forzar) and E._ultima_grilla_fuentes.get("clave") == clave_grilla:
         mod_ui_ventana.actualizar_scroll()
         return
     E._ultima_grilla_fuentes["clave"] = clave_grilla
-    for idx, nombre in enumerate(E.orden_fuentes):
+    for idx, nombre in enumerate(orden):
         if nombre not in E.fuentes:
             continue
         try:

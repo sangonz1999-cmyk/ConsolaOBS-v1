@@ -666,11 +666,17 @@ def construir_cuerpo():
     tk.Frame(barra_titulo_fuentes, bg=_acento_barra, width=4).pack(side="left", fill="y")
     tk.Frame(barra_titulo_fuentes, bg=_acento_linea, height=2).pack(side="bottom", fill="x")
 
+    boton_orden_fuentes = tk.Label(
+        barra_titulo_fuentes, text="☰",
+        bg=E.color_barra_titulo(), fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="hand2"
+    )
+    boton_orden_fuentes.pack(side="left", padx=(12, 0))
+    boton_orden_fuentes.bind("<ButtonPress-1>", mod_ui_tarjeta._abrir_menu_orden_fuentes)
     titulo_fuentes = tk.Label(
-        barra_titulo_fuentes, text="☰  FUENTES DE AUDIO   ·   arrastrá para mover el panel",
+        barra_titulo_fuentes, text="FUENTES DE AUDIO   ·   arrastrá para mover el panel",
         bg=E.color_barra_titulo(), fg="white", font=(E.FUENTE_UI, 11, "bold"), cursor="fleur"
     )
-    titulo_fuentes.pack(side="left", padx=12)
+    titulo_fuentes.pack(side="left", padx=(4, 12))
     titulo_fuentes.bind("<ButtonPress-1>", lambda e: _iniciar_arrastre_panel("fuentes"))
     titulo_fuentes.bind("<ButtonRelease-1>", lambda e: _soltar_panel("fuentes", e))
 

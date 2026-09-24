@@ -153,6 +153,18 @@ def main():
     if isinstance(E._orden_guardado, list):
         E.orden_fuentes = [n for n in E._orden_guardado if isinstance(n, str)]
 
+    E.orden_fuentes_modo = E.config_interfaz_previa.get("orden_fuentes_modo", "manual")
+    if E.orden_fuentes_modo not in ("manual", "alfabetico", "activas", "escena", "favoritos", "colores"):
+        E.orden_fuentes_modo = "manual"
+    E.mostrar_ocultas = E.config_interfaz_previa.get("mostrar_ocultas", True)
+    if not isinstance(E.mostrar_ocultas, bool):
+        E.mostrar_ocultas = True
+    _ocultas_guardadas = E.config_interfaz_previa.get("fuentes_ocultas", [])
+    if isinstance(_ocultas_guardadas, list):
+        E.fuentes_ocultas = set(n for n in _ocultas_guardadas if isinstance(n, str))
+    else:
+        E.fuentes_ocultas = set()
+
     E.num_pads_soundboard = E.config_interfaz_previa.get("num_pads_soundboard", C.NUM_BOTONES_SOUNDBOARD_INICIAL)
     if not isinstance(E.num_pads_soundboard, int) or E.num_pads_soundboard < 1:
         E.num_pads_soundboard = C.NUM_BOTONES_SOUNDBOARD_INICIAL
@@ -713,6 +725,8 @@ def main():
 
 
     mod_ui_ventana.construir_cuerpo()
+    # Loop de reorden por actividad (sólo actúa si el modo es 'activas').
+    mod_ui_tarjeta._programar_reorden_activas()
     # Los audios nuevos de la carpeta Sondidos_pad se convierten en pads
     # solos al arrancar (los que ya tienen pad no se tocan).
     mod_ui_soundboard.detectar_sonidos_carpeta(avisar=False)

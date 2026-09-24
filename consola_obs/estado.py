@@ -167,9 +167,12 @@ num_pads_soundboard = C.NUM_BOTONES_SOUNDBOARD_INICIAL
 orden_fuentes = []                                                                    
 columnas_fuentes = 1                                                                               
 
-fuentes_principales = set()                                             
-colores_fuentes = {}                                                          
-escena_actual_nombres = set()                                                          
+fuentes_principales = set()
+colores_fuentes = {}
+fuentes_ocultas = set()
+orden_fuentes_modo = "manual"
+mostrar_ocultas = True
+escena_actual_nombres = set()
 escena_actual_obtenida = False                                                            
 
 _dialogo_filtros_abierto = {"nombre": None, "refrescar": None, "ventana": None}
