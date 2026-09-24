@@ -544,7 +544,6 @@ def _mover_divisor(event):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
         _tapar_grillas()
-        _tapar_fuentes()
         E.cuerpo.sash_place(0, nx, ny)
         try:
             E.ventana.update_idletasks()

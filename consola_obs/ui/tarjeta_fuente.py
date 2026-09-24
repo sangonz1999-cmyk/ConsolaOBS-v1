@@ -537,14 +537,22 @@ def _al_redimensionar_fuentes(event=None):
     except Exception:
         cambio = False
     if cambio:
+        # El drag del DIVISOR no se toca: tiene su propio sistema (foto
+        # en pads) y funcionaba perfecto. Solo el resize de borde de
+        # ventana congela y difiere.
         try:
-            E._ultimo_tamano_canvas_fuentes["valor"] = tam
+            en_divisor = bool(getattr(getattr(E, "cuerpo", None), "_arrastrando_sash", False))
         except Exception:
-            pass
-        mod_ui_ventana._congelar_gesto_resize()
-        mod_ui_ventana._tapar_fuentes_con_foto()
-        mod_ui_ventana._programar_asentado_fuentes()
-        return
+            en_divisor = False
+        if not en_divisor:
+            try:
+                E._ultimo_tamano_canvas_fuentes["valor"] = tam
+            except Exception:
+                pass
+            mod_ui_ventana._congelar_gesto_resize()
+            mod_ui_ventana._tapar_fuentes_con_foto()
+            mod_ui_ventana._programar_asentado_fuentes()
+            return
     if E._trabajo_redimension_fuentes["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
     E._trabajo_redimension_fuentes["id"] = E.ventana.after(15, _aplicar_redimension_fuentes)
