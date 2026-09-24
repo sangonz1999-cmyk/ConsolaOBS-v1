@@ -1138,19 +1138,25 @@ def _reconstruir_interfaz_con_velo():
 
 
 def _reubicar_vivo_ventana():
-    """Reacomoda ambas grillas en vivo durante el redimensionado de la
-    ventana, sin tapar nada: sólo grid_forget + grid, sin destruir ni
-    crear nada, así el movimiento se ve fluido."""
+    """Durante el redimensionado de la ventana: los pads se reacomodan
+    en vivo (celdas fijas, barato, no se rompe) pero los faders NO (cada
+    tarjeta cambia de tamaño y se vería cortado): se congelan con la
+    tapa y se reacomodan enteros al asentar. Sin esto, esta ruta
+    salteaba el diferido del canvas y el resize rápido se veía roto."""
     try:
         E.ventana._timer_resize_vivo = None
     except Exception:
         pass
     try:
-        mod_ui_tarjeta._reubicar_fuentes()
+        mod_ui_soundboard._reubicar_pads()
     except Exception:
         pass
     try:
-        mod_ui_soundboard._reubicar_pads()
+        _tapar_fuentes_con_foto()
+    except Exception:
+        pass
+    try:
+        _programar_asentado_fuentes()
     except Exception:
         pass
 
