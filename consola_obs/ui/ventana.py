@@ -190,56 +190,18 @@ def _log_fuentes(texto):
         pass
 
 
-def _ocultar_panel_fuentes(motivo=""):
-    """Esconde la grilla de faders del canvas (se ve el fondo limpio).
-    Nada oculto se puede pintar roto: inmunidad estructural contra los
-    cortes del resize, sin depender de fotos ni de la cadencia de
-    eventos. Devuelve True si quedó oculto."""
-    try:
-        wid = getattr(E, "_ventana_panel_fx_id", None)
-        lienzo = getattr(E, "canvas", None)
-        if wid is None or lienzo is None:
-            return False
-        try:
-            lienzo.type(wid)
-        except Exception:
-            return False
-        lienzo.itemconfigure(wid, state="hidden")
-        E.panel_fuentes_oculto = True
-        _log_fuentes(f"panel oculto ({motivo})")
-        return True
-    except Exception:
-        return False
-
-
-def _mostrar_panel_fuentes(motivo=""):
-    try:
-        wid = getattr(E, "_ventana_panel_fx_id", None)
-        lienzo = getattr(E, "canvas", None)
-        if wid is None or lienzo is None:
-            return False
-        try:
-            lienzo.type(wid)
-        except Exception:
-            return False
-        lienzo.itemconfigure(wid, state="normal")
-        E.panel_fuentes_oculto = False
-        _log_fuentes(f"panel visible ({motivo})")
-        return True
-    except Exception:
-        return False
-
-
 def _tapar_fuentes_con_foto():
     """Espejo de _tapar_pads_con_foto para la grilla de faders: congela
     la vista actual en una foto que queda hasta el asentado. Si ya está
-    puesta no re-saca la foto (un grab por gesto alcanza)."""
+    puesta no re-saca la foto (un grab por gesto alcanza). Con log para
+    diagnóstico (si falla, el motivo queda en conexion.log)."""
     try:
         if getattr(E, "tapa_fuentes_puesta", False):
             return
         tapa = getattr(E, "tapa_fuentes", None)
         lienzo = getattr(E, "canvas", None)
         if tapa is None or lienzo is None:
+            _log_fuentes(f"tapa-foto omitida (tapa={tapa is not None} canvas={lienzo is not None})")
             return
         if HAY_PILLOW and ImageGrab is not None:
             try:
@@ -250,13 +212,15 @@ def _tapar_fuentes_con_foto():
                     foto = ImageGrab.grab(bbox=(x, y, x + ancho, y + alto))
                     tapa.imagen_foto = ImageTk.PhotoImage(foto)
                     tapa.config(image=tapa.imagen_foto)
-            except Exception:
+            except Exception as e:
                 tapa.config(image="")
+                _log_fuentes(f"tapa-foto sin foto: {e!r}")
         tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
         tapa.lift()
         E.tapa_fuentes_puesta = True
-    except Exception:
-        pass
+        _log_fuentes("tapa-foto puesta")
+    except Exception as e:
+        _log_fuentes(f"tapa-foto fallo: {e!r}")
 
 
 def _tapar_fuentes():
@@ -270,8 +234,9 @@ def _tapar_fuentes():
         tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
         tapa.lift()
         E.tapa_fuentes_puesta = True
-    except Exception:
-        pass
+        _log_fuentes("tapa-plana puesta")
+    except Exception as e:
+        _log_fuentes(f"tapa-plana fallo: {e!r}")
 
 
 def _destapar_fuentes():
@@ -279,8 +244,9 @@ def _destapar_fuentes():
         tapa = getattr(E, "tapa_fuentes", None)
         if tapa is not None:
             tapa.place_forget()
-    except Exception:
-        pass
+            _log_fuentes("tapa quitada")
+    except Exception as e:
+        _log_fuentes(f"destape fallo: {e!r}")
     try:
         E.tapa_fuentes_puesta = False
     except Exception:
@@ -330,13 +296,13 @@ def _asentar_fuentes():
         pass
     try:
         mod_ui_tarjeta._reubicar_fuentes()
+        _log_fuentes("reubica-muestra")
     except Exception:
         pass
     try:
         E.ventana.update_idletasks()
     except Exception:
         pass
-    _mostrar_panel_fuentes("asentar")
     _destapar_fuentes()
 
 
@@ -427,9 +393,9 @@ def _vigilar_modo_super():
             pass
         return
     # Se soltó de verdad (aunque el evento se haya perdido): si quedó
-    # la tapa de fuentes o el panel oculto, asentar y mostrar acá también.
+    # la tapa de fuentes, asentar y destapar acá también.
     try:
-        if getattr(E, "tapa_fuentes_puesta", False) or getattr(E, "panel_fuentes_oculto", False):
+        if getattr(E, "tapa_fuentes_puesta", False):
             _asentar_fuentes()
     except Exception:
         pass
@@ -582,10 +548,10 @@ def _soltar_boton_termina_resize(event=None):
             salir_modo_super()
     except Exception:
         pass
-    # Si quedó la tapa de fuentes puesta o el panel oculto (resize),
-    # asentar ya: no esperar al timer de quietud.
+    # Si quedó la tapa de fuentes puesta (resize), asentar ya:
+    # no esperar al timer de quietud.
     try:
-        if getattr(E, "tapa_fuentes_puesta", False) or getattr(E, "panel_fuentes_oculto", False):
+        if getattr(E, "tapa_fuentes_puesta", False):
             try:
                 timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
                 if timer is not None:
@@ -684,8 +650,7 @@ def construir_cuerpo():
     E.scrollbar_h.grid_remove()
 
     E.panel_fuentes = tk.Frame(E.canvas, bg=E.color_fondo_panel())
-    E._ventana_panel_fx_id = E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
-    E.panel_fuentes_oculto = False
+    E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
     E.panel_fuentes_oculto = False
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
@@ -1199,7 +1164,7 @@ def _reubicar_vivo_ventana():
     except Exception:
         pass
     try:
-        _ocultar_panel_fuentes("resize-ventana")
+        _tapar_fuentes_con_foto()
     except Exception:
         pass
     try:

@@ -320,7 +320,7 @@ def _al_redimensionar_fuentes(event=None):
             E._ultimo_tamano_canvas_fuentes["valor"] = tam
         except Exception:
             pass
-        mod_ui_ventana._ocultar_panel_fuentes("resize-canvas")
+        mod_ui_ventana._tapar_fuentes_con_foto()
         mod_ui_ventana._programar_asentado_fuentes()
         return
     if E._trabajo_redimension_fuentes["id"] is not None:
