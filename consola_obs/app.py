@@ -153,9 +153,14 @@ def main():
     if isinstance(E._orden_guardado, list):
         E.orden_fuentes = [n for n in E._orden_guardado if isinstance(n, str)]
 
-    E.orden_fuentes_modo = E.config_interfaz_previa.get("orden_fuentes_modo", "manual")
-    if E.orden_fuentes_modo not in ("manual", "alfabetico", "activas", "escena", "favoritos", "colores"):
-        E.orden_fuentes_modo = "manual"
+    _validos = ("favoritos", "colores", "activas", "escena", "alfabetico")
+    _crit = E.config_interfaz_previa.get("orden_fuentes_criterios", None)
+    if isinstance(_crit, list):
+        E.orden_fuentes_criterios = [c for c in _crit if c in _validos]
+    else:
+        # Migración del formato anterior (un solo modo string).
+        _viejo = E.config_interfaz_previa.get("orden_fuentes_modo", "manual")
+        E.orden_fuentes_criterios = [_viejo] if _viejo in _validos else []
     E.mostrar_ocultas = E.config_interfaz_previa.get("mostrar_ocultas", True)
     if not isinstance(E.mostrar_ocultas, bool):
         E.mostrar_ocultas = True

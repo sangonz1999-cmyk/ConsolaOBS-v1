@@ -207,14 +207,23 @@ def _fila_col_fuente(nombre):
     return idx // columnas, idx % columnas
 
 
-MODOS_ORDEN_FUENTES = (
-    ("manual", "Orden manual"),
-    ("alfabetico", "Alfabético"),
-    ("activas", "Activas primero"),
-    ("escena", "Escena actual primero"),
+CRITERIOS_ORDEN_FUENTES = (
     ("favoritos", "Favoritos primero"),
     ("colores", "Con colores primero"),
+    ("activas", "Activas primero"),
+    ("escena", "Escena actual primero"),
+    ("alfabetico", "Alfabético"),
 )
+# Prioridad = el orden de la tupla (el alfabético cierra como desempate).
+
+
+def _criterios_orden_activos():
+    """Claves activas en orden de prioridad (no de clickeo)."""
+    try:
+        lista = set(getattr(E, "orden_fuentes_criterios", None) or [])
+    except Exception:
+        return []
+    return [c for c, _t in CRITERIOS_ORDEN_FUENTES if c in lista]
 
 
 def _fuente_sonando_ahora(nombre):
@@ -260,32 +269,39 @@ def orden_visible_fuentes():
         ocultas = set()
     visibles = [n for n in base if n not in ocultas]
     ocult_lista = [n for n in base if n in ocultas]
-    try:
-        modo = getattr(E, "orden_fuentes_modo", "manual") or "manual"
-    except Exception:
-        modo = "manual"
-    if modo == "alfabetico":
-        visibles = sorted(visibles, key=lambda n: _nombre_mostrado_fuente(n).lower())
-    elif modo == "activas":
-        visibles = sorted(visibles, key=lambda n: 0 if _fuente_sonando_ahora(n) else 1)
-    elif modo == "escena":
+    criterios = _criterios_orden_activos()
+    if criterios:
         try:
             actual = set(E.escena_actual_nombres or set())
         except Exception:
             actual = set()
-        visibles = sorted(visibles, key=lambda n: 0 if n in actual else 1)
-    elif modo == "favoritos":
         try:
             favs = set(E.fuentes_principales or set())
         except Exception:
             favs = set()
-        visibles = sorted(visibles, key=lambda n: 0 if n in favs else 1)
-    elif modo == "colores":
         try:
             con_color = set((E.colores_fuentes or {}).keys())
         except Exception:
             con_color = set()
-        visibles = sorted(visibles, key=lambda n: 0 if n in con_color else 1)
+
+        def _clave(n):
+            clave = []
+            if "favoritos" in criterios:
+                clave.append(0 if n in favs else 1)
+            if "colores" in criterios:
+                clave.append(0 if n in con_color else 1)
+            if "activas" in criterios:
+                clave.append(0 if _fuente_sonando_ahora(n) else 1)
+            if "escena" in criterios:
+                clave.append(0 if n in actual else 1)
+            if "alfabetico" in criterios:
+                clave.append(_nombre_mostrado_fuente(n).lower())
+            return tuple(clave)
+
+        try:
+            visibles = sorted(visibles, key=_clave)
+        except Exception:
+            pass
     try:
         mostrar = bool(getattr(E, "mostrar_ocultas", True))
     except Exception:
@@ -298,7 +314,7 @@ def orden_visible_fuentes():
 def _guardar_orden_fuentes():
     try:
         mod_configuracion.guardar_config_interfaz({
-            "orden_fuentes_modo": getattr(E, "orden_fuentes_modo", "manual"),
+            "orden_fuentes_criterios": list(getattr(E, "orden_fuentes_criterios", []) or []),
             "mostrar_ocultas": bool(getattr(E, "mostrar_ocultas", True)),
             "fuentes_ocultas": sorted(getattr(E, "fuentes_ocultas", set()) or set()),
         })
@@ -306,11 +322,28 @@ def _guardar_orden_fuentes():
         pass
 
 
-def fijar_modo_orden_fuentes(modo):
+def alternar_criterio_orden_fuentes(clave):
+    """Prende/apaga un criterio (checkbox): combinables entre sí."""
     try:
-        if modo not in [c for c, _t in MODOS_ORDEN_FUENTES]:
+        validos = [c for c, _t in CRITERIOS_ORDEN_FUENTES]
+        if clave not in validos:
             return
-        E.orden_fuentes_modo = modo
+        actual = list(getattr(E, "orden_fuentes_criterios", None) or [])
+        if clave in actual:
+            actual = [c for c in actual if c != clave]
+        else:
+            actual.append(clave)
+        E.orden_fuentes_criterios = actual
+        _guardar_orden_fuentes()
+        _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def limpiar_criterios_orden_fuentes():
+    """Vuelve al orden manual (drag & drop puro)."""
+    try:
+        E.orden_fuentes_criterios = []
         _guardar_orden_fuentes()
         _reubicar_fuentes()
     except Exception:
@@ -346,7 +379,7 @@ def _reorden_activas_tick():
     except Exception:
         return
     try:
-        if getattr(E, "orden_fuentes_modo", "manual") != "activas":
+        if "activas" not in _criterios_orden_activos():
             return
         firma = tuple(n for n in (E.orden_fuentes or []) if _fuente_sonando_ahora(n))
         if firma != getattr(_reorden_activas_tick, "ultima", None):
@@ -357,23 +390,22 @@ def _reorden_activas_tick():
 
 
 def _items_menu_orden_fuentes():
-    """([radios], toggle) del menú ☰, testeable sin Tk. El separador lo
-    pone quien arma el tk.Menu."""
+    """(checks, reset, toggle) del menú ☰, testeable sin Tk."""
     try:
-        modo = getattr(E, "orden_fuentes_modo", "manual") or "manual"
+        activos = set(_criterios_orden_activos())
     except Exception:
-        modo = "manual"
-    radios = []
-    for clave, texto in MODOS_ORDEN_FUENTES:
-        radios.append((("● " if clave == modo else "○ ") + texto,
-                       lambda c=clave: fijar_modo_orden_fuentes(c)))
+        activos = set()
+    checks = []
+    for clave, texto in CRITERIOS_ORDEN_FUENTES:
+        checks.append((("☑ " if clave in activos else "☐ ") + texto,
+                       lambda c=clave: alternar_criterio_orden_fuentes(c)))
     try:
         mostrar = bool(getattr(E, "mostrar_ocultas", True))
     except Exception:
         mostrar = True
     toggle = (("☑ " if mostrar else "☐ ") + "Mostrar fuentes ocultas",
               _alternar_mostrar_ocultas)
-    return radios, toggle
+    return checks, toggle
 
 
 def _abrir_menu_orden_fuentes(event=None):
@@ -384,14 +416,19 @@ def _abrir_menu_orden_fuentes(event=None):
     except Exception:
         return
     try:
-        radios, toggle = _items_menu_orden_fuentes()
+        checks, toggle = _items_menu_orden_fuentes()
     except Exception:
         return
-    for texto, accion in radios:
+    for texto, accion in checks:
         try:
             menu.add_command(label=texto, command=accion)
         except Exception:
             pass
+    try:
+        menu.add_command(label="↩ Orden manual",
+                         command=limpiar_criterios_orden_fuentes)
+    except Exception:
+        pass
     try:
         menu.add_separator()
     except Exception:
