@@ -240,9 +240,11 @@ def _destapar_fuentes():
 
 
 def _programar_asentado_fuentes():
-    """Tapa y programa el asentado de fuentes a los 150 ms (resetea el
-    timer en cada movimiento: mientras haya movimiento, no se muestra
-    nada a medias). Espejo de _programar_asentado."""
+    """Reprograma el asentado OCULTO a los 150 ms (resetea el timer en
+    cada movimiento). El asentado en quietud reacomoda SIN destapar: la
+    tapa sólo sale al soltar (ver _asentar_fuentes). Si se destapara por
+    quietud, en movimientos rápidos (donde Tk deja de mandar <Configure>
+    por instantes) se verían frames rotos a mitad del gesto."""
     try:
         timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
         if timer is not None:
@@ -251,14 +253,32 @@ def _programar_asentado_fuentes():
         pass
     _tapar_fuentes_con_foto()
     try:
-        E.ventana._timer_asentado_fuentes = E.ventana.after(150, _asentar_fuentes)
+        E.ventana._timer_asentado_fuentes = E.ventana.after(150, _asentar_fuentes_oculto)
+    except Exception:
+        pass
+
+
+def _asentar_fuentes_oculto():
+    """Reacomoda la grilla y fuerza el pintado SIN destapar: el layout
+    queda fresco pero tapado hasta la soltada."""
+    try:
+        E.ventana._timer_asentado_fuentes = None
+    except Exception:
+        pass
+    try:
+        mod_ui_tarjeta._reubicar_fuentes()
+    except Exception:
+        pass
+    try:
+        E.ventana.update_idletasks()
     except Exception:
         pass
 
 
 def _asentar_fuentes():
-    """Reacomoda la grilla de faders, fuerza el pintado y destapa. Así
-    nunca se ve un estado a medio renderizar. Idempotente."""
+    """Reacomoda la grilla de faders, fuerza el pintado completo y
+    destapa. Sólo para fin de gesto (soltada o clic de seguridad):
+    nunca por quietud a mitad del gesto. Idempotente."""
     try:
         E.ventana._timer_asentado_fuentes = None
     except Exception:
@@ -360,6 +380,13 @@ def _vigilar_modo_super():
         except Exception:
             pass
         return
+    # Se soltó de verdad (aunque el evento se haya perdido): si quedó
+    # la tapa de fuentes, asentar y destapar acá también.
+    try:
+        if getattr(E, "tapa_fuentes_puesta", False):
+            _asentar_fuentes()
+    except Exception:
+        pass
     salir_modo_super()
 
 
