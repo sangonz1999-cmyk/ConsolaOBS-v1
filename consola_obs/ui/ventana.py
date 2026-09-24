@@ -182,6 +182,54 @@ def _tapar_grillas():
         pass
 
 
+def _log_fuentes(texto):
+    try:
+        from consola_obs import red as mod_red
+        mod_red.log_conexion("FUENTES", texto)
+    except Exception:
+        pass
+
+
+def _ocultar_panel_fuentes(motivo=""):
+    """Esconde la grilla de faders del canvas (se ve el fondo limpio).
+    Nada oculto se puede pintar roto: inmunidad estructural contra los
+    cortes del resize, sin depender de fotos ni de la cadencia de
+    eventos. Devuelve True si quedó oculto."""
+    try:
+        wid = getattr(E, "_ventana_panel_fx_id", None)
+        lienzo = getattr(E, "canvas", None)
+        if wid is None or lienzo is None:
+            return False
+        try:
+            lienzo.type(wid)
+        except Exception:
+            return False
+        lienzo.itemconfigure(wid, state="hidden")
+        E.panel_fuentes_oculto = True
+        _log_fuentes(f"panel oculto ({motivo})")
+        return True
+    except Exception:
+        return False
+
+
+def _mostrar_panel_fuentes(motivo=""):
+    try:
+        wid = getattr(E, "_ventana_panel_fx_id", None)
+        lienzo = getattr(E, "canvas", None)
+        if wid is None or lienzo is None:
+            return False
+        try:
+            lienzo.type(wid)
+        except Exception:
+            return False
+        lienzo.itemconfigure(wid, state="normal")
+        E.panel_fuentes_oculto = False
+        _log_fuentes(f"panel visible ({motivo})")
+        return True
+    except Exception:
+        return False
+
+
 def _tapar_fuentes_con_foto():
     """Espejo de _tapar_pads_con_foto para la grilla de faders: congela
     la vista actual en una foto que queda hasta el asentado. Si ya está
@@ -241,17 +289,13 @@ def _destapar_fuentes():
 
 def _programar_asentado_fuentes():
     """Reprograma el asentado OCULTO a los 150 ms (resetea el timer en
-    cada movimiento). El asentado en quietud reacomoda SIN destapar: la
-    tapa sólo sale al soltar (ver _asentar_fuentes). Si se destapara por
-    quietud, en movimientos rápidos (donde Tk deja de mandar <Configure>
-    por instantes) se verían frames rotos a mitad del gesto."""
+    cada movimiento). La grilla sigue oculta hasta la soltada."""
     try:
         timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
         if timer is not None:
             E.ventana.after_cancel(timer)
     except Exception:
         pass
-    _tapar_fuentes_con_foto()
     try:
         E.ventana._timer_asentado_fuentes = E.ventana.after(150, _asentar_fuentes_oculto)
     except Exception:
@@ -259,14 +303,15 @@ def _programar_asentado_fuentes():
 
 
 def _asentar_fuentes_oculto():
-    """Reacomoda la grilla y fuerza el pintado SIN destapar: el layout
-    queda fresco pero tapado hasta la soltada."""
+    """Reacomoda la grilla y fuerza el pintado SIN mostrar: el layout
+    queda fresco pero oculto hasta la soltada."""
     try:
         E.ventana._timer_asentado_fuentes = None
     except Exception:
         pass
     try:
         mod_ui_tarjeta._reubicar_fuentes()
+        _log_fuentes("reubica-oculto")
     except Exception:
         pass
     try:
@@ -276,9 +321,9 @@ def _asentar_fuentes_oculto():
 
 
 def _asentar_fuentes():
-    """Reacomoda la grilla de faders, fuerza el pintado completo y
-    destapa. Sólo para fin de gesto (soltada o clic de seguridad):
-    nunca por quietud a mitad del gesto. Idempotente."""
+    """Reacomoda la grilla de faders, fuerza el pintado completo y la
+    MUESTRA. Sólo para fin de gesto (soltada o clic de seguridad).
+    Idempotente."""
     try:
         E.ventana._timer_asentado_fuentes = None
     except Exception:
@@ -291,6 +336,7 @@ def _asentar_fuentes():
         E.ventana.update_idletasks()
     except Exception:
         pass
+    _mostrar_panel_fuentes("asentar")
     _destapar_fuentes()
 
 
@@ -381,9 +427,9 @@ def _vigilar_modo_super():
             pass
         return
     # Se soltó de verdad (aunque el evento se haya perdido): si quedó
-    # la tapa de fuentes, asentar y destapar acá también.
+    # la tapa de fuentes o el panel oculto, asentar y mostrar acá también.
     try:
-        if getattr(E, "tapa_fuentes_puesta", False):
+        if getattr(E, "tapa_fuentes_puesta", False) or getattr(E, "panel_fuentes_oculto", False):
             _asentar_fuentes()
     except Exception:
         pass
@@ -536,10 +582,10 @@ def _soltar_boton_termina_resize(event=None):
             salir_modo_super()
     except Exception:
         pass
-    # Si quedó la tapa de fuentes puesta (resize de borde), asentar ya:
-    # no esperar al timer de quietud.
+    # Si quedó la tapa de fuentes puesta o el panel oculto (resize),
+    # asentar ya: no esperar al timer de quietud.
     try:
-        if getattr(E, "tapa_fuentes_puesta", False):
+        if getattr(E, "tapa_fuentes_puesta", False) or getattr(E, "panel_fuentes_oculto", False):
             try:
                 timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
                 if timer is not None:
@@ -638,7 +684,9 @@ def construir_cuerpo():
     E.scrollbar_h.grid_remove()
 
     E.panel_fuentes = tk.Frame(E.canvas, bg=E.color_fondo_panel())
-    E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
+    E._ventana_panel_fx_id = E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
+    E.panel_fuentes_oculto = False
+    E.panel_fuentes_oculto = False
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
     E.canvas.bind("<Configure>", lambda e: (actualizar_scroll(e), mod_ui_tarjeta._al_redimensionar_fuentes(e)))
@@ -1139,10 +1187,9 @@ def _reconstruir_interfaz_con_velo():
 
 def _reubicar_vivo_ventana():
     """Durante el redimensionado de la ventana: los pads se reacomodan
-    en vivo (celdas fijas, barato, no se rompe) pero los faders NO (cada
-    tarjeta cambia de tamaño y se vería cortado): se congelan con la
-    tapa y se reacomodan enteros al asentar. Sin esto, esta ruta
-    salteaba el diferido del canvas y el resize rápido se veía roto."""
+    en vivo (celdas fijas, barato, no se rompe) pero los faders se
+    OCULTAN y se reacomodan enteros al asentar (nada oculto se puede
+    pintar roto)."""
     try:
         E.ventana._timer_resize_vivo = None
     except Exception:
@@ -1152,7 +1199,7 @@ def _reubicar_vivo_ventana():
     except Exception:
         pass
     try:
-        _tapar_fuentes_con_foto()
+        _ocultar_panel_fuentes("resize-ventana")
     except Exception:
         pass
     try:

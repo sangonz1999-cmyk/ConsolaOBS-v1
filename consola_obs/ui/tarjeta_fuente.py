@@ -299,13 +299,11 @@ def _reubicar_fuentes(forzar=False):
 
 
 def _al_redimensionar_fuentes(event=None):
-    """Si cambió el TAMAÑO (resize real): se congela con la tapa y el
-    reacomodo se difiere entero al asentado (quietud/soltada). Reacomodar
-    en vivo cada 15ms era lo que se veía cortado: cada tarjeta cambia de
-    tamaño, recorta texto y redibuja degradados, carísimo por evento
-    (los pads son celdas fijas y por eso no se notaba). Sin cambio de
-    tamaño (scrollbars, contenido): reacomodo barato inmediato como
-    antes, sin tapa."""
+    """Si cambió el TAMAÑO (resize real): se OCULTA la grilla y el
+    reacomodo se difiere entero al asentado. Oculto no hay nada que se
+    pueda pintar roto (inmune a cadencia de eventos, fotos y escalas).
+    Sin cambio de tamaño (scrollbars, contenido): reacomodo barato
+    inmediato como antes, sin ocultar."""
     mod_ui_ventana.entrar_modo_super()
     try:
         tam = None
@@ -322,7 +320,7 @@ def _al_redimensionar_fuentes(event=None):
             E._ultimo_tamano_canvas_fuentes["valor"] = tam
         except Exception:
             pass
-        mod_ui_ventana._tapar_fuentes_con_foto()
+        mod_ui_ventana._ocultar_panel_fuentes("resize-canvas")
         mod_ui_ventana._programar_asentado_fuentes()
         return
     if E._trabajo_redimension_fuentes["id"] is not None:
