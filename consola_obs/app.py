@@ -275,13 +275,6 @@ def main():
     # color correcto, sin flash claro de por medio. No hace nada en Mac/
     # Linux (ver la versión de la función para esos sistemas).
     P._fijar_color_fondo_nativo("#10141b")
-    # Sin preservación de bits en resize (ver
-    # _forzar_repintado_total_en_resize): lo no repintado muestra el
-    # fondo en vez de píxeles viejos estirados.
-    try:
-        P._forzar_repintado_total_en_resize()
-    except Exception:
-        pass
 
     # ------------------------------------------------------------------
     # VELO DE REDIMENSIONADO

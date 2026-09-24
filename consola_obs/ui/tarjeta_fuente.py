@@ -242,6 +242,10 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
             redibujar()
 
 
+# Último origen de reacomodo logueado (throttle del diagnóstico).
+_ultimo_log_reubica_fuentes = {"quien": None, "t": 0.0}
+
+
 def _reubicar_fuentes(forzar=False):
     """Reacomoda (sin recrear) las tarjetas de fuente ya existentes según
     la cantidad de columnas actual. No recrear evita perder el estado
@@ -253,6 +257,21 @@ def _reubicar_fuentes(forzar=False):
     cantidad de columnas (ver _columnas_disponibles_fuentes); cuando
     eso pasa, esta función reposiciona las tarjetas en su nueva fila/
     columna, pero ninguna tarjeta cambia de tamaño por eso."""
+    try:
+        # Diagnóstico (throttleado): quién dispara cada reacomodo, para
+        # cazar reubicaciones en vivo a mitad de un gesto de resize.
+        import time as _t
+        import traceback as _tb
+        _pila = _tb.extract_stack(limit=3)
+        _quien = _pila[-2].name if len(_pila) >= 2 else "?"
+        _ahora = _t.monotonic()
+        _ult = _ultimo_log_reubica_fuentes
+        if _quien != _ult.get("quien") or (_ahora - _ult.get("t", 0.0)) > 3.0:
+            _ult["quien"] = _quien
+            _ult["t"] = _ahora
+            mod_ui_ventana._log_fuentes(f"reubica desde {_quien}")
+    except Exception:
+        pass
     columnas = max(1, E.columnas_fuentes)
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
