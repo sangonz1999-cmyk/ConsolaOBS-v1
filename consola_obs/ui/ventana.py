@@ -645,10 +645,11 @@ def construir_cuerpo():
     )
     E.canvas.configure(yscrollcommand=E.scrollbar_v.set, xscrollcommand=E.scrollbar_h.set)
 
-    E.canvas.grid(row=0, column=0, sticky="nsew")
-    E.scrollbar_v.grid(row=0, column=1, sticky="ns")
-    E.scrollbar_h.grid(row=1, column=0, sticky="ew")
-    E.marco_canvas.grid_rowconfigure(0, weight=1)
+    E.canvas.grid(row=1, column=0, sticky="nsew")
+    E.scrollbar_v.grid(row=1, column=1, sticky="ns")
+    E.scrollbar_h.grid(row=2, column=0, sticky="ew")
+    _crear_bordes_fuentes()
+    E.marco_canvas.grid_rowconfigure(1, weight=1)
     E.marco_canvas.grid_columnconfigure(0, weight=1)
     E.scrollbar_v.grid_remove()
     E.scrollbar_h.grid_remove()
@@ -659,7 +660,6 @@ def construir_cuerpo():
     # tope de scroll (ver actualizar_scroll, que extiende abajo/derecha).
     E.canvas.create_window((MARGEN_BORDES_FUENTES, MARGEN_BORDES_FUENTES),
                            window=E.panel_fuentes, anchor="nw")
-    E.panel_fuentes_oculto = False
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
     E.canvas.bind("<Configure>", lambda e: (actualizar_scroll(e), mod_ui_tarjeta._al_redimensionar_fuentes(e)))
@@ -816,6 +816,31 @@ def construir_cuerpo():
         mod_ui_musica.construir_mini_player()
     except Exception as e:
         print(f"No se pudo construir el mini player de música: {e}")
+
+
+def _crear_bordes_fuentes():
+    """Franjas fijas de aire arriba y abajo del área scrolleable de
+    faders (filas 0 y 3 de la grilla del marco; el canvas va en la 1).
+    El contenido desliza POR DEBAJO de ellas, así que siempre se ve un
+    pequeño espacio de fondo antes del borde, en cualquier estado de
+    scroll. No participan del layout scrolleable: imposible que generen
+    bucles como los overlays que sí lo tocaban."""
+    try:
+        marco = E.marco_canvas
+        fondo = E.color_fondo_panel()
+        alto = MARGEN_BORDES_FUENTES
+    except Exception:
+        return
+    try:
+        E.borde_sup_fuentes = tk.Frame(marco, bg=fondo, height=alto)
+        E.borde_sup_fuentes.grid(row=0, column=0, sticky="ew")
+    except Exception:
+        pass
+    try:
+        E.borde_inf_fuentes = tk.Frame(marco, bg=fondo, height=alto)
+        E.borde_inf_fuentes.grid(row=3, column=0, sticky="ew")
+    except Exception:
+        pass
 
 
 def actualizar_scroll(event=None):
