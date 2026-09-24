@@ -48,6 +48,23 @@ El .exe queda en la carpeta "dist".
 """
 
 
+def _marca_build():
+    """Fecha/hora del propio ejecutable (o de main.py si corre desde
+    código): identifica el build en el título, para saber siempre qué
+    se está probando."""
+    try:
+        import sys as _sys
+        import os as _os
+        import datetime as _dt
+        if getattr(_sys, "frozen", False):
+            ruta = _os.path.abspath(_sys.executable)
+        else:
+            ruta = _os.path.join(R.CARPETA_SCRIPT, "main.py")
+        return _dt.datetime.fromtimestamp(_os.path.getmtime(ruta)).strftime("%d/%m %H:%M")
+    except Exception:
+        return ""
+
+
 def main():
 
 
@@ -145,7 +162,9 @@ def main():
             E.num_pads_soundboard = max(E.num_pads_soundboard, max(E.indices_guardados) + 1)
 
     E.ventana = tk.Tk()
-    E.ventana.title("Consola OBS — Panel de Audio Profesional")
+    _marca = _marca_build()
+    E.ventana.title("Consola OBS — Panel de Audio Profesional"
+                    + (f" · build {_marca}" if _marca else ""))
 
     # Ahora que el proceso es consciente del DPI (ver el bloque del
     # principio del archivo), Tk nos entrega la pantalla a resolución
@@ -256,6 +275,13 @@ def main():
     # color correcto, sin flash claro de por medio. No hace nada en Mac/
     # Linux (ver la versión de la función para esos sistemas).
     P._fijar_color_fondo_nativo("#10141b")
+    # Sin preservación de bits en resize (ver
+    # _forzar_repintado_total_en_resize): lo no repintado muestra el
+    # fondo en vez de píxeles viejos estirados.
+    try:
+        P._forzar_repintado_total_en_resize()
+    except Exception:
+        pass
 
     # ------------------------------------------------------------------
     # VELO DE REDIMENSIONADO

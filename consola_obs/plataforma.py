@@ -67,6 +67,33 @@ if _ES_WINDOWS:
     _RDW_ALLCHILDREN = 0x0080
     _RDW_UPDATENOW = 0x0100
     _GCLP_HBRBACKGROUND = -10
+    _GCL_STYLE = -26
+    _CS_HREDRAW = 0x0002
+    _CS_VREDRAW = 0x0001
+
+    def _forzar_repintado_total_en_resize():
+        """Agrega CS_HREDRAW|CS_VREDRAW al estilo de la clase de ventana,
+        una sola vez al arrancar: Windows invalida TODA la ventana en
+        cada resize en vez de preservar bits (bitblt). Esa preservación
+        era la que repetía la última imagen del borde hacia arriba/abajo
+        indefinidamente hasta que Tk repintaba (el glitch). Sin bits
+        preservados no hay nada que estirar: lo aún no repintado muestra
+        el fondo, nunca píxeles viejos. Devuelve True si lo aplicó."""
+        try:
+            hwnd = _hwnd_ventana_real()
+            if not hwnd:
+                return False
+            try:
+                estilo = int(_user32.GetClassLongPtrW(hwnd, _GCL_STYLE) or 0)
+            except Exception:
+                return False
+            nuevo = estilo | _CS_HREDRAW | _CS_VREDRAW
+            if nuevo == estilo:
+                return True
+            _user32.SetClassLongPtrW(hwnd, _GCL_STYLE, nuevo)
+            return True
+        except Exception:
+            return False
 
     # Los handles de Windows (HWND, HBRUSH) son del tamaño de un
     # puntero: en Windows de 64 bits eso es 8 bytes. Si no se le avisa
@@ -84,6 +111,8 @@ if _ES_WINDOWS:
     _user32.RedrawWindow.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
     _user32.SetClassLongPtrW.restype = ctypes.c_void_p
     _user32.SetClassLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    _user32.GetClassLongPtrW.restype = ctypes.c_void_p
+    _user32.GetClassLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int]
     _gdi32.CreateSolidBrush.restype = ctypes.c_void_p
     _gdi32.CreateSolidBrush.argtypes = [ctypes.c_uint]
     _gdi32.AddFontResourceExW.restype = ctypes.c_int
@@ -181,6 +210,9 @@ else:
 
     def _descongelar_pintado_ventana():
         pass
+
+    def _forzar_repintado_total_en_resize():
+        return False
 
     def _boton_izquierdo_presionado():
         return False
