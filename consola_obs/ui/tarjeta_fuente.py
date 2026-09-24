@@ -301,8 +301,11 @@ def _reubicar_fuentes(forzar=False):
 def _al_redimensionar_fuentes(event=None):
     """Reacomoda la grilla en vivo durante el arrastre (throttle corto
     de 15ms): sólo reubica celdas ya existentes, no destruye ni crea
-    nada (ver _reubicar)."""
+    nada (ver _reubicar). La tapa con foto (como en pads) oculta los
+    estados intermedios hasta que hay quietud."""
     mod_ui_ventana.entrar_modo_super()
+    mod_ui_ventana._tapar_fuentes_con_foto()
+    mod_ui_ventana._programar_asentado_fuentes()
     if E._trabajo_redimension_fuentes["id"] is not None:
         E.ventana.after_cancel(E._trabajo_redimension_fuentes["id"])
     E._trabajo_redimension_fuentes["id"] = E.ventana.after(15, _aplicar_redimension_fuentes)

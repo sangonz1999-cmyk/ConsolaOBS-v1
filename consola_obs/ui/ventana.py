@@ -182,6 +182,98 @@ def _tapar_grillas():
         pass
 
 
+def _tapar_fuentes_con_foto():
+    """Espejo de _tapar_pads_con_foto para la grilla de faders: congela
+    la vista actual en una foto que queda hasta el asentado. Si ya está
+    puesta no re-saca la foto (un grab por gesto alcanza)."""
+    try:
+        if getattr(E, "tapa_fuentes_puesta", False):
+            return
+        tapa = getattr(E, "tapa_fuentes", None)
+        lienzo = getattr(E, "canvas", None)
+        if tapa is None or lienzo is None:
+            return
+        if HAY_PILLOW and ImageGrab is not None:
+            try:
+                E.ventana.update_idletasks()
+                x, y = lienzo.winfo_rootx(), lienzo.winfo_rooty()
+                ancho, alto = lienzo.winfo_width(), lienzo.winfo_height()
+                if ancho > 1 and alto > 1:
+                    foto = ImageGrab.grab(bbox=(x, y, x + ancho, y + alto))
+                    tapa.imagen_foto = ImageTk.PhotoImage(foto)
+                    tapa.config(image=tapa.imagen_foto)
+            except Exception:
+                tapa.config(image="")
+        tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
+        tapa.lift()
+        E.tapa_fuentes_puesta = True
+    except Exception:
+        pass
+
+
+def _tapar_fuentes():
+    """Cubre la grilla de faders con su fondo (sin foto). Para el drag
+    del divisor, donde los pads ya van con foto."""
+    try:
+        tapa = getattr(E, "tapa_fuentes", None)
+        lienzo = getattr(E, "canvas", None)
+        if tapa is None or lienzo is None:
+            return
+        tapa.place(in_=lienzo, x=0, y=0, relwidth=1, relheight=1)
+        tapa.lift()
+        E.tapa_fuentes_puesta = True
+    except Exception:
+        pass
+
+
+def _destapar_fuentes():
+    try:
+        tapa = getattr(E, "tapa_fuentes", None)
+        if tapa is not None:
+            tapa.place_forget()
+    except Exception:
+        pass
+    try:
+        E.tapa_fuentes_puesta = False
+    except Exception:
+        pass
+
+
+def _programar_asentado_fuentes():
+    """Tapa y programa el asentado de fuentes a los 150 ms (resetea el
+    timer en cada movimiento: mientras haya movimiento, no se muestra
+    nada a medias). Espejo de _programar_asentado."""
+    try:
+        timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
+        if timer is not None:
+            E.ventana.after_cancel(timer)
+    except Exception:
+        pass
+    _tapar_fuentes_con_foto()
+    try:
+        E.ventana._timer_asentado_fuentes = E.ventana.after(150, _asentar_fuentes)
+    except Exception:
+        pass
+
+
+def _asentar_fuentes():
+    """Reacomoda la grilla de faders, fuerza el pintado y destapa. Así
+    nunca se ve un estado a medio renderizar. Idempotente."""
+    try:
+        E.ventana._timer_asentado_fuentes = None
+    except Exception:
+        pass
+    try:
+        mod_ui_tarjeta._reubicar_fuentes()
+    except Exception:
+        pass
+    try:
+        E.ventana.update_idletasks()
+    except Exception:
+        pass
+    _destapar_fuentes()
+
+
 def _tapar_titulo_con_foto():
     """Igual que pads pero para la barra del título: foto fija de
     "Efectos De Sonido" que queda hasta soltar."""
@@ -208,12 +300,17 @@ def _tapar_titulo_con_foto():
 
 
 def _destapar_grillas():
-    for tapa in (getattr(E, "tapa_pads", None), getattr(E, "tapa_titulo", None)):
+    for tapa in (getattr(E, "tapa_pads", None), getattr(E, "tapa_titulo", None),
+                 getattr(E, "tapa_fuentes", None)):
         try:
             if tapa is not None:
                 tapa.place_forget()
         except Exception:
             pass
+    try:
+        E.tapa_fuentes_puesta = False
+    except Exception:
+        pass
 
 
 def entrar_modo_super(origen=None):
@@ -363,6 +460,7 @@ def _mover_divisor(event):
             return
         E.cuerpo._ultimo_snap = (nx, ny)
         _tapar_grillas()
+        _tapar_fuentes()
         E.cuerpo.sash_place(0, nx, ny)
         try:
             E.ventana.update_idletasks()
@@ -409,6 +507,20 @@ def _soltar_boton_termina_resize(event=None):
     try:
         if E._modo_super.get("activo") and E._modo_super.get("origen") in ("ventana", "divisor"):
             salir_modo_super()
+    except Exception:
+        pass
+    # Si quedó la tapa de fuentes puesta (resize de borde), asentar ya:
+    # no esperar al timer de quietud.
+    try:
+        if getattr(E, "tapa_fuentes_puesta", False):
+            try:
+                timer = getattr(E.ventana, "_timer_asentado_fuentes", None)
+                if timer is not None:
+                    E.ventana.after_cancel(timer)
+                    E.ventana._timer_asentado_fuentes = None
+            except Exception:
+                pass
+            _asentar_fuentes()
     except Exception:
         pass
 
@@ -637,6 +749,18 @@ def construir_cuerpo():
     # Si alguna vez queda tapado sin sesión (release perdido), un clic
     # sobre la tapa lo destapa y acomoda (asentar es idempotente).
     E.tapa_pads.bind("<ButtonPress-1>", lambda e: _asentar_grillas())
+
+    # Tapa anti-corte de FUENTES (espejo de la de pads): congela la
+    # grilla de faders con una foto durante el redimensionado, así no
+    # se ven estados a medio reubicar. Se recrea oculta con cada
+    # construir_cuerpo, igual que la de pads.
+    try:
+        E.tapa_fuentes = tk.Label(E.marco_canvas, bg=E.color_fondo_panel(), bd=0, highlightthickness=0)
+        E.tapa_fuentes.place_forget()
+        E.tapa_fuentes.bind("<ButtonPress-1>", lambda e: _asentar_fuentes())
+    except Exception:
+        E.tapa_fuentes = None
+    E.tapa_fuentes_puesta = False
 
     # Mini player de música al pie del panel de fuentes (se reconstruye
     # acá para sobrevivir a cambios de tema/diseño como el resto).
