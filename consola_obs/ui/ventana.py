@@ -106,6 +106,10 @@ def _soltar_panel(nombre_actual, event):
 # píxel por píxel dentro del rango útil. Sin snap a posiciones fijas.
 MIN_PANEL_FUENTES = 140
 MIN_PANEL_SOUNDBOARD = 220
+# Aire azul permanente alrededor de la grilla de faders (arriba e
+# izquierda por desplazamiento del panel; abajo y derecha por
+# scrollregion extendida): las tarjetas nunca tocan el borde.
+MARGEN_BORDES_FUENTES = 8
 
 
 def _limitar_divisor(valor, total, minimo_antes, minimo_despues):
@@ -650,7 +654,11 @@ def construir_cuerpo():
     E.scrollbar_h.grid_remove()
 
     E.panel_fuentes = tk.Frame(E.canvas, bg=E.color_fondo_panel())
-    E.canvas.create_window((0, 0), window=E.panel_fuentes, anchor="nw")
+    # Margen azul permanente: el panel nace desplazado para que las
+    # tarjetas nunca toquen el borde superior/izquierdo, ni siquiera a
+    # tope de scroll (ver actualizar_scroll, que extiende abajo/derecha).
+    E.canvas.create_window((MARGEN_BORDES_FUENTES, MARGEN_BORDES_FUENTES),
+                           window=E.panel_fuentes, anchor="nw")
     E.panel_fuentes_oculto = False
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
@@ -812,9 +820,17 @@ def construir_cuerpo():
 
 def actualizar_scroll(event=None):
     bbox = E.canvas.bbox("all")
-    E.canvas.configure(scrollregion=bbox)
     if not bbox:
+        E.canvas.configure(scrollregion=bbox)
         return
+    # El margen también abajo/derecha: al scrollear a tope se sigue
+    # viendo fondo antes del borde.
+    try:
+        pad = MARGEN_BORDES_FUENTES
+        bbox = (bbox[0], bbox[1], bbox[2] + pad, bbox[3] + pad)
+    except Exception:
+        pass
+    E.canvas.configure(scrollregion=bbox)
 
     ancho_contenido = bbox[2] - bbox[0]
     alto_contenido = bbox[3] - bbox[1]
