@@ -678,6 +678,7 @@ def construir_cuerpo():
     titulo_fuentes.pack(side="left", padx=(4, 12))
     titulo_fuentes.bind("<ButtonPress-1>", lambda e: _iniciar_arrastre_panel("fuentes"))
     titulo_fuentes.bind("<ButtonRelease-1>", lambda e: _soltar_panel("fuentes", e))
+    E.titulo_fuentes = titulo_fuentes
 
     E.marco_canvas = tk.Frame(E.marco_fuentes, bg=E.color_fondo_panel())
     E.marco_canvas.pack(fill="both", expand=True)

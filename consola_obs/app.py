@@ -730,6 +730,8 @@ def main():
 
 
     mod_ui_ventana.construir_cuerpo()
+    # Vigilancia de escena (autocura la detección si los eventos no llegan).
+    mod_ui_tarjeta._programar_vigilancia_escena()
     # Los audios nuevos de la carpeta Sondidos_pad se convierten en pads
     # solos al arrancar (los que ya tienen pad no se tocan).
     mod_ui_soundboard.detectar_sonidos_carpeta(avisar=False)

@@ -89,6 +89,10 @@ def _refrescar_membresia_escena():
     except Exception as e:
         print(f"No se pudo actualizar la escena activa: {e}")
         return
+    try:
+        E.escena_actual_nombre = escena_actual or ""
+    except Exception:
+        pass
     nombres_en_escena = set()
     orden_escena = []
     if escena_actual:
@@ -147,6 +151,10 @@ def _aplicar_membresia_escena(nombres_en_escena, orden_escena=None):
             mod_ui_tarjeta._actualizar_estado_gris(nombre)
         except Exception:
             pass
+    try:
+        mod_ui_tarjeta._refrescar_titulo_escena()
+    except Exception:
+        pass
     try:
         mod_ui_tarjeta._reubicar_si_orden_dinamico()
     except Exception:

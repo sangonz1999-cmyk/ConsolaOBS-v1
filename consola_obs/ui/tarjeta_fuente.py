@@ -408,6 +408,68 @@ def _reubicar_si_orden_dinamico():
         pass
 
 
+def _programar_vigilancia_escena():
+    """Loop de 5 s (una sola llamada barata): si cambió la escena al
+    aire, dispara el refresco completo de membresía. Red de seguridad
+    por si los eventos de OBS no llegan (enlace caído, versión rara):
+    la detección se autocura sola. Se arranca una sola vez."""
+    try:
+        if getattr(E, "_vigilancia_escena_en_marcha", False):
+            return
+        E._vigilancia_escena_en_marcha = True
+        E.ventana.after(5000, _vigilancia_escena_tick)
+    except Exception:
+        pass
+
+
+def _vigilancia_escena_tick():
+    try:
+        E.ventana.after(5000, _vigilancia_escena_tick)
+    except Exception:
+        return
+    try:
+        if not E.conectado:
+            return
+        nombre = None
+        try:
+            respuesta = E.cliente_obs.get_current_program_scene()
+            nombre = mod_obs_eventos._valor(
+                respuesta, "current_program_scene_name", "currentProgramSceneName",
+                "scene_name", "sceneName")
+        except Exception:
+            return
+        try:
+            ultima = getattr(E, "_ultima_escena_vista", None)
+        except Exception:
+            ultima = None
+        if not nombre or nombre == ultima:
+            return
+        E._ultima_escena_vista = nombre
+        try:
+            mod_obs_cliente._refrescar_membresia_escena()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _refrescar_titulo_escena():
+    """Muestra la escena al aire en el título del panel (diagnóstico
+    visible: de un vistazo se ve qué escena sigue la consola)."""
+    try:
+        etiqueta = getattr(E, "titulo_fuentes", None)
+        if etiqueta is None:
+            return
+        try:
+            escena = str(getattr(E, "escena_actual_nombre", "") or "")
+        except Exception:
+            escena = ""
+        base = "FUENTES DE AUDIO   ·   arrastrá para mover el panel"
+        etiqueta.config(text=base + (f"   ·   🎬 {escena}" if escena else ""))
+    except Exception:
+        pass
+
+
 def _items_menu_orden_fuentes():
     """(checks, reset, toggle) del menú ☰, testeable sin Tk."""
     try:
@@ -1995,6 +2057,10 @@ def _actualizar_en_hilo():
         )
         if escena_actual:
             try:
+                E.escena_actual_nombre = escena_actual
+            except Exception:
+                pass
+            try:
                 respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
                 try:
                     items = respuesta_items.scene_items
@@ -2039,6 +2105,10 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
         E.escena_actual_obtenida = True
         try:
             E.orden_escena_actual = list(orden_escena or [])
+        except Exception:
+            pass
+        try:
+            _refrescar_titulo_escena()
         except Exception:
             pass
 
