@@ -173,7 +173,8 @@ fuentes_ocultas = set()
 orden_fuentes_criterios = []
 mostrar_ocultas = True
 escena_actual_nombres = set()
-escena_actual_obtenida = False                                                            
+escena_actual_obtenida = False
+orden_escena_actual = []                                                            
 
 _dialogo_filtros_abierto = {"nombre": None, "refrescar": None, "ventana": None}
 

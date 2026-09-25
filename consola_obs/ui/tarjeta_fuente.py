@@ -284,9 +284,10 @@ def orden_visible_fuentes():
     criterios = _criterios_orden_activos()
     if criterios:
         try:
-            actual = set(E.escena_actual_nombres or set())
+            _orden_esc = list(getattr(E, "orden_escena_actual", None) or [])
         except Exception:
-            actual = set()
+            _orden_esc = []
+        pos_escena = {n: i for i, n in enumerate(_orden_esc)}
         try:
             favs = set(E.fuentes_principales or set())
         except Exception:
@@ -305,7 +306,12 @@ def orden_visible_fuentes():
             if "activas" in criterios:
                 clave.append(0 if _fuente_activa(n) else 1)
             if "escena" in criterios:
-                clave.append(0 if n in actual else 1)
+                # Orden del OBS (posición en escena; resto al fondo,
+                # estable = manual). Tupla de 2 para comparar parejo.
+                if n in pos_escena:
+                    clave.append((0, pos_escena[n]))
+                else:
+                    clave.append((1, 0))
             if "alfabetico" in criterios:
                 clave.append(_nombre_mostrado_fuente(n).lower())
             return tuple(clave)
@@ -1217,7 +1223,9 @@ def _actualizar_estado_gris(nombre):
 
     widgets["contenedor"].config(
         bg=color_cuerpo,
-        highlightbackground=((C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL) if es_principal else "#0e1219"),
+        highlightbackground=(
+            (C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL) if es_principal
+            else ("#ffffff" if en_escena else "#0e1219")),
         highlightthickness=(3 if es_principal else 2)
     )
     widgets["db"].config(bg=color_cuerpo)
@@ -1976,6 +1984,7 @@ def _actualizar_en_hilo():
             continue
 
     nombres_en_escena = set()
+    orden_escena = []
     escena_leida_ok = False
     try:
         respuesta_escena = E.cliente_obs.get_current_program_scene()
@@ -1985,11 +1994,22 @@ def _actualizar_en_hilo():
             "scene_name", "sceneName"
         )
         if escena_actual:
-            items = E.cliente_obs.get_scene_item_list(escena_actual).scene_items
-            for it in items:
+            try:
+                respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
+                try:
+                    items = respuesta_items.scene_items
+                except Exception:
+                    items = mod_obs_eventos._valor(respuesta_items, "scene_items", "sceneItems") or []
+            except Exception:
+                items = []
+            for it in items or []:
                 nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
                 habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
-                if nombre_item and habilitado:
+                if not nombre_item:
+                    continue
+                if nombre_item not in orden_escena:
+                    orden_escena.append(nombre_item)
+                if habilitado:
                     nombres_en_escena.add(nombre_item)
             escena_leida_ok = True
     except Exception as e:
@@ -2000,10 +2020,10 @@ def _actualizar_en_hilo():
     except Exception as e:
         print(f"No se pudo leer las fuentes de audio globales de OBS: {e}")
 
-    E.ventana.after(0, lambda: _aplicar_actualizacion(datos_fuentes, error_general, nombres_en_escena, escena_leida_ok))
+    E.ventana.after(0, lambda: _aplicar_actualizacion(datos_fuentes, error_general, nombres_en_escena, escena_leida_ok, orden_escena))
 
 
-def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_leida_ok=False):
+def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_leida_ok=False, orden_escena=None):
 
     E.boton_actualizar.config(state="normal", text="ACTUALIZAR FUENTES")
 
@@ -2017,6 +2037,10 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
     if escena_leida_ok:
         E.escena_actual_nombres = nombres_en_escena or set()
         E.escena_actual_obtenida = True
+        try:
+            E.orden_escena_actual = list(orden_escena or [])
+        except Exception:
+            pass
 
     nombres_activos = [d["nombre"] for d in datos_fuentes]
 

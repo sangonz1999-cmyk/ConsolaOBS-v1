@@ -90,6 +90,7 @@ def _refrescar_membresia_escena():
         print(f"No se pudo actualizar la escena activa: {e}")
         return
     nombres_en_escena = set()
+    orden_escena = []
     if escena_actual:
         try:
             respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
@@ -103,10 +104,24 @@ def _refrescar_membresia_escena():
                 habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
             except Exception:
                 continue
-            if nombre_item and habilitado:
+            if not nombre_item:
+                continue
+            if nombre_item not in orden_escena:
+                orden_escena.append(nombre_item)
+            if habilitado:
                 nombres_en_escena.add(nombre_item)
     try:
-        nombres_en_escena |= _leer_fuentes_globales_obs()
+        globales = _leer_fuentes_globales_obs()
+    except Exception:
+        globales = set()
+    try:
+        nombres_en_escena |= globales
+    except Exception:
+        pass
+    try:
+        for g in sorted(globales or set()):
+            if g not in orden_escena:
+                orden_escena.append(g)
     except Exception:
         pass
     try:
@@ -115,14 +130,18 @@ def _refrescar_membresia_escena():
     except Exception:
         pass
     try:
-        E.ventana.after(0, lambda: _aplicar_membresia_escena(nombres_en_escena))
+        E.ventana.after(0, lambda: _aplicar_membresia_escena(nombres_en_escena, orden_escena))
     except Exception:
         pass
 
 
-def _aplicar_membresia_escena(nombres_en_escena):
+def _aplicar_membresia_escena(nombres_en_escena, orden_escena=None):
     E.escena_actual_nombres = nombres_en_escena
     E.escena_actual_obtenida = True
+    try:
+        E.orden_escena_actual = list(orden_escena or [])
+    except Exception:
+        pass
     for nombre in list(E.fuentes.keys()):
         try:
             mod_ui_tarjeta._actualizar_estado_gris(nombre)
