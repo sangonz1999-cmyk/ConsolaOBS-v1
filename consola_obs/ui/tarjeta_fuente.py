@@ -226,24 +226,18 @@ def _criterios_orden_activos():
     return [c for c, _t in CRITERIOS_ORDEN_FUENTES if c in lista]
 
 
-def _fuente_sonando_ahora(nombre):
-    """True si la fuente tiene nivel real y fresco (ventana de 2 s):
-    así el orden 'activas' no se queda pegado a picos viejos."""
+def _fuente_activa(nombre):
+    """Activa = prendida (NO muteada). A propósito no es 'sonando
+    ahora': reordenar con cada sonido marearía (las tarjetas bailarían
+    todo el tiempo). Sin widgets o sin dato: activa (no se castiga lo
+    desconocido)."""
     try:
-        pico = float((E.niveles_actuales or {}).get(nombre) or 0.0)
+        widgets = E.fuentes.get(nombre)
+        if not widgets:
+            return True
+        return not bool(widgets.get("muted", False))
     except Exception:
-        return False
-    if pico <= 0.005:
-        return False
-    try:
-        ultima = float((E.ultima_actualizacion_nivel or {}).get(nombre, 0.0))
-    except Exception:
-        return False
-    try:
-        import time as _t
-        return (_t.monotonic() - ultima) < 2.0
-    except Exception:
-        return False
+        return True
 
 
 def _nombre_mostrado_fuente(nombre):
@@ -291,7 +285,7 @@ def orden_visible_fuentes():
             if "colores" in criterios:
                 clave.append(0 if n in con_color else 1)
             if "activas" in criterios:
-                clave.append(0 if _fuente_sonando_ahora(n) else 1)
+                clave.append(0 if _fuente_activa(n) else 1)
             if "escena" in criterios:
                 clave.append(0 if n in actual else 1)
             if "alfabetico" in criterios:
@@ -359,31 +353,16 @@ def _alternar_mostrar_ocultas():
         pass
 
 
-def _programar_reorden_activas():
-    """Loop de 1 s (barato): si el modo es 'activas' y cambió quién
-    suena, reubica. Se arranca una sola vez (bandera en E)."""
-    try:
-        if getattr(E, "_reorden_activas_en_marcha", False):
-            return
-        E._reorden_activas_en_marcha = True
-        E.ventana.after(1000, _reorden_activas_tick)
-    except Exception:
-        pass
-
-
-def _reorden_activas_tick():
-    try:
-        # La bandera ya está prendida: sólo reprogramar el próximo.
-        E._reorden_activas_en_marcha = True
-        E.ventana.after(1000, _reorden_activas_tick)
-    except Exception:
-        return
+def _reubicar_si_activas():
+    """Reubica si el criterio 'activas' está prendido. Para llamar tras
+    cambios de mute (locales o remotos): el orden por mute es estático,
+    no necesita loop. Siempre por after(0): vale desde cualquier hilo."""
     try:
         if "activas" not in _criterios_orden_activos():
             return
-        firma = tuple(n for n in (E.orden_fuentes or []) if _fuente_sonando_ahora(n))
-        if firma != getattr(_reorden_activas_tick, "ultima", None):
-            _reorden_activas_tick.ultima = firma
+        try:
+            E.ventana.after(0, _reubicar_fuentes)
+        except Exception:
             _reubicar_fuentes()
     except Exception:
         pass
@@ -1526,6 +1505,7 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     )
 
     _actualizar_estado_gris(nombre)
+    _reubicar_si_activas()
 
 
 
@@ -1543,6 +1523,7 @@ def cambiar_mute(nombre):
             color_nuevo=mod_ui_dibujo._color_mute(nuevo_estado)
         )
         _actualizar_estado_gris(nombre)
+        _reubicar_si_activas()
     except Exception as e:
         print(f"Error cambiando mute de {nombre}: {e}")
 

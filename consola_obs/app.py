@@ -730,8 +730,6 @@ def main():
 
 
     mod_ui_ventana.construir_cuerpo()
-    # Loop de reorden por actividad (sólo actúa si el modo es 'activas').
-    mod_ui_tarjeta._programar_reorden_activas()
     # Los audios nuevos de la carpeta Sondidos_pad se convierten en pads
     # solos al arrancar (los que ya tienen pad no se tocan).
     mod_ui_soundboard.detectar_sonidos_carpeta(avisar=False)
