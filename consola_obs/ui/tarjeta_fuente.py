@@ -2218,23 +2218,8 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
             "Error al actualizar",
             f"No se pudieron obtener las fuentes.\n\n{error}"
         )
+        _programar_reintento_si_vacio()
         return
-
-    if not datos_fuentes and not error:
-        # Refresh vacío con conexión viva: hasta 2 reintentos a los 3 s
-        # (cubre lecturas transitorias al conectar; un OBS de verdad
-        # vacío no se reintenta para siempre).
-        try:
-            if E.conectado and int(getattr(E, "_reintentos_vacio", 0) or 0) < 2:
-                E._reintentos_vacio = int(getattr(E, "_reintentos_vacio", 0) or 0) + 1
-                E.ventana.after(3000, _reintentar_si_vacio)
-        except Exception:
-            pass
-    elif datos_fuentes:
-        try:
-            E._reintentos_vacio = 0
-        except Exception:
-            pass
 
     if escena_leida_ok:
         E.escena_actual_nombres = nombres_en_escena or set()
@@ -2252,8 +2237,14 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
 
     for nombre_existente in list(E.fuentes.keys()):
         if nombre_existente not in nombres_activos:
-            E.fuentes[nombre_existente]["tarjeta_sombra"].destroy()
-            del E.fuentes[nombre_existente]
+            try:
+                E.fuentes[nombre_existente]["tarjeta_sombra"].destroy()
+            except Exception as e:
+                print(f"No se pudo destruir la tarjeta de '{nombre_existente}': {e}")
+            try:
+                del E.fuentes[nombre_existente]
+            except Exception:
+                pass
             E.niveles_actuales.pop(nombre_existente, None)
             E.niveles_crudos.pop(nombre_existente, None)
             E.niveles_entrada.pop(nombre_existente, None)
@@ -2285,6 +2276,28 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
 
     _al_redimensionar_fuentes()
     _reubicar_fuentes()
+    _programar_reintento_si_vacio()
+
+
+def _programar_reintento_si_vacio():
+    """Si el panel quedó vacío con conexión viva, hasta 2 reintentos a
+    los 3 s (cubre lecturas transitorias al conectar y cualquier fallo
+    silencioso que deje el panel sin tarjetas)."""
+    try:
+        if E.fuentes:
+            try:
+                E._reintentos_vacio = 0
+            except Exception:
+                pass
+            return
+        if not E.conectado:
+            return
+        if int(getattr(E, "_reintentos_vacio", 0) or 0) >= 2:
+            return
+        E._reintentos_vacio = int(getattr(E, "_reintentos_vacio", 0) or 0) + 1
+        E.ventana.after(3000, _reintentar_si_vacio)
+    except Exception:
+        pass
 
 
 def _limpiar_referencias_fuente_borrada(nombre):
