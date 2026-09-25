@@ -319,10 +319,29 @@ def conectar_obs():
         pass
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
-    mod_configuracion.guardar_config_conexion(host, puerto, password)
+    try:
+        mod_configuracion.guardar_config_conexion(host, puerto, password)
+    except Exception as e:
+        print(f"No se pudo guardar la conexión: {e}")
     _guardar_base_obs_del_campo()
-    actualizar_estado_conexion()
-    mod_ui_tarjeta.actualizar()
+    try:
+        actualizar_estado_conexion()
+    except Exception as e:
+        print(f"No se pudo actualizar el estado de conexión: {e}")
+        try:
+            mod_red.log_conexion("EXITO", f"aviso estado falló: {e!r}")
+        except Exception:
+            pass
+    # El refresh inicial no puede quedar atado a lo de arriba: si algo
+    # de esto fallara, el panel quedaba vacío para siempre sin aviso.
+    try:
+        mod_ui_tarjeta.actualizar()
+    except Exception as e:
+        print(f"No se pudo lanzar el refresh inicial: {e}")
+        try:
+            mod_red.log_conexion("EXITO", f"refresh inicial no lanzado: {e!r}")
+        except Exception:
+            pass
 
 
 def _guardar_base_obs_del_campo():

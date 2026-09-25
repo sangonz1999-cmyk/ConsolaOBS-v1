@@ -2067,6 +2067,30 @@ def _reintentar_si_vacio():
 
 
 def _actualizar_en_hilo():
+    """Envoltorio: el cuerpo real corre acá adentro vigilado. Si algo
+    inesperado lo mata (antes moría en silencio y el panel quedaba
+    vacío sin aviso ni reintento), queda en el log y se programa la
+    autocura."""
+    try:
+        _actualizar_en_hilo_cuerpo()
+    except Exception as e:
+        import traceback as _tb
+        try:
+            detalle = "".join(_tb.format_exception(type(e), e, e.__traceback__)).strip()[-2000:]
+        except Exception:
+            detalle = ""
+        try:
+            from consola_obs import red as mod_red
+            mod_red.log_conexion("FUENTES", f"refresh MUERTO: {type(e).__name__}: {e} {detalle}")
+        except Exception:
+            pass
+        try:
+            _programar_reintento_si_vacio()
+        except Exception:
+            pass
+
+
+def _actualizar_en_hilo_cuerpo():
     datos_fuentes = []
     error_general = None
 
@@ -2295,7 +2319,17 @@ def _programar_reintento_si_vacio():
         if int(getattr(E, "_reintentos_vacio", 0) or 0) >= 2:
             return
         E._reintentos_vacio = int(getattr(E, "_reintentos_vacio", 0) or 0) + 1
-        E.ventana.after(3000, _reintentar_si_vacio)
+        try:
+            E.ventana.after(3000, _reintentar_si_vacio)
+        except Exception:
+            # Si el after falla (hilo no-UI roto), Timer no depende de Tk.
+            try:
+                import threading as _th
+                _t = _th.Timer(3.0, _reintentar_si_vacio)
+                _t.daemon = True
+                _t.start()
+            except Exception:
+                pass
     except Exception:
         pass
 
