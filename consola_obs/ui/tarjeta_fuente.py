@@ -1988,6 +1988,10 @@ def _kinds_sin_audio():
         return set()
 
 
+# Kill-switch de la exclusión de no-audio (diagnóstico).
+_EXCLUIR_SIN_AUDIO = False
+
+
 def _kinds_con_audio():
     try:
         return set(getattr(E, "_kinds_con_audio", None) or set())
@@ -2135,8 +2139,10 @@ def _actualizar_en_hilo_cuerpo():
 
             # Sin audio no va al panel (como el mixer de OBS): ni tarjeta
             # ni lecturas de volumen/mute/monitoreo (eran los 604s).
+            # Kill-switch: en False se comporta como antes de la
+            # exclusión (todo entra). Diagnóstico del panel vacío.
             try:
-                if _es_entrada_sin_audio(entrada, nombre):
+                if _EXCLUIR_SIN_AUDIO and _es_entrada_sin_audio(entrada, nombre):
                     omitidas_sin_audio[0] += 1
                     continue
             except Exception:
