@@ -191,6 +191,37 @@ def _ancho_celda_fuentes():
     return _ancho_preferido_fuente()
 
 
+def _tiene_tarjeta_viva(nombre):
+    try:
+        w = (E.fuentes or {}).get(nombre)
+        if not w:
+            return False
+        sombra = w.get("tarjeta_sombra")
+        if sombra is None:
+            return False
+        return bool(sombra.winfo_exists())
+    except Exception:
+        return False
+
+
+def _posiciones_grilla(orden, columnas):
+    """[(nombre, fila, col)] DENSAS: salta los nombres sin tarjeta viva
+    para no dejar huecos (antes el índice venía del enumerate y un
+    nombre sin tarjeta consumía celda vacía). Nunca lanza."""
+    try:
+        presentes = [n for n in (orden or []) if _tiene_tarjeta_viva(n)]
+    except Exception:
+        try:
+            presentes = list(orden or [])
+        except Exception:
+            return []
+    try:
+        columnas = max(1, int(columnas))
+    except Exception:
+        columnas = 1
+    return [(n, i // columnas, i % columnas) for i, n in enumerate(presentes)]
+
+
 def _fila_col_fuente(nombre):
     """Posición (fila, columna) de una fuente dentro de la grilla, según
     el orden VISIBLE (manual + criterio) y la cantidad de columnas que
@@ -200,9 +231,16 @@ def _fila_col_fuente(nombre):
     if nombre not in E.orden_fuentes:
         E.orden_fuentes.append(nombre)
     try:
-        idx = orden_visible_fuentes().index(nombre)
+        for _n, _f, _c in _posiciones_grilla(orden_visible_fuentes(), E.columnas_fuentes):
+            if _n == nombre:
+                return _f, _c
+        raise ValueError(nombre)
     except Exception:
+        pass
+    try:
         idx = E.orden_fuentes.index(nombre)
+    except Exception:
+        idx = 0
     columnas = max(1, E.columnas_fuentes)
     return idx // columnas, idx % columnas
 
@@ -302,7 +340,15 @@ def orden_visible_fuentes():
             if "favoritos" in criterios:
                 clave.append(0 if n in favs else 1)
             if "colores" in criterios:
-                clave.append(0 if n in con_color else 1)
+                # El gris (muteada o fuera de escena) NO cuenta como
+                # color: va en un nivel propio, debajo hasta de las de
+                # color por defecto sin mutear.
+                if n in con_color and _fuente_activa(n):
+                    clave.append(0)
+                elif not _fuente_activa(n):
+                    clave.append(2)
+                else:
+                    clave.append(1)
             if "activas" in criterios:
                 clave.append(0 if _fuente_activa(n) else 1)
             if "escena" in criterios:
@@ -607,16 +653,14 @@ def _reubicar_fuentes(forzar=False):
         mod_ui_ventana.actualizar_scroll()
         return
     E._ultima_grilla_fuentes["clave"] = clave_grilla
-    for idx, nombre in enumerate(orden):
-        if nombre not in E.fuentes:
-            continue
+    # Posiciones DENSAS: los nombres sin tarjeta no consumen celda (si
+    # no, quedaban huecos vacíos en la grilla).
+    for nombre, fila, col in _posiciones_grilla(orden, columnas):
         try:
             if not E.fuentes[nombre]["tarjeta_sombra"].winfo_exists():
                 continue
         except Exception:
             continue
-        fila = idx // columnas
-        col = idx % columnas
         tarjeta_sombra = E.fuentes[nombre]["tarjeta_sombra"]
         contenedor = E.fuentes[nombre]["contenedor"]
         if not ancho_sin_cambios:
@@ -2029,6 +2073,10 @@ def actualizar():
             "Conectate a OBS antes de actualizar."
         )
         return
+    try:
+        E._reintentos_vacio = 0
+    except Exception:
+        pass
 
     E.boton_actualizar.config(state="disabled", text="ACTUALIZANDO...")
 
@@ -2036,6 +2084,29 @@ def actualizar():
 
 
 def _actualizar_en_hilo():
+    """Envoltorio: si el cuerpo muere por lo que sea (antes moría en
+    silencio y el panel quedaba vacío sin aviso), queda en el log y se
+    programa la autocura."""
+    try:
+        _actualizar_en_hilo_cuerpo()
+    except Exception as e:
+        import traceback as _tb
+        try:
+            detalle = "".join(_tb.format_exception(type(e), e, e.__traceback__)).strip()[-2000:]
+        except Exception:
+            detalle = ""
+        try:
+            from consola_obs import red as mod_red
+            mod_red.log_conexion("FUENTES", f"refresh MUERTO: {type(e).__name__}: {e} {detalle}")
+        except Exception:
+            pass
+        try:
+            _programar_reintento_si_vacio()
+        except Exception:
+            pass
+
+
+def _actualizar_en_hilo_cuerpo():
     datos_fuentes = []
     error_general = None
 
@@ -2236,8 +2307,64 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
         except Exception as e:
             print(f"Error creando/actualizando '{nombre}': {e}")
 
+    # Poda de orden: nombres que nunca llegaron a tarjeta (config vieja
+    # con fuentes borradas) no pueden quedar en la lista, o dejan
+    # huecos aunque el posicionado sea denso en otros caminos.
+    _podar_orden_sin_tarjeta()
+
     _al_redimensionar_fuentes()
     _reubicar_fuentes()
+    _programar_reintento_si_vacio()
+
+
+def _programar_reintento_si_vacio():
+    """Si el panel quedó vacío con conexión viva, hasta 2 reintentos a
+    los 3 s (cubre lecturas transitorias al conectar). Con tarjeta y sin
+    tarjeta: resetea el contador."""
+    try:
+        if E.fuentes:
+            try:
+                E._reintentos_vacio = 0
+            except Exception:
+                pass
+            return
+        if not E.conectado:
+            return
+        if int(getattr(E, "_reintentos_vacio", 0) or 0) >= 2:
+            return
+        E._reintentos_vacio = int(getattr(E, "_reintentos_vacio", 0) or 0) + 1
+        try:
+            E.ventana.after(3000, _reintentar_si_vacio)
+        except Exception:
+            try:
+                import threading as _th
+                _t = _th.Timer(3.0, _reintentar_si_vacio)
+                _t.daemon = True
+                _t.start()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _reintentar_si_vacio():
+    try:
+        if E.conectado:
+            threading.Thread(target=_actualizar_en_hilo, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _podar_orden_sin_tarjeta():
+    """Saca de E.orden_fuentes los nombres sin tarjeta (y lo guarda si
+    podó algo). Nunca lanza."""
+    try:
+        podados = [n for n in E.orden_fuentes if n not in E.fuentes]
+        if podados:
+            E.orden_fuentes = [n for n in E.orden_fuentes if n in E.fuentes]
+            mod_configuracion.guardar_config_interfaz({"orden_fuentes": list(E.orden_fuentes)})
+    except Exception:
+        pass
 
 
 def _limpiar_referencias_fuente_borrada(nombre):
