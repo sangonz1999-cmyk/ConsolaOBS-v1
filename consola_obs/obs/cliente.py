@@ -69,9 +69,16 @@ def _refrescar_membresia_escena():
     """Vuelve a leer qué fuentes están presentes Y activas en la escena
     que está al aire ahora mismo, para poder mostrar en gris las que no
     lo están. Se llama al conectar, al actualizar fuentes, y cada vez
-    que la escena activa cambia (evento de OBS)."""
+    que la escena activa cambia (evento de OBS). Con generación: si dos
+    refrescos se enciman, el viejo no pisa al nuevo. Cada paso tolera
+    fallos por separado para no abortar todo."""
     if not E.conectado:
         return
+    try:
+        E._gen_membresia_escena = int(getattr(E, "_gen_membresia_escena", 0) or 0) + 1
+        gen = E._gen_membresia_escena
+    except Exception:
+        gen = None
     try:
         respuesta_escena = E.cliente_obs.get_current_program_scene()
         escena_actual = mod_obs_eventos._valor(
@@ -79,25 +86,52 @@ def _refrescar_membresia_escena():
             "current_program_scene_name", "currentProgramSceneName",
             "scene_name", "sceneName"
         )
-        nombres_en_escena = set()
-        if escena_actual:
-            items = E.cliente_obs.get_scene_item_list(escena_actual).scene_items
-            for it in items:
-                nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
-                habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
-                if nombre_item and habilitado:
-                    nombres_en_escena.add(nombre_item)
-        nombres_en_escena |= _leer_fuentes_globales_obs()
-        E.ventana.after(0, lambda: _aplicar_membresia_escena(nombres_en_escena))
     except Exception as e:
         print(f"No se pudo actualizar la escena activa: {e}")
+        return
+    nombres_en_escena = set()
+    if escena_actual:
+        try:
+            respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
+            items = mod_obs_eventos._valor(respuesta_items, "scene_items", "sceneItems") or []
+        except Exception as e:
+            print(f"No se pudieron listar los ítems de '{escena_actual}': {e}")
+            items = []
+        for it in items or []:
+            try:
+                nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
+                habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
+            except Exception:
+                continue
+            if nombre_item and habilitado:
+                nombres_en_escena.add(nombre_item)
+    try:
+        nombres_en_escena |= _leer_fuentes_globales_obs()
+    except Exception:
+        pass
+    try:
+        if gen is not None and int(getattr(E, "_gen_membresia_escena", 0) or 0) != gen:
+            return
+    except Exception:
+        pass
+    try:
+        E.ventana.after(0, lambda: _aplicar_membresia_escena(nombres_en_escena))
+    except Exception:
+        pass
 
 
 def _aplicar_membresia_escena(nombres_en_escena):
     E.escena_actual_nombres = nombres_en_escena
     E.escena_actual_obtenida = True
     for nombre in list(E.fuentes.keys()):
-        mod_ui_tarjeta._actualizar_estado_gris(nombre)
+        try:
+            mod_ui_tarjeta._actualizar_estado_gris(nombre)
+        except Exception:
+            pass
+    try:
+        mod_ui_tarjeta._reubicar_si_orden_dinamico()
+    except Exception:
+        pass
 
 
 def conectar_obs():

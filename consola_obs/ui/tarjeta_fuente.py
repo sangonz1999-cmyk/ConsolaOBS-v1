@@ -386,6 +386,22 @@ def _reubicar_si_activas():
         pass
 
 
+def _reubicar_si_orden_dinamico():
+    """Reubica si hay criterio dinámico prendido (escena o activas:
+    ambos dependen de la membresía). Para llamar al aplicar membresía
+    de escena (corre en hilo UI)."""
+    try:
+        criterios = set(_criterios_orden_activos())
+    except Exception:
+        return
+    if "escena" not in criterios and "activas" not in criterios:
+        return
+    try:
+        _reubicar_fuentes()
+    except Exception:
+        pass
+
+
 def _items_menu_orden_fuentes():
     """(checks, reset, toggle) del menú ☰, testeable sin Tk."""
     try:
