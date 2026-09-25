@@ -2048,10 +2048,22 @@ def actualizar():
             "Conectate a OBS antes de actualizar."
         )
         return
+    try:
+        E._reintentos_vacio = 0
+    except Exception:
+        pass
 
     E.boton_actualizar.config(state="disabled", text="ACTUALIZANDO...")
 
     threading.Thread(target=_actualizar_en_hilo, daemon=True).start()
+
+
+def _reintentar_si_vacio():
+    try:
+        if E.conectado:
+            threading.Thread(target=_actualizar_en_hilo, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _actualizar_en_hilo():
@@ -2089,6 +2101,7 @@ def _actualizar_en_hilo():
         error_general = str(e)
         entradas = []
 
+    omitidas_sin_audio = [0]
     for entrada in entradas:
         try:
             nombre = mod_obs_eventos._valor(entrada, "input_name", "inputName")
@@ -2100,6 +2113,7 @@ def _actualizar_en_hilo():
             # ni lecturas de volumen/mute/monitoreo (eran los 604s).
             try:
                 if _es_entrada_sin_audio(entrada, nombre):
+                    omitidas_sin_audio[0] += 1
                     continue
             except Exception:
                 pass
@@ -2183,6 +2197,15 @@ def _actualizar_en_hilo():
     except Exception as e:
         print(f"No se pudo leer las fuentes de audio globales de OBS: {e}")
 
+    try:
+        from consola_obs import red as mod_red
+        mod_red.log_conexion("FUENTES", f"refresh: {len(entradas)} entradas, "
+                             f"{len(datos_fuentes)} con audio, "
+                             f"{omitidas_sin_audio[0]} sin audio"
+                             + (f" (error: {error_general})" if error_general else ""))
+    except Exception:
+        pass
+
     E.ventana.after(0, lambda: _aplicar_actualizacion(datos_fuentes, error_general, nombres_en_escena, escena_leida_ok, orden_escena))
 
 
@@ -2196,6 +2219,22 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
             f"No se pudieron obtener las fuentes.\n\n{error}"
         )
         return
+
+    if not datos_fuentes and not error:
+        # Refresh vacío con conexión viva: hasta 2 reintentos a los 3 s
+        # (cubre lecturas transitorias al conectar; un OBS de verdad
+        # vacío no se reintenta para siempre).
+        try:
+            if E.conectado and int(getattr(E, "_reintentos_vacio", 0) or 0) < 2:
+                E._reintentos_vacio = int(getattr(E, "_reintentos_vacio", 0) or 0) + 1
+                E.ventana.after(3000, _reintentar_si_vacio)
+        except Exception:
+            pass
+    elif datos_fuentes:
+        try:
+            E._reintentos_vacio = 0
+        except Exception:
+            pass
 
     if escena_leida_ok:
         E.escena_actual_nombres = nombres_en_escena or set()
