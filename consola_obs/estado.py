@@ -169,6 +169,8 @@ columnas_fuentes = 1
 
 fuentes_principales = set()
 colores_fuentes = {}
+_kinds_sin_audio = set()
+_kinds_con_audio = set()
 fuentes_ocultas = set()
 orden_fuentes_criterios = []
 mostrar_ocultas = True

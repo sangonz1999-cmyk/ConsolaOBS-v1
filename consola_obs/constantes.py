@@ -195,6 +195,19 @@ CAMPOS_GANANCIA_FILTRO = {
 # _refrescar_ganancia_fuente)-, así que este ciclo es sólo una red de
 # contención por si algo se movió desde otro lado (otra instancia del
 # programa, o la propia ventana de filtros de OBS).
+# Kinds que seguro tienen audio (no se prueban): el catálogo de
+# capturas + las multimedia. El resto se prueba una vez (604 = sin
+# audio, se recuerda) para no mostrar tarjetas que el mixer de OBS
+# tampoco mostraría.
+KINDS_CON_AUDIO = frozenset([
+    "wasapi_input_capture", "wasapi_output_capture",
+    "wasapi_process_output_capture", "coreaudio_input_capture",
+    "coreaudio_output_capture", "pulse_input_capture",
+    "pulse_output_capture", "pipewire_audio_input_capture",
+    "pipewire_audio_output_capture", "jack_input_capture",
+    "jack_output_capture", "ffmpeg_source", "vlc_source",
+])
+
 INTERVALO_REFRESCO_GANANCIA_MS = 1000
 
 ETIQUETAS_MONITOREO = {

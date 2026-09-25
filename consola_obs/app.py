@@ -149,6 +149,11 @@ def main():
     if isinstance(E._colores_guardados, dict):
         E.colores_fuentes = dict(E._colores_guardados)
 
+    E._kinds_sin_audio = set(
+        n for n in (E.config_interfaz_previa.get("kinds_sin_audio", []) or []) if isinstance(n, str))
+    E._kinds_con_audio = set(
+        n for n in (E.config_interfaz_previa.get("kinds_con_audio", []) or []) if isinstance(n, str))
+
     E._orden_guardado = E.config_interfaz_previa.get("orden_fuentes", [])
     if isinstance(E._orden_guardado, list):
         E.orden_fuentes = [n for n in E._orden_guardado if isinstance(n, str)]

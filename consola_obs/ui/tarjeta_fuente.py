@@ -1247,6 +1247,12 @@ def _actualizar_estado_gris(nombre):
     muted = widgets.get("muted", False)
     en_escena = es_principal or (not E.escena_actual_obtenida) or (nombre in E.escena_actual_nombres)
     widgets["en_escena"] = en_escena
+    # Borde blanco = está ESTRUCTURALMENTE en la escena (aunque esté
+    # apagada/muteada y se vea gris). Las principales conservan su acento.
+    try:
+        en_orden = nombre in (E.orden_escena_actual or [])
+    except Exception:
+        en_orden = False
 
     atenuado = muted or not en_escena
     widgets["atenuado"] = atenuado
@@ -1287,7 +1293,7 @@ def _actualizar_estado_gris(nombre):
         bg=color_cuerpo,
         highlightbackground=(
             (C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL) if es_principal
-            else ("#ffffff" if en_escena else "#0e1219")),
+            else ("#ffffff" if en_orden else "#0e1219")),
         highlightthickness=(3 if es_principal else 2)
     )
     widgets["db"].config(bg=color_cuerpo)
@@ -1952,6 +1958,70 @@ def _quitar_de_escenas_en_hilo(nombre):
 
 
 
+def _kinds_sin_audio():
+    try:
+        return set(getattr(E, "_kinds_sin_audio", None) or set())
+    except Exception:
+        return set()
+
+
+def _kinds_con_audio():
+    try:
+        return set(getattr(E, "_kinds_con_audio", None) or set())
+    except Exception:
+        return set()
+
+
+# Exclusión de no-audio pedida: Color/imagen/texto no van al panel.
+_EXCLUIR_SIN_AUDIO = True
+
+
+def _recordar_kind(kind, con_audio):
+    try:
+        if con_audio:
+            s = _kinds_con_audio()
+            if kind not in s:
+                s.add(kind)
+                E._kinds_con_audio = s
+                mod_configuracion.guardar_config_interfaz({"kinds_con_audio": sorted(s)})
+        else:
+            s = _kinds_sin_audio()
+            if kind not in s:
+                s.add(kind)
+                E._kinds_sin_audio = s
+                mod_configuracion.guardar_config_interfaz({"kinds_sin_audio": sorted(s)})
+    except Exception:
+        pass
+
+
+def _es_entrada_sin_audio(entrada, nombre):
+    """True si el input no tiene audio (color, imagen, texto...): no va
+    al panel, como el mixer de OBS. Una sola prueba por kind (604); lo
+    conocido no se vuelve a probar. Nunca lanza."""
+    try:
+        kind = mod_obs_eventos._valor(entrada, "input_kind", "inputKind")
+    except Exception:
+        kind = None
+    if not kind:
+        return False
+    if kind in _kinds_sin_audio():
+        return True
+    try:
+        if kind in _kinds_con_audio() or kind in C.KINDS_CON_AUDIO:
+            return False
+    except Exception:
+        pass
+    try:
+        E.cliente_obs.get_input_volume(nombre)
+        _recordar_kind(kind, True)
+        return False
+    except Exception as e:
+        if "604" not in str(e):
+            return False
+    _recordar_kind(kind, False)
+    return True
+
+
 def actualizar():
     if not E.conectado:
         messagebox.showinfo(
@@ -2000,12 +2070,22 @@ def _actualizar_en_hilo():
         error_general = str(e)
         entradas = []
 
+    omitidas_sin_audio = [0]
     for entrada in entradas:
         try:
             nombre = mod_obs_eventos._valor(entrada, "input_name", "inputName")
 
             if not nombre:
                 continue
+
+            # Sin audio no va al panel (como el mixer de OBS): ni tarjeta
+            # ni lecturas de volumen/mute/monitoreo (eran los 604s).
+            try:
+                if _EXCLUIR_SIN_AUDIO and _es_entrada_sin_audio(entrada, nombre):
+                    omitidas_sin_audio[0] += 1
+                    continue
+            except Exception:
+                pass
 
             try:
                 respuesta_volumen = E.cliente_obs.get_input_volume(nombre)
@@ -2085,6 +2165,15 @@ def _actualizar_en_hilo():
         nombres_en_escena |= mod_obs_cliente._leer_fuentes_globales_obs()
     except Exception as e:
         print(f"No se pudo leer las fuentes de audio globales de OBS: {e}")
+
+    try:
+        from consola_obs import red as mod_red
+        mod_red.log_conexion("FUENTES", f"refresh: {len(entradas)} entradas, "
+                             f"{len(datos_fuentes)} con audio, "
+                             f"{omitidas_sin_audio[0]} sin audio"
+                             + (f" (error: {error_general})" if error_general else ""))
+    except Exception:
+        pass
 
     E.ventana.after(0, lambda: _aplicar_actualizacion(datos_fuentes, error_general, nombres_en_escena, escena_leida_ok, orden_escena))
 

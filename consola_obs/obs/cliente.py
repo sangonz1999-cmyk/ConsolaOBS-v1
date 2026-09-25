@@ -128,6 +128,47 @@ def _refrescar_membresia_escena():
                 orden_escena.append(g)
     except Exception:
         pass
+    # Modo estudio: la preview también suena al lado del programa.
+    try:
+        en_estudio = False
+        try:
+            resp_estudio = E.cliente_obs.get_studio_mode_enabled()
+            en_estudio = bool(mod_obs_eventos._valor(resp_estudio, "studio_mode_enabled", "studioModeEnabled"))
+        except Exception:
+            en_estudio = False
+        if en_estudio:
+            try:
+                resp_previa = E.cliente_obs.get_current_preview_scene()
+                escena_previa = mod_obs_eventos._valor(
+                    resp_previa, "current_preview_scene_name", "currentPreviewSceneName",
+                    "scene_name", "sceneName")
+            except Exception:
+                escena_previa = None
+            if escena_previa and escena_previa != escena_actual:
+                try:
+                    resp_items = E.cliente_obs.get_scene_item_list(escena_previa)
+                    items_prev = mod_obs_eventos._valor(resp_items, "scene_items", "sceneItems") or []
+                except Exception:
+                    items_prev = []
+                for it in items_prev or []:
+                    try:
+                        nm = mod_obs_eventos._valor(it, "source_name", "sourceName")
+                        hab = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
+                    except Exception:
+                        continue
+                    if not nm:
+                        continue
+                    if nm not in orden_escena:
+                        orden_escena.append(nm)
+                    if hab:
+                        nombres_en_escena.add(nm)
+    except Exception:
+        pass
+    try:
+        mod_red.log_conexion("FUENTES", f"escena '{escena_actual}': "
+                             f"{len(orden_escena)} ítems, {len(nombres_en_escena)} activos")
+    except Exception:
+        pass
     try:
         if gen is not None and int(getattr(E, "_gen_membresia_escena", 0) or 0) != gen:
             return
