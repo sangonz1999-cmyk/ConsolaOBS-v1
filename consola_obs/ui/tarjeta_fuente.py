@@ -208,13 +208,11 @@ def _fila_col_fuente(nombre):
 
 
 CRITERIOS_ORDEN_FUENTES = (
-    ("favoritos", "Favoritos primero"),
     ("colores", "Con colores primero"),
-    ("activas", "Activas primero"),
-    ("escena", "Escena actual primero"),
     ("alfabetico", "Alfabético"),
 )
-# Prioridad = el orden de la tupla (el alfabético cierra como desempate).
+# El orden/agrupado base es el del mixer de OBS (ocultas e inactivas,
+# con sus toggles); colores/alfabético son filtros propios después.
 
 
 def _criterios_orden_activos():
@@ -279,54 +277,48 @@ def orden_visible_fuentes():
         ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
     except Exception:
         ocultas = set()
-    visibles = [n for n in base if n not in ocultas]
-    ocult_lista = [n for n in base if n in ocultas]
-    criterios = _criterios_orden_activos()
-    if criterios:
-        try:
-            _orden_esc = list(getattr(E, "orden_escena_actual", None) or [])
-        except Exception:
-            _orden_esc = []
-        pos_escena = {n: i for i, n in enumerate(_orden_esc)}
-        try:
-            favs = set(E.fuentes_principales or set())
-        except Exception:
-            favs = set()
-        try:
-            con_color = set((E.colores_fuentes or {}).keys())
-        except Exception:
-            con_color = set()
-
-        def _clave(n):
-            clave = []
-            if "favoritos" in criterios:
-                clave.append(0 if n in favs else 1)
-            if "colores" in criterios:
-                clave.append(0 if n in con_color else 1)
-            if "activas" in criterios:
-                clave.append(0 if _fuente_activa(n) else 1)
-            if "escena" in criterios:
-                # Orden del OBS (posición en escena; resto al fondo,
-                # estable = manual). Tupla de 2 para comparar parejo.
-                if n in pos_escena:
-                    clave.append((0, pos_escena[n]))
-                else:
-                    clave.append((1, 0))
-            if "alfabetico" in criterios:
-                clave.append(_nombre_mostrado_fuente(n).lower())
-            return tuple(clave)
-
-        try:
-            visibles = sorted(visibles, key=_clave)
-        except Exception:
-            pass
     try:
-        mostrar = bool(getattr(E, "mostrar_ocultas", True))
+        mostrar_oc = bool(getattr(E, "mostrar_ocultas", True))
     except Exception:
-        mostrar = True
-    if mostrar:
-        visibles = visibles + [n for n in ocult_lista]
-    return visibles
+        mostrar_oc = True
+    try:
+        mostrar_in = bool(getattr(E, "mostrar_inactivas", True))
+    except Exception:
+        mostrar_in = True
+    base = [n for n in base if (n not in ocultas or mostrar_oc)]
+    if not mostrar_in:
+        base = [n for n in base if _fuente_activa(n)]
+    try:
+        mantener_oc = bool(getattr(E, "mantener_ocultas_abajo", True))
+    except Exception:
+        mantener_oc = True
+    try:
+        mantener_in = bool(getattr(E, "mantener_inactivas_abajo", True))
+    except Exception:
+        mantener_in = True
+    criterios = _criterios_orden_activos()
+    try:
+        con_color = set((E.colores_fuentes or {}).keys())
+    except Exception:
+        con_color = set()
+
+    def _clave(n):
+        # Prioridad OBS: ocultas, inactivas; después los filtros
+        # propios (colores, alfabético). Forma fija para comparar parejo.
+        oc = 1 if (n in ocultas and mantener_oc) else 0
+        ina = 1 if (not _fuente_activa(n) and mantener_in) else 0
+        clave = [oc, ina]
+        if "colores" in criterios:
+            clave.append(0 if n in con_color else 1)
+        if "alfabetico" in criterios:
+            clave.append(_nombre_mostrado_fuente(n).lower())
+        return tuple(clave)
+
+    try:
+        base = sorted(base, key=_clave)
+    except Exception:
+        pass
+    return base
 
 
 def _guardar_orden_fuentes():
@@ -334,6 +326,9 @@ def _guardar_orden_fuentes():
         mod_configuracion.guardar_config_interfaz({
             "orden_fuentes_criterios": list(getattr(E, "orden_fuentes_criterios", []) or []),
             "mostrar_ocultas": bool(getattr(E, "mostrar_ocultas", True)),
+            "mostrar_inactivas": bool(getattr(E, "mostrar_inactivas", True)),
+            "mantener_ocultas_abajo": bool(getattr(E, "mantener_ocultas_abajo", True)),
+            "mantener_inactivas_abajo": bool(getattr(E, "mantener_inactivas_abajo", True)),
             "fuentes_ocultas": sorted(getattr(E, "fuentes_ocultas", set()) or set()),
         })
     except Exception:
@@ -377,33 +372,40 @@ def _alternar_mostrar_ocultas():
         pass
 
 
-def _reubicar_si_activas():
-    """Reubica si el criterio 'activas' está prendido. Para llamar tras
-    cambios de mute (locales o remotos): el orden por mute es estático,
-    no necesita loop. Siempre por after(0): vale desde cualquier hilo."""
+def _alternar_mostrar_inactivas():
     try:
-        if "activas" not in _criterios_orden_activos():
-            return
-        try:
-            E.ventana.after(0, _reubicar_fuentes)
-        except Exception:
-            _reubicar_fuentes()
+        E.mostrar_inactivas = not bool(getattr(E, "mostrar_inactivas", True))
+        _guardar_orden_fuentes()
+        _reubicar_fuentes()
     except Exception:
         pass
 
 
-def _reubicar_si_orden_dinamico():
-    """Reubica si hay criterio dinámico prendido (escena o activas:
-    ambos dependen de la membresía). Para llamar al aplicar membresía
-    de escena (corre en hilo UI)."""
+def _alternar_mantener_ocultas():
     try:
-        criterios = set(_criterios_orden_activos())
-    except Exception:
-        return
-    if "escena" not in criterios and "activas" not in criterios:
-        return
-    try:
+        E.mantener_ocultas_abajo = not bool(getattr(E, "mantener_ocultas_abajo", True))
+        _guardar_orden_fuentes()
         _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _alternar_mantener_inactivas():
+    try:
+        E.mantener_inactivas_abajo = not bool(getattr(E, "mantener_inactivas_abajo", True))
+        _guardar_orden_fuentes()
+        _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _reubicar_diferido():
+    """Reubica por after(0): vale desde cualquier hilo (mute, escena)."""
+    try:
+        try:
+            E.ventana.after(0, _reubicar_fuentes)
+        except Exception:
+            _reubicar_fuentes()
     except Exception:
         pass
 
@@ -471,36 +473,65 @@ def _refrescar_titulo_escena():
 
 
 def _items_menu_orden_fuentes():
-    """(checks, reset, toggle) del menú ☰, testeable sin Tk."""
+    """(checks visibilidad, checks filtros, reset, toggle ocultas) del
+    menú ☰, testeable sin Tk. Espejo del menú del mixer de OBS."""
+    def _check(texto, prendido, accion):
+        return (("☑ " if prendido else "☐ ") + texto, accion)
+
+    try:
+        mostrar_oc = bool(getattr(E, "mostrar_ocultas", True))
+    except Exception:
+        mostrar_oc = True
+    try:
+        mostrar_in = bool(getattr(E, "mostrar_inactivas", True))
+    except Exception:
+        mostrar_in = True
+    try:
+        mantener_oc = bool(getattr(E, "mantener_ocultas_abajo", True))
+    except Exception:
+        mantener_oc = True
+    try:
+        mantener_in = bool(getattr(E, "mantener_inactivas_abajo", True))
+    except Exception:
+        mantener_in = True
     try:
         activos = set(_criterios_orden_activos())
     except Exception:
         activos = set()
-    checks = []
+    visibilidad = [
+        _check("Mostrar fuentes ocultas", mostrar_oc, _alternar_mostrar_ocultas),
+        _check("Mostrar fuentes inactivas", mostrar_in, _alternar_mostrar_inactivas),
+        _check("Mantener las ocultas abajo", mantener_oc, _alternar_mantener_ocultas),
+        _check("Mantener las inactivas abajo", mantener_in, _alternar_mantener_inactivas),
+    ]
+    filtros = []
     for clave, texto in CRITERIOS_ORDEN_FUENTES:
-        checks.append((("☑ " if clave in activos else "☐ ") + texto,
-                       lambda c=clave: alternar_criterio_orden_fuentes(c)))
-    try:
-        mostrar = bool(getattr(E, "mostrar_ocultas", True))
-    except Exception:
-        mostrar = True
-    toggle = (("☑ " if mostrar else "☐ ") + "Mostrar fuentes ocultas",
-              _alternar_mostrar_ocultas)
-    return checks, toggle
+        filtros.append(_check(texto, clave in activos,
+                              lambda c=clave: alternar_criterio_orden_fuentes(c)))
+    return visibilidad, filtros
 
 
 def _abrir_menu_orden_fuentes(event=None):
-    """Menú del botón ☰: criterio de orden + toggle de ocultas."""
+    """Menú del botón ☰: espejo del mixer de OBS + filtros propios."""
     try:
         menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
                        activebackground="#323b4c", activeforeground="white")
     except Exception:
         return
     try:
-        checks, toggle = _items_menu_orden_fuentes()
+        visibilidad, filtros = _items_menu_orden_fuentes()
     except Exception:
         return
-    for texto, accion in checks:
+    for texto, accion in visibilidad:
+        try:
+            menu.add_command(label=texto, command=accion)
+        except Exception:
+            pass
+    try:
+        menu.add_separator()
+    except Exception:
+        pass
+    for texto, accion in filtros:
         try:
             menu.add_command(label=texto, command=accion)
         except Exception:
@@ -508,14 +539,6 @@ def _abrir_menu_orden_fuentes(event=None):
     try:
         menu.add_command(label="↩ Orden manual",
                          command=limpiar_criterios_orden_fuentes)
-    except Exception:
-        pass
-    try:
-        menu.add_separator()
-    except Exception:
-        pass
-    try:
-        menu.add_command(label=toggle[0], command=toggle[1])
     except Exception:
         pass
     try:
@@ -1247,6 +1270,12 @@ def _actualizar_estado_gris(nombre):
     muted = widgets.get("muted", False)
     en_escena = es_principal or (not E.escena_actual_obtenida) or (nombre in E.escena_actual_nombres)
     widgets["en_escena"] = en_escena
+    # Borde blanco = está ESTRUCTURALMENTE en la escena (aunque esté
+    # apagada/muteada y se vea gris). Las principales conservan su acento.
+    try:
+        en_orden = nombre in (E.orden_escena_actual or [])
+    except Exception:
+        en_orden = False
 
     atenuado = muted or not en_escena
     widgets["atenuado"] = atenuado
@@ -1287,7 +1316,7 @@ def _actualizar_estado_gris(nombre):
         bg=color_cuerpo,
         highlightbackground=(
             (C.MOD_ACENTO if E.es_moderna() else C.COLOR_BORDE_PRINCIPAL) if es_principal
-            else ("#ffffff" if en_escena else "#0e1219")),
+            else ("#ffffff" if en_orden else "#0e1219")),
         highlightthickness=(3 if es_principal else 2)
     )
     widgets["db"].config(bg=color_cuerpo)
@@ -1609,7 +1638,7 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     )
 
     _actualizar_estado_gris(nombre)
-    _reubicar_si_activas()
+    _reubicar_diferido()
 
 
 
@@ -1627,7 +1656,7 @@ def cambiar_mute(nombre):
             color_nuevo=mod_ui_dibujo._color_mute(nuevo_estado)
         )
         _actualizar_estado_gris(nombre)
-        _reubicar_si_activas()
+        _reubicar_diferido()
     except Exception as e:
         print(f"Error cambiando mute de {nombre}: {e}")
 
@@ -1952,6 +1981,66 @@ def _quitar_de_escenas_en_hilo(nombre):
 
 
 
+def _kinds_sin_audio():
+    try:
+        return set(getattr(E, "_kinds_sin_audio", None) or set())
+    except Exception:
+        return set()
+
+
+def _kinds_con_audio():
+    try:
+        return set(getattr(E, "_kinds_con_audio", None) or set())
+    except Exception:
+        return set()
+
+
+def _recordar_kind(kind, con_audio):
+    try:
+        if con_audio:
+            s = _kinds_con_audio()
+            if kind not in s:
+                s.add(kind)
+                E._kinds_con_audio = s
+                mod_configuracion.guardar_config_interfaz({"kinds_con_audio": sorted(s)})
+        else:
+            s = _kinds_sin_audio()
+            if kind not in s:
+                s.add(kind)
+                E._kinds_sin_audio = s
+                mod_configuracion.guardar_config_interfaz({"kinds_sin_audio": sorted(s)})
+    except Exception:
+        pass
+
+
+def _es_entrada_sin_audio(entrada, nombre):
+    """True si el input no tiene audio (color, imagen, texto...): no va
+    al panel, como el mixer de OBS. Una sola prueba por kind (604); lo
+    conocido no se vuelve a probar. Nunca lanza."""
+    try:
+        kind = mod_obs_eventos._valor(entrada, "input_kind", "inputKind")
+    except Exception:
+        kind = None
+    if not kind:
+        return False
+    if kind in _kinds_sin_audio():
+        return True
+    try:
+        if kind in _kinds_con_audio() or kind in C.KINDS_CON_AUDIO:
+            return False
+    except Exception:
+        pass
+    try:
+        E.cliente_obs.get_input_volume(nombre)
+        _recordar_kind(kind, True)
+        return False
+    except Exception as e:
+        if "604" not in str(e):
+            return False
+    _recordar_kind(kind, False)
+    return True
+
+
 def actualizar():
     if not E.conectado:
         messagebox.showinfo(
@@ -2006,6 +2095,14 @@ def _actualizar_en_hilo():
 
             if not nombre:
                 continue
+
+            # Sin audio no va al panel (como el mixer de OBS): ni tarjeta
+            # ni lecturas de volumen/mute/monitoreo (eran los 604s).
+            try:
+                if _es_entrada_sin_audio(entrada, nombre):
+                    continue
+            except Exception:
+                pass
 
             try:
                 respuesta_volumen = E.cliente_obs.get_input_volume(nombre)

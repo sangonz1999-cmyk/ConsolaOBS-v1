@@ -153,14 +153,18 @@ def main():
     if isinstance(E._orden_guardado, list):
         E.orden_fuentes = [n for n in E._orden_guardado if isinstance(n, str)]
 
-    _validos = ("favoritos", "colores", "activas", "escena", "alfabetico")
+    _validos = ("colores", "alfabetico")
     _crit = E.config_interfaz_previa.get("orden_fuentes_criterios", None)
     if isinstance(_crit, list):
         E.orden_fuentes_criterios = [c for c in _crit if c in _validos]
     else:
-        # Migración del formato anterior (un solo modo string).
-        _viejo = E.config_interfaz_previa.get("orden_fuentes_modo", "manual")
-        E.orden_fuentes_criterios = [_viejo] if _viejo in _validos else []
+        E.orden_fuentes_criterios = []
+    for _clave, _defecto in (("mostrar_ocultas", True),
+                             ("mostrar_inactivas", True),
+                             ("mantener_ocultas_abajo", True),
+                             ("mantener_inactivas_abajo", True)):
+        _val = E.config_interfaz_previa.get(_clave, _defecto)
+        setattr(E, _clave, _val if isinstance(_val, bool) else _defecto)
     E.mostrar_ocultas = E.config_interfaz_previa.get("mostrar_ocultas", True)
     if not isinstance(E.mostrar_ocultas, bool):
         E.mostrar_ocultas = True
@@ -169,6 +173,10 @@ def main():
         E.fuentes_ocultas = set(n for n in _ocultas_guardadas if isinstance(n, str))
     else:
         E.fuentes_ocultas = set()
+    E._kinds_sin_audio = set(
+        n for n in (E.config_interfaz_previa.get("kinds_sin_audio", []) or []) if isinstance(n, str))
+    E._kinds_con_audio = set(
+        n for n in (E.config_interfaz_previa.get("kinds_con_audio", []) or []) if isinstance(n, str))
 
     E.num_pads_soundboard = E.config_interfaz_previa.get("num_pads_soundboard", C.NUM_BOTONES_SOUNDBOARD_INICIAL)
     if not isinstance(E.num_pads_soundboard, int) or E.num_pads_soundboard < 1:

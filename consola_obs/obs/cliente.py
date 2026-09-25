@@ -156,7 +156,7 @@ def _aplicar_membresia_escena(nombres_en_escena, orden_escena=None):
     except Exception:
         pass
     try:
-        mod_ui_tarjeta._reubicar_si_orden_dinamico()
+        mod_ui_tarjeta._reubicar_diferido()
     except Exception:
         pass
 

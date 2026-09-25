@@ -194,6 +194,29 @@ def _log_fuentes(texto):
         pass
 
 
+def _asegurar_tapa_fuentes():
+    """Crea la tapa de fuentes si no existe (el log mostró casos con
+    tapa=False: así se autocura en vez de quedar sin tapa para siempre).
+    Devuelve la tapa o None."""
+    try:
+        tapa = getattr(E, "tapa_fuentes", None)
+        if tapa is not None:
+            return tapa
+        marco = getattr(E, "marco_canvas", None)
+        if marco is None:
+            _log_fuentes("sin marco para tapa")
+            return None
+        tapa = tk.Label(marco, bg=E.color_fondo_panel(), bd=0, highlightthickness=0)
+        tapa.place_forget()
+        tapa.bind("<ButtonPress-1>", lambda e: _asentar_fuentes())
+        E.tapa_fuentes = tapa
+        _log_fuentes("tapa creada lazy")
+        return tapa
+    except Exception as e:
+        _log_fuentes(f"tapa no creada: {e!r}")
+        return None
+
+
 def _tapar_fuentes_con_foto():
     """Espejo de _tapar_pads_con_foto para la grilla de faders: congela
     la vista actual en una foto que queda hasta el asentado. Si ya está
@@ -202,7 +225,7 @@ def _tapar_fuentes_con_foto():
     try:
         if getattr(E, "tapa_fuentes_puesta", False):
             return
-        tapa = getattr(E, "tapa_fuentes", None)
+        tapa = _asegurar_tapa_fuentes()
         lienzo = getattr(E, "canvas", None)
         if tapa is None or lienzo is None:
             _log_fuentes(f"tapa-foto omitida (tapa={tapa is not None} canvas={lienzo is not None})")
@@ -231,7 +254,7 @@ def _tapar_fuentes():
     """Cubre la grilla de faders con su fondo (sin foto). Para el drag
     del divisor, donde los pads ya van con foto."""
     try:
-        tapa = getattr(E, "tapa_fuentes", None)
+        tapa = _asegurar_tapa_fuentes()
         lienzo = getattr(E, "canvas", None)
         if tapa is None or lienzo is None:
             return

@@ -246,7 +246,7 @@ def _sincronizar_mute_remoto(nombre, muted):
         color_nuevo=mod_ui_dibujo._color_mute(muted)
     )
     mod_ui_tarjeta._actualizar_estado_gris(nombre)
-    mod_ui_tarjeta._reubicar_si_activas()
+    mod_ui_tarjeta._reubicar_diferido()
 
 
 def on_input_volume_changed(datos):
