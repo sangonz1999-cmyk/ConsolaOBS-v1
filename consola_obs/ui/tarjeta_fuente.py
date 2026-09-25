@@ -227,15 +227,33 @@ def _criterios_orden_activos():
 
 
 def _fuente_activa(nombre):
-    """Activa = prendida (NO muteada). A propósito no es 'sonando
-    ahora': reordenar con cada sonido marearía (las tarjetas bailarían
-    todo el tiempo). Sin widgets o sin dato: activa (no se castiga lo
-    desconocido)."""
+    """Activa = prendida Y en escena: el espejo del gris de la tarjeta
+    (atenuado = muted o fuera de escena). Se calcula en fresco para que
+    el toggle de mute reordene ya, sin esperar al repintado. Sin
+    widgets o sin dato: activa (no se castiga lo desconocido)."""
     try:
         widgets = E.fuentes.get(nombre)
         if not widgets:
             return True
-        return not bool(widgets.get("muted", False))
+        try:
+            if bool(widgets.get("muted", False)):
+                return False
+        except Exception:
+            pass
+        try:
+            if nombre in (E.fuentes_principales or set()):
+                return True
+        except Exception:
+            pass
+        try:
+            if not E.escena_actual_obtenida:
+                return True
+        except Exception:
+            return True
+        try:
+            return nombre in (E.escena_actual_nombres or set())
+        except Exception:
+            return True
     except Exception:
         return True
 
