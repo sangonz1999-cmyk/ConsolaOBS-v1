@@ -806,40 +806,65 @@ def _refrescar_titulo_escena():
 
 
 def _items_menu_orden_fuentes():
-    """(checks, reset, toggle) del menú ☰, testeable sin Tk."""
+    """(checks, toggle) del menú ☰, testeable sin Tk: checks es
+    [(texto, marcada, accion)], toggle es (texto, marcada, accion)."""
     try:
         activos = set(_criterios_orden_activos())
     except Exception:
         activos = set()
     checks = []
     for clave, texto in CRITERIOS_ORDEN_FUENTES:
-        checks.append((("☑ " if clave in activos else "☐ ") + texto,
+        checks.append((texto, clave in activos,
                        lambda c=clave: alternar_criterio_orden_fuentes(c)))
     try:
         mostrar = bool(getattr(E, "mostrar_ocultas", True))
     except Exception:
         mostrar = True
-    toggle = (("☑ " if mostrar else "☐ ") + "Mostrar fuentes ocultas",
-              _alternar_mostrar_ocultas)
+    toggle = ("Mostrar fuentes ocultas", mostrar, _alternar_mostrar_ocultas)
     return checks, toggle
 
 
+def _icono_check_menu(marcada):
+    """Foto del casillero tildado/vacío a 16px (o None sin Pillow)."""
+    try:
+        return mod_ui_dibujo._imagen_svg_menu(
+            "menu/menu_check_on.svg" if marcada else "menu/menu_check_off.svg", 16)
+    except Exception:
+        return None
+
+
 def _abrir_menu_orden_fuentes(event=None):
-    """Menú del botón ☰: criterio de orden + toggle de ocultas."""
+    """Menú del botón ☰: criterio de orden + toggle de ocultas, con los
+    casilleros propios (cae a ☑/☐ si faltan los iconos)."""
     try:
         menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
                        activebackground="#323b4c", activeforeground="white")
+        menu._imagenes = []
     except Exception:
         return
     try:
         checks, toggle = _items_menu_orden_fuentes()
     except Exception:
         return
-    for texto, accion in checks:
+
+    def _check(texto, marcada, accion):
         try:
-            menu.add_command(label=texto, command=accion)
+            foto = _icono_check_menu(marcada)
+        except Exception:
+            foto = None
+        try:
+            if foto is None:
+                menu.add_command(
+                    label=("☑ " if marcada else "☐ ") + texto, command=accion)
+            else:
+                menu._imagenes.append(foto)
+                menu.add_command(label=texto, image=foto, compound="left",
+                                 command=accion)
         except Exception:
             pass
+
+    for texto, marcada, accion in checks:
+        _check(texto, marcada, accion)
     try:
         menu.add_command(label="↩ Orden manual",
                          command=limpiar_criterios_orden_fuentes)
@@ -849,10 +874,7 @@ def _abrir_menu_orden_fuentes(event=None):
         menu.add_separator()
     except Exception:
         pass
-    try:
-        menu.add_command(label=toggle[0], command=toggle[1])
-    except Exception:
-        pass
+    _check(toggle[0], toggle[1], toggle[2])
     try:
         if event is not None:
             menu.tk_popup(event.x_root, event.y_root)
@@ -1791,6 +1813,18 @@ def _abrir_menu_contextual_panel_fuentes(event):
         E.ventana, tearoff=0, bg="#151a24", fg="white",
         activebackground="#323b4c", activeforeground="white"
     )
+    menu._imagenes = []
+
+    def _cmd(svg, texto, texto_respaldo, comando):
+        try:
+            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
+        except Exception:
+            foto = None
+        if foto is None:
+            menu.add_command(label=texto_respaldo, command=comando)
+        else:
+            menu._imagenes.append(foto)
+            menu.add_command(label=texto, image=foto, compound="left", command=comando)
 
     if not E.conectado:
         menu.add_command(label="Conectate a OBS para agregar fuentes", state="disabled")
@@ -1826,12 +1860,14 @@ def _abrir_menu_contextual_panel_fuentes(event):
         )
         menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
         menu.add_separator()
-        menu.add_command(label="↻  Actualizar fuentes", command=actualizar)
+        _cmd("menu/menu_actualizar.svg", "Actualizar fuentes",
+             "↻  Actualizar fuentes", actualizar)
         menu.add_separator()
-        menu.add_command(label="🧹  Quitar Efectos/Música de otras escenas…",
-                         command=_quitar_internas_de_otras_escenas)
-        menu.add_command(label="✅  Escenas permitidas…",
-                         command=_abrir_permitidas)
+        _cmd("menu/menu_limpiar.svg", "Quitar Efectos/Música de otras escenas…",
+             "🧹  Quitar Efectos/Música de otras escenas…",
+             _quitar_internas_de_otras_escenas)
+        _cmd("menu/menu_permitidas.svg", "Escenas permitidas…",
+             "✅  Escenas permitidas…", _abrir_permitidas)
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
@@ -2514,11 +2550,13 @@ def _cargar_permitidas_en_hilo():
     E.ventana.after(0, lambda: _mostrar_dialogo_permitidas(escenas))
 
 
-def _alternar_permitida(nombre, var):
+def _alternar_permitida(nombre, marcada):
+    """Tilda/destilda una escena (marcada = bool). Al tildar deja todo
+    (internas + favoritas) ya armado ahí."""
     try:
         if not isinstance(getattr(E, "escenas_permitidas", None), set):
             E.escenas_permitidas = set()
-        if var.get():
+        if marcada:
             E.escenas_permitidas.add(nombre)
             tildada = True
         else:
@@ -2527,13 +2565,13 @@ def _alternar_permitida(nombre, var):
         _guardar_permitidas()
     except Exception:
         tildada = False
-        return
-    # Al tildar: deja todo (internas + favoritas) ya armado ahí.
+        return False
     if tildada and E.conectado:
         threading.Thread(
             target=mod_obs_cliente.asegurar_todo_en_escena,
             args=(nombre,), daemon=True
         ).start()
+    return tildada
 
 
 def _mostrar_dialogo_permitidas(escenas):
@@ -2552,27 +2590,81 @@ def _mostrar_dialogo_permitidas(escenas):
         win.attributes("-topmost", True)
     except Exception:
         pass
+    try:
+        win._imagenes = []
+        foto_titulo = mod_ui_dibujo._imagen_svg_menu("menu/menu_permitidas.svg", 20)
+        if foto_titulo is not None:
+            win._imagenes.append(foto_titulo)
+    except Exception:
+        foto_titulo = None
+    cabecera = tk.Frame(win, bg=C.COLOR_MENU_FONDO)
+    cabecera.pack(fill="x", padx=14, pady=(12, 6))
+    if foto_titulo is not None:
+        tk.Label(cabecera, image=foto_titulo, bg=C.COLOR_MENU_FONDO,
+                 bd=0, highlightthickness=0).pack(side="left", padx=(0, 8))
     tk.Label(
-        win, text="SÓLO en estas escenas pueden estar\nEfectos y Música:",
+        cabecera, text="SÓLO en estas escenas pueden estar\nEfectos y Música:",
         bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
         font=(E.FUENTE_UI, 9), justify="left",
-    ).pack(anchor="w", padx=14, pady=(12, 6))
+    ).pack(side="left")
     marco = tk.Frame(win, bg=C.COLOR_MENU_FONDO)
     marco.pack(fill="both", expand=True, padx=14, pady=4)
+    try:
+        foto_on = mod_ui_dibujo._imagen_svg_menu("menu/menu_check_on.svg", 16)
+        foto_off = mod_ui_dibujo._imagen_svg_menu("menu/menu_check_off.svg", 16)
+        if foto_on is not None:
+            win._imagenes.append(foto_on)
+        if foto_off is not None:
+            win._imagenes.append(foto_off)
+    except Exception:
+        foto_on, foto_off = None, None
+    con_iconos = foto_on is not None and foto_off is not None
     if not escenas:
         tk.Label(marco, text="(No hay escenas en OBS)",
                  bg=C.COLOR_MENU_FONDO, fg="#8fa0bd",
                  font=(E.FUENTE_UI, 9)).pack(anchor="w")
+
+    def _pintar_fila(etiqueta_icono, nombre):
+        try:
+            marcada = nombre in (getattr(E, "escenas_permitidas", None) or set())
+            if con_iconos:
+                etiqueta_icono.config(image=foto_on if marcada else foto_off)
+            else:
+                etiqueta_icono.config(text="☑ " if marcada else "☐ ")
+        except Exception:
+            pass
+
+    def _al_click(nombre, etiqueta_icono):
+        try:
+            marcada_ahora = nombre in (getattr(E, "escenas_permitidas", None) or set())
+            _alternar_permitida(nombre, not marcada_ahora)
+        except Exception:
+            pass
+        _pintar_fila(etiqueta_icono, nombre)
+
     for escena in escenas:
         try:
-            var = tk.BooleanVar(value=escena in (getattr(E, "escenas_permitidas", None) or set()))
-            cb = tk.Checkbutton(
-                marco, text=escena, variable=var, anchor="w",
-                bg=C.COLOR_MENU_FONDO, fg="white", selectcolor="#242d3d",
-                activebackground=C.COLOR_MENU_FONDO, activeforeground="white",
-                font=(E.FUENTE_UI, 10),
-                command=lambda n=escena, v=var: _alternar_permitida(n, v))
-            cb.pack(anchor="w", fill="x")
+            fila = tk.Frame(marco, bg=C.COLOR_MENU_FONDO, cursor="hand2")
+            fila.pack(anchor="w", fill="x", pady=1)
+            if con_iconos:
+                marcada_ini = escena in (getattr(E, "escenas_permitidas", None) or set())
+                et_icono = tk.Label(
+                    fila, image=foto_on if marcada_ini else foto_off,
+                    bg=C.COLOR_MENU_FONDO, bd=0, highlightthickness=0)
+            else:
+                marcada_ini = escena in (getattr(E, "escenas_permitidas", None) or set())
+                et_icono = tk.Label(
+                    fila, text="☑ " if marcada_ini else "☐ ",
+                    bg=C.COLOR_MENU_FONDO, fg="white",
+                    font=(E.FUENTE_UI, 10), bd=0, highlightthickness=0)
+            et_icono.pack(side="left")
+            et_texto = tk.Label(
+                fila, text=escena, bg=C.COLOR_MENU_FONDO, fg="white",
+                font=(E.FUENTE_UI, 10), anchor="w", bd=0, highlightthickness=0)
+            et_texto.pack(side="left", fill="x", expand=True)
+            for widget in (fila, et_icono, et_texto):
+                widget.bind("<Button-1>",
+                            lambda e, n=escena, i=et_icono: _al_click(n, i))
         except Exception:
             continue
     tk.Button(
