@@ -650,6 +650,30 @@ def asegurar_interna_en_escena_actual(nombre_fuente, kind, ajustes):
     return _asegurar_item_en_escena(nombre_fuente, escena)
 
 
+def asegurar_todo_en_escena(escena):
+    """Al tildar una escena en permitidas: deja ahí Efectos/Música (sólo
+    si sus inputs ya existen; crearlos de cero sólo pasa al aire) +
+    todas las favoritas. Idempotente."""
+    if not E.conectado or not escena:
+        return
+    try:
+        entradas = set(mod_obs_eventos._valor(i, "input_name", "inputName")
+                       for i in E.cliente_obs.get_input_list().inputs)
+    except Exception as e:
+        print(f"No se pudieron listar las entradas: {e}")
+        return
+    for interno in (C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FUENTE_MUSICA):
+        if interno in entradas:
+            try:
+                _asegurar_item_en_escena(interno, escena)
+            except Exception:
+                pass
+    try:
+        asegurar_principales_en_permitidas()
+    except Exception:
+        pass
+
+
 def asegurar_internas_en_escena_actual():
     """Efectos + Música presentes y activas en la escena al aire
     (barato e idempotente). Para llamar al cambiar de escena o antes de
@@ -749,12 +773,72 @@ def quitar_fuente_de_todas_las_escenas(nombre_fuente):
 
 
 def asegurar_fuentes_principales_en_todas_las_escenas():
-    """OBSOLETA a propósito: las 'principales' son sólo resaltado visual
-    (borde + criterio de orden). Ya no se fuerza ninguna fuente en
-    ninguna escena: las escenas especiales (cámaras, capturas) no se
-    tocan nunca. Se deja vacía (en vez de borrarla) por si algo viejo
-    todavía la llama."""
-    pass
+    """Compatibilidad: ahora asegura las principales sólo en permitidas."""
+    asegurar_principales_en_permitidas()
+
+
+def asegurar_principales_en_permitidas(solo_nombre=None):
+    """Crea/activa las fuentes marcadas como favoritas (★) en las
+    escenas PERMITIDAS (y en ninguna otra): si el input no existe en OBS
+    se poda de favoritas con aviso (era un nombre viejo); si existe pero
+    falta el ítem en una permitida, se agrega activado. Con solo_nombre
+    se limita a esa fuente (al marcarla o al tildar una escena)."""
+    if not E.conectado:
+        return
+    try:
+        permitidas = sorted(getattr(E, "escenas_permitidas", None) or set())
+    except Exception:
+        permitidas = []
+    if not permitidas:
+        return
+    try:
+        nombres = [solo_nombre] if solo_nombre else list(E.fuentes_principales)
+    except Exception:
+        return
+    with E._lock_sincronizar_escenas:
+        try:
+            entradas = set(mod_obs_eventos._valor(i, "input_name", "inputName")
+                           for i in E.cliente_obs.get_input_list().inputs)
+        except Exception as e:
+            print(f"No se pudieron listar las entradas: {e}")
+            return
+        for nombre in nombres:
+            if not nombre:
+                continue
+            if nombre not in entradas:
+                print(f"'{nombre}' no existe en OBS: se quita de favoritas.")
+                try:
+                    E.fuentes_principales.discard(nombre)
+                    mod_configuracion.guardar_config_interfaz(
+                        {"fuentes_principales": sorted(E.fuentes_principales)})
+                except Exception:
+                    pass
+                continue
+            for escena in permitidas:
+                try:
+                    items = E.cliente_obs.get_scene_item_list(escena).scene_items
+                except Exception as e:
+                    print(f"No se pudieron listar los ítems de '{escena}': {e}")
+                    continue
+                existente = None
+                for it in items or []:
+                    try:
+                        if mod_obs_eventos._valor(it, "source_name", "sourceName") == nombre:
+                            existente = it
+                            break
+                    except Exception:
+                        continue
+                try:
+                    if existente is None:
+                        E.cliente_obs.create_scene_item(escena, nombre, True)
+                    elif not mod_obs_eventos._valor(
+                            existente, "scene_item_enabled", "sceneItemEnabled"):
+                        item_id = mod_obs_eventos._valor(
+                            existente, "scene_item_id", "sceneItemId")
+                        if item_id is not None:
+                            E.cliente_obs.set_scene_item_enabled(escena, item_id, True)
+                except Exception as e:
+                    print(f"No se pudo asegurar '{nombre}' en '{escena}': {e}")
 
 
 def preparar_fuente_efectos():

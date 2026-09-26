@@ -33,26 +33,29 @@ def _log_sync(paso, detalle=""):
         pass
 
 
-def construir_seccion_actualizacion():
-    """Agrega la sección ACTUALIZACIÓN al menú Ajustes. La llama app.py;
-    si falla, el resto del menú se arma igual."""
+def construir_seccion_actualizacion(padre=None):
+    """Agrega la sección ACTUALIZACIÓN a su pestaña de Ajustes. La llama
+    app.py; si falla, el resto se arma igual."""
     from consola_obs.ui import cabecera as mod_ui_cabecera
 
-    mod_ui_cabecera._seccion_menu("ACTUALIZACIÓN")
+    base = padre if padre is not None else E.barra
     E.etiqueta_update_estado = tk.Label(
-        E.barra,
+        base,
         text=f"Versión instalada: {mod_version.VERSION} (se busca sola al arrancar).",
         bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
-        wraplength=300, justify="left",
+        wraplength=420, justify="left",
     )
     E.etiqueta_update_estado.pack(fill="x", padx=16, pady=(0, 2))
     E.boton_update = tk.Button(
-        E.barra, text="🔍 BUSCAR ACTUALIZACIONES", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        base, text="🔍 BUSCAR ACTUALIZACIONES", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, pady=7, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=lambda: buscar_actualizaciones(manual=True)
     )
     E.boton_update.pack(fill="x", padx=16, pady=(6, 2))
+    mod_ui_cabecera._ayuda_menu(
+        base, "Consulta las Releases de GitHub y, si hay versión nueva, descarga el "
+              "ZIP y actualiza con el updater separado (preserva tu config).")
 
 
 def _set_estado(texto, color="#8fa0bd"):

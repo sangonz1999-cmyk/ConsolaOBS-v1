@@ -195,10 +195,11 @@ def _hover_engranaje_fuera(event=None):
     _redibujar_icono_engranaje()
 
 
-def _seccion_menu(texto):
+def _seccion_menu(texto, padre=None):
     """Título de sección + línea separadora, para que el menú se lea
     como un panel de ajustes y no como una lista suelta de campos."""
-    contenedor = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
+    base = padre if padre is not None else E.barra
+    contenedor = tk.Frame(base, bg=C.COLOR_MENU_FONDO)
     contenedor.pack(fill="x", padx=16, pady=(10, 2))
     tk.Label(
         contenedor, text=texto, bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TITULO,
@@ -209,15 +210,28 @@ def _seccion_menu(texto):
     return contenedor
 
 
-def _fila_menu(texto, widget_ancho=None):
+def _fila_menu(texto, widget_ancho=None, padre=None):
     """Una fila 'etiqueta a la izquierda, control a la derecha'."""
-    fila = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
+    base = padre if padre is not None else E.barra
+    fila = tk.Frame(base, bg=C.COLOR_MENU_FONDO)
     fila.pack(fill="x", padx=16, pady=4)
     tk.Label(
         fila, text=texto, bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
         font=(E.FUENTE_UI, 9), width=11, anchor="w"
     ).pack(side="left")
     return fila
+
+
+def _ayuda_menu(padre, texto):
+    """Descripción chica gris debajo de un grupo de opciones: qué va en
+    cada campo, en una línea o dos."""
+    base = padre if padre is not None else E.barra
+    etiqueta = tk.Label(
+        base, text=texto, bg=C.COLOR_MENU_FONDO, fg="#8fa0bd",
+        font=(E.FUENTE_UI, 8), wraplength=420, justify="left",
+    )
+    etiqueta.pack(fill="x", padx=16, pady=(0, 6))
+    return etiqueta
 
 
 def _entrada_menu(padre, **extras):
@@ -230,31 +244,70 @@ def _entrada_menu(padre, **extras):
     return entrada
 
 
-def _posicionar_menu_ajustes():
-    """Cuelga el menú justo debajo del engranaje, alineado a la derecha,
-    y lo corre hacia adentro si se saldría de la pantalla."""
-    E.ventana_ajustes.update_idletasks()
-    alto = max(220, E.ventana_ajustes.winfo_reqheight())
-    x = E.boton_engranaje.winfo_rootx() + E.boton_engranaje.winfo_width() - C.ANCHO_MENU_AJUSTES
-    y = E.boton_engranaje.winfo_rooty() + E.boton_engranaje.winfo_height() + 10
-    x = max(8, min(x, E.ventana.winfo_screenwidth() - C.ANCHO_MENU_AJUSTES - 8))
-    y = max(8, min(y, E.ventana.winfo_screenheight() - alto - 8))
-    E.ventana_ajustes.geometry(f"{C.ANCHO_MENU_AJUSTES}x{alto}+{int(x)}+{int(y)}")
+PESTANAS_AJUSTES = ("Conexión", "Apariencia", "Audio",
+                    "Sincronización", "Actualización")
+
+
+def mostrar_pestana_ajustes(nombre):
+    """Muestra una pestaña de la ventana de Ajustes (lista a la
+    izquierda, panel a la derecha). Nunca lanza."""
+    try:
+        if nombre not in PESTANAS_AJUSTES:
+            nombre = PESTANAS_AJUSTES[0]
+        for clave, marco in (getattr(E, "pestanas_ajustes", None) or {}).items():
+            try:
+                if clave == nombre:
+                    marco.pack(fill="both", expand=True)
+                else:
+                    marco.pack_forget()
+            except Exception:
+                pass
+        E._pestana_ajustes_actual = nombre
+        try:
+            lista = E.lista_pestanas_ajustes
+            idx = PESTANAS_AJUSTES.index(nombre)
+            lista.selection_clear(0, "end")
+            lista.selection_set(idx)
+            lista.see(idx)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def abrir_ajustes(pestana="Conexión"):
+    """Abre la ventana de Ajustes en la pestaña pedida (por defecto
+    Conexión, que oficia de general)."""
+    try:
+        mostrar_pestana_ajustes(pestana)
+        E.ventana_ajustes.deiconify()
+        E.ventana_ajustes.lift()
+        try:
+            E.ventana_ajustes.focus_force()
+        except Exception:
+            pass
+        E._estado_engranaje["abierto"] = True
+        _redibujar_icono_engranaje()
+        if pestana == "Conexión":
+            E.ventana_ajustes.after(80, lambda: E.entrada_host.focus_set())
+    except Exception:
+        pass
 
 
 def _abrir_menu_ajustes():
-    _posicionar_menu_ajustes()
-    E.ventana_ajustes.deiconify()
-    E.ventana_ajustes.lift()
-    E._estado_engranaje["abierto"] = True
-    _redibujar_icono_engranaje()
-    E.ventana_ajustes.after(80, lambda: E.entrada_host.focus_set())
+    abrir_ajustes("Conexión")
 
 
 def _cerrar_menu_ajustes(event=None):
-    E.ventana_ajustes.withdraw()
-    E._estado_engranaje["abierto"] = False
-    _redibujar_icono_engranaje()
+    try:
+        E.ventana_ajustes.withdraw()
+    except Exception:
+        pass
+    try:
+        E._estado_engranaje["abierto"] = False
+        _redibujar_icono_engranaje()
+    except Exception:
+        pass
 
 
 def _menu_ajustes_visible():
@@ -272,24 +325,16 @@ def _alternar_menu_ajustes(event=None):
 
 
 def _clic_fuera_del_menu(event=None):
-    """Cierra el menú al tocar cualquier parte de la ventana principal,
-    salvo el propio engranaje (ese ya alterna por su cuenta; si no lo
-    exceptuáramos, abriría y cerraría en el mismo clic)."""
-    if not _menu_ajustes_visible():
-        return
-    if event is not None and event.widget is E.marco_engranaje:
-        return
-    _cerrar_menu_ajustes()
+    """OBSOLETA: con la ventana de Ajustes con marco propio ya no se
+    cierra al tocar afuera (se cierra con ✕, Escape o el engranaje). Se
+    deja vacía por si algo viejo todavía la llama."""
+    return
 
 
 def _seguir_ventana_con_menu(event=None):
-    """Si la ventana principal se mueve o cambia de tamaño con el menú
-    abierto, el menú se reacomoda debajo del engranaje en vez de quedar
-    flotando suelto en la pantalla."""
-    if event is not None and event.widget is not E.ventana:
-        return
-    if _menu_ajustes_visible():
-        _posicionar_menu_ajustes()
+    """OBSOLETA: la ventana de Ajustes es independiente y no sigue a la
+    principal. Se deja vacía por compatibilidad."""
+    return
 
 
 def repintar_logo_cabecera():

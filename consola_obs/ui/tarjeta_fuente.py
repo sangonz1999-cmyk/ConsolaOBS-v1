@@ -2026,15 +2026,22 @@ def _asignar_color_fuente(nombre, color):
 
 
 def _alternar_principal(nombre):
-    """Marca/desmarca una fuente como 'principal': sólo resaltado visual
-    (borde) + criterio de orden. Ya no se fuerza nada en ninguna escena:
-    las escenas especiales (cámaras, capturas) no se tocan nunca."""
+    """Marca/desmarca una fuente como 'principal' (★): resaltado visual
+    (borde) + criterio de orden + se crea/activa en las escenas
+    PERMITIDAS (y en ninguna otra)."""
     if nombre in E.fuentes_principales:
         E.fuentes_principales.discard(nombre)
+        marcada = False
     else:
         E.fuentes_principales.add(nombre)
+        marcada = True
     mod_configuracion.guardar_config_interfaz({"fuentes_principales": sorted(E.fuentes_principales)})
     _actualizar_estado_gris(nombre)
+    if marcada and E.conectado:
+        threading.Thread(
+            target=mod_obs_cliente.asegurar_principales_en_permitidas,
+            kwargs={"solo_nombre": nombre}, daemon=True
+        ).start()
 
 
 def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
@@ -2513,11 +2520,20 @@ def _alternar_permitida(nombre, var):
             E.escenas_permitidas = set()
         if var.get():
             E.escenas_permitidas.add(nombre)
+            tildada = True
         else:
             E.escenas_permitidas.discard(nombre)
+            tildada = False
         _guardar_permitidas()
     except Exception:
-        pass
+        tildada = False
+        return
+    # Al tildar: deja todo (internas + favoritas) ya armado ahí.
+    if tildada and E.conectado:
+        threading.Thread(
+            target=mod_obs_cliente.asegurar_todo_en_escena,
+            args=(nombre,), daemon=True
+        ).start()
 
 
 def _mostrar_dialogo_permitidas(escenas):
@@ -2685,6 +2701,11 @@ def _actualizar_en_hilo_cuerpo():
         mod_obs_cliente.preparar_fuente_musica()
     except Exception as e:
         print(f"No se pudo preparar la fuente de música: {e}")
+
+    try:
+        mod_obs_cliente.asegurar_principales_en_permitidas()
+    except Exception as e:
+        print(f"No se pudieron asegurar las favoritas en permitidas: {e}")
 
     try:
         # STOP de orden: solo sin sesión activa (con un efecto en curso

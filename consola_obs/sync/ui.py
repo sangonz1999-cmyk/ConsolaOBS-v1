@@ -212,36 +212,44 @@ def mostrar_clave():
         messagebox.showerror("Sync", f"No se pudo leer la clave: {e}")
 
 
-def construir_seccion_sync():
-    """Agrega la sección SINCRONIZACIÓN al menú Ajustes. La llama app.py
-    al armar el menú; si algo falla, no frena el arranque."""
+def construir_seccion_sync(padre=None):
+    """Agrega la sección SINCRONIZACIÓN a su pestaña de Ajustes. La llama
+    app.py al armar la ventana; si algo falla, no frena el arranque."""
     from consola_obs.ui import cabecera as mod_ui_cabecera
 
+    base = padre if padre is not None else E.barra
     cfg = cfg_sync.cargar()
-    mod_ui_cabecera._seccion_menu("SINCRONIZACIÓN")
 
-    E.entrada_sync_ip = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("PC remota"))
+    E.entrada_sync_ip = mod_ui_cabecera._entrada_menu(
+        mod_ui_cabecera._fila_menu("PC remota", padre=base))
     E.entrada_sync_ip.insert(0, cfg.get("ip_remota", ""))
-    E.entrada_sync_puerto = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Puerto"))
+    E.entrada_sync_puerto = mod_ui_cabecera._entrada_menu(
+        mod_ui_cabecera._fila_menu("Puerto", padre=base))
     E.entrada_sync_puerto.insert(0, str(cfg.get("puerto") or cfg_sync.PUERTO_POR_DEFECTO))
+    mod_ui_cabecera._ayuda_menu(
+        base, "IP de la otra PC en tu misma red + puerto 4456. La clave tiene "
+              "que ser LA MISMA en ambas (botón 🔑 VER CLAVE).")
 
     E.etiqueta_sync_estado = tk.Label(
-        E.barra,
+        base,
         text="Copia efectos, imágenes y música entre tus 2 PCs (misma WiFi/red).",
         bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
-        wraplength=300, justify="left",
+        wraplength=420, justify="left",
     )
     E.etiqueta_sync_estado.pack(fill="x", padx=16, pady=(0, 2))
 
     E.boton_sync = tk.Button(
-        E.barra, text="🔄 SINCRONIZAR CON LA OTRA PC", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        base, text="🔄 SINCRONIZAR CON LA OTRA PC", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
         activebackground="#2f3a4d", activeforeground="white",
         relief="flat", bd=0, pady=7, font=(E.FUENTE_UI, 9, "bold"), cursor="hand2",
         command=sincronizar_ahora
     )
     E.boton_sync.pack(fill="x", padx=16, pady=(6, 2))
+    mod_ui_cabecera._ayuda_menu(
+        base, "Sincroniza en ambas direcciones: lo nuevo viaja, lo borrado se "
+              "propaga y en conflictos gana el archivo más nuevo.")
 
-    fila = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
+    fila = tk.Frame(base, bg=C.COLOR_MENU_FONDO)
     fila.pack(fill="x", padx=16, pady=(4, 2))
     tk.Button(
         fila, text="🛡 FIREWALL", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,

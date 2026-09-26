@@ -446,36 +446,58 @@ def main():
     C.COLOR_MENU_TITULO = "#6f7d99"
     C.COLOR_MENU_TEXTO = "#c3cee5"
 
-    E.ventana_ajustes = tk.Toplevel(E.ventana, bg=C.COLOR_MENU_BORDE)
-    E.ventana_ajustes.overrideredirect(True)
+    # ------------------------------------------------------------------
+    # VENTANA DE AJUSTES (por pestañas: lista a la izquierda, panel a la
+    # derecha). Reemplaza al menú desplegable del engranaje, que ya no
+    # entraba en pantalla. Ventana normal con marco: se cierra con la X,
+    # Escape o el engranaje (ya no se cierra al tocar afuera).
+    # ------------------------------------------------------------------
+    E.ventana_ajustes = tk.Toplevel(E.ventana, bg=C.COLOR_MENU_FONDO)
+    E.ventana_ajustes.title("Ajustes")
+    E.ventana_ajustes.geometry("700x560")
+    E.ventana_ajustes.minsize(620, 440)
     E.ventana_ajustes.withdraw()
+    E.ventana_ajustes.protocol("WM_DELETE_WINDOW", mod_ui_cabecera._cerrar_menu_ajustes)
     try:
-        E.ventana_ajustes.attributes("-topmost", True)
+        E.ventana_ajustes.transient(E.ventana)
     except Exception:
         pass
 
-    # El borde del menú es el propio Toplevel asomando 1px alrededor del
-    # marco interior: es la forma simple de tener un contorno prolijo en una
-    # ventana sin decoración.
-    E.barra = tk.Frame(E.ventana_ajustes, bg=C.COLOR_MENU_FONDO)
-    E.barra.pack(fill="both", expand=True, padx=1, pady=1)
+    E.marco_ajustes = tk.Frame(E.ventana_ajustes, bg=C.COLOR_MENU_FONDO)
+    E.marco_ajustes.pack(fill="both", expand=True, padx=10, pady=10)
 
-    E._encabezado_menu = tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO)
-    E._encabezado_menu.pack(fill="x", padx=16, pady=(14, 8))
-
-    tk.Label(
-        E._encabezado_menu, text="AJUSTES", bg=C.COLOR_MENU_FONDO, fg="white",
-        font=(E.FUENTE_TITULO, 12, "bold")
-    ).pack(side="left")
-
-    E._cerrar_menu = tk.Label(
-        E._encabezado_menu, text="✕", bg=C.COLOR_MENU_FONDO, fg="#6f7d99",
-        font=(E.FUENTE_UI, 11, "bold"), cursor="hand2"
+    E.lista_pestanas_ajustes = tk.Listbox(
+        E.marco_ajustes, bg="#0e1219", fg=C.COLOR_MENU_TEXTO,
+        selectbackground="#2f3a4d", selectforeground="white",
+        relief="flat", highlightthickness=1, highlightbackground="#2b3548",
+        font=(E.FUENTE_UI, 10), exportselection=False, width=18,
     )
-    E._cerrar_menu.pack(side="right")
-    E._cerrar_menu.bind("<Button-1>", lambda e: mod_ui_cabecera._cerrar_menu_ajustes())
-    E._cerrar_menu.bind("<Enter>", lambda e: E._cerrar_menu.config(fg="#ff5d6c"))
-    E._cerrar_menu.bind("<Leave>", lambda e: E._cerrar_menu.config(fg="#6f7d99"))
+    for _nombre_pestana in mod_ui_cabecera.PESTANAS_AJUSTES:
+        E.lista_pestanas_ajustes.insert("end", _nombre_pestana)
+    E.lista_pestanas_ajustes.pack(side="left", fill="y", padx=(0, 10))
+
+    def _al_elegir_pestana(event=None):
+        try:
+            sel = E.lista_pestanas_ajustes.curselection()
+            if sel:
+                mod_ui_cabecera.mostrar_pestana_ajustes(
+                    mod_ui_cabecera.PESTANAS_AJUSTES[sel[0]])
+        except Exception:
+            pass
+    E.lista_pestanas_ajustes.bind("<<ListboxSelect>>", _al_elegir_pestana)
+
+    E.contenedor_pestanas = tk.Frame(E.marco_ajustes, bg=C.COLOR_MENU_FONDO)
+    E.contenedor_pestanas.pack(side="left", fill="both", expand=True)
+
+    E.pestanas_ajustes = {}
+    for _nombre_pestana in mod_ui_cabecera.PESTANAS_AJUSTES:
+        _marco = tk.Frame(E.contenedor_pestanas, bg=C.COLOR_MENU_FONDO)
+        E.pestanas_ajustes[_nombre_pestana] = _marco
+    E._pestana_ajustes_actual = "Conexión"
+
+    # Compatibilidad: los helpers de menú (_fila_menu, _entrada_menu…)
+    # usan E.barra por defecto; apunta a Conexión (la pestaña general).
+    E.barra = E.pestanas_ajustes["Conexión"]
 
 
     def _refrescar_hint_base_obs():
@@ -524,8 +546,6 @@ def main():
             pass
     E.refrescar_hint_base_obs = _refrescar_hint_base_obs
 
-    mod_ui_cabecera._seccion_menu("CONEXIÓN")
-
     E.entrada_host = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Host"))
     E.entrada_host.insert(0, E.config_previa.get("host", "localhost"))
 
@@ -534,6 +554,9 @@ def main():
 
     E.entrada_password = mod_ui_cabecera._entrada_menu(mod_ui_cabecera._fila_menu("Contraseña"), show="•")
     E.entrada_password.insert(0, E.config_previa.get("password", ""))
+    mod_ui_cabecera._ayuda_menu(
+        E.barra, "Datos del WebSocket de OBS (en OBS: Herramientas → WebSocket). "
+                 "Si el OBS está en esta misma PC, dejá localhost y 4455.")
 
     # Carpeta assets del lado del OBS (Fase 2 música): solo importa si
     # el OBS está en OTRA pc. No se puede explorar el disco remoto,
@@ -631,12 +654,14 @@ def main():
         command=mod_audio_fuentes.abrir_selector_nueva_fuente
     )
     E.boton_agregar_fuente.pack(fill="x", padx=16, pady=(4, 2))
+    mod_ui_cabecera._ayuda_menu(
+        E.barra, "CONECTAR une o corta con OBS. ACTUALIZAR relee las fuentes. "
+                 "AGREGAR crea una fuente de audio nueva sin ir a OBS.")
 
-    mod_ui_cabecera._seccion_menu("APARIENCIA")
-
+    E._marco_apariencia = E.pestanas_ajustes["Apariencia"]
     E.variable_tamano_icono = tk.StringVar(value=E.tamano_icono_actual)
     E.selector_tamano_icono = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Íconos"),
+        mod_ui_cabecera._fila_menu("Íconos", padre=E._marco_apariencia),
         textvariable=E.variable_tamano_icono,
         values=list(C.TAMANOS_ICONO.keys()),
         state="readonly",
@@ -650,7 +675,7 @@ def main():
 
     E.variable_alto_tarjeta = tk.StringVar(value=E.alto_tarjeta_actual)
     E.selector_alto_tarjeta = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Alto"),
+        mod_ui_cabecera._fila_menu("Alto", padre=E._marco_apariencia),
         textvariable=E.variable_alto_tarjeta,
         values=list(C.ALTOS_TARJETA.keys()),
         state="readonly",
@@ -664,7 +689,7 @@ def main():
 
     E.variable_diseno = tk.StringVar(value=mod_ui_ventana._nombre_diseno_actual())
     E.selector_diseno = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Diseño"),
+        mod_ui_cabecera._fila_menu("Diseño", padre=E._marco_apariencia),
         textvariable=E.variable_diseno,
         values=list(E.DISENOS.keys()),
         state="readonly",
@@ -679,7 +704,7 @@ def main():
     E.variable_fuente = tk.StringVar(
         value=E.fuente_elegida or mod_ui_ventana.FUENTE_PREDETERMINADA)
     E.selector_fuente = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Tipografía"),
+        mod_ui_cabecera._fila_menu("Tipografía", padre=E._marco_apariencia),
         textvariable=E.variable_fuente,
         values=mod_ui_ventana._fuentes_tipografia_disponibles(),
         state="readonly",
@@ -693,7 +718,7 @@ def main():
 
     E.variable_tema = tk.StringVar(value=E.tema_interfaz)
     E.selector_tema = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Interfaz"),
+        mod_ui_cabecera._fila_menu("Interfaz", padre=E._marco_apariencia),
         textvariable=E.variable_tema,
         values=list(E.TEMAS_INTERFAZ),
         state="readonly",
@@ -704,12 +729,13 @@ def main():
         "<<ComboboxSelected>>",
         lambda e: mod_ui_ventana.cambiar_tema_interfaz(E.variable_tema.get())
     )
+    mod_ui_cabecera._ayuda_menu(
+        E._marco_apariencia, "Tamaño y estilo de la interfaz. Todo se aplica en el acto.")
 
-    mod_ui_cabecera._seccion_menu("AUDIO")
-
+    E._marco_audio = E.pestanas_ajustes["Audio"]
     E.variable_escuchar = tk.StringVar(value="Sí" if E.escuchar_en_pc else "No")
     E.selector_escuchar = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Escuchar acá"),
+        mod_ui_cabecera._fila_menu("Escuchar acá", padre=E._marco_audio),
         textvariable=E.variable_escuchar,
         values=["Sí", "No"],
         state="readonly",
@@ -723,7 +749,7 @@ def main():
 
     E.variable_nivelar = tk.StringVar(value="Sí" if E.nivelar_efectos else "No")
     E.selector_nivelar = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Nivelar efectos"),
+        mod_ui_cabecera._fila_menu("Nivelar efectos", padre=E._marco_audio),
         textvariable=E.variable_nivelar,
         values=["Sí", "No"],
         state="readonly",
@@ -734,13 +760,16 @@ def main():
         "<<ComboboxSelected>>",
         lambda e: mod_audio_reproduccion.cambiar_nivelar_efectos(E.variable_nivelar.get())
     )
+    mod_ui_cabecera._ayuda_menu(
+        E._marco_audio, "Escuchar acá: los efectos suenan también por los parlantes de "
+                        "esta PC. Nivelar: iguala el volumen de todos los pads.")
 
     # Sincronización bidireccional de assets con la otra PC (módulo
     # aislado consola_obs/sync: no toca la lógica actual). Si algo
-    # falla acá, el resto del menú se arma igual.
+    # falla acá, el resto se arma igual.
     try:
         from consola_obs.sync import ui as mod_sync_ui
-        mod_sync_ui.construir_seccion_sync()
+        mod_sync_ui.construir_seccion_sync(E.pestanas_ajustes["Sincronización"])
     except Exception as e:
         print(f"Sync: no se pudo armar la sección de sincronización: {e}")
 
@@ -748,19 +777,17 @@ def main():
     # consola_obs/update). Igual criterio: nunca frena el arranque.
     try:
         from consola_obs.update import ui as mod_update_ui
-        mod_update_ui.construir_seccion_actualizacion()
+        mod_update_ui.construir_seccion_actualizacion(E.pestanas_ajustes["Actualización"])
     except Exception as e:
         print(f"Update: no se pudo armar la sección de actualización: {e}")
 
-    tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")
+    mod_ui_cabecera.mostrar_pestana_ajustes("Conexión")
 
 
-    E.ventana.bind("<Button-1>", mod_ui_cabecera._clic_fuera_del_menu, add="+")
     E.ventana.bind("<Escape>", mod_ui_cabecera._cerrar_menu_ajustes, add="+")
     E.ventana_ajustes.bind("<Escape>", mod_ui_cabecera._cerrar_menu_ajustes)
 
 
-    E.ventana.bind("<Configure>", mod_ui_cabecera._seguir_ventana_con_menu, add="+")
     E.ventana.bind("<B1-Motion>", mod_ui_ventana._mover_divisor, add="+")
     E.ventana.bind("<ButtonRelease-1>", mod_ui_ventana._soltar_divisor, add="+")
     E.ventana.bind("<ButtonRelease-1>", mod_ui_ventana._soltar_boton_termina_resize, add="+")
