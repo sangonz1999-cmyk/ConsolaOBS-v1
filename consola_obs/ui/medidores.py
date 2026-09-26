@@ -446,7 +446,13 @@ def actualizar_vu_meters_ui():
         # destilencia la fuente, o es una fuente sin este tipo de
         # filtro), se usa de nuevo el reflejo exacto de OBS de arriba.
         muted = widgets.get("muted", False)
-        if not datos_vigentes:
+        if widgets.get("oculta"):
+            # Fuente oculta: el indicador no se muestra hasta
+            # desocultar. Se fuerza silencio directo (sin la
+            # reconstrucción de 'elif muted', que seguiría moviendo
+            # la barra con la señal de entrada aunque esté muteada).
+            nivel_mul_crudo = 0.0
+        elif not datos_vigentes:
             nivel_mul_crudo = 0.0
         elif muted:
             # Antes de reconstruir nada a mano, nos fijamos si
@@ -499,6 +505,10 @@ def actualizar_vu_meters_ui():
             db_visual = db_objetivo
         else:
             db_visual = max(db_objetivo, db_visual - E.CAIDA_POR_CUADRO)
+        if widgets.get("oculta"):
+            # Apagado instantáneo (sin la caída animada): oculta =
+            # indicador apagado hasta desocultar.
+            db_visual = -60.0
 
         widgets["vu_visual_db"] = db_visual
 
@@ -506,7 +516,9 @@ def actualizar_vu_meters_ui():
         # en gris) la saturación se sigue marcando igual -ver
         # _actualizar_medidor_led-, sólo que en gris en vez de rojo,
         # para no perder el aviso de saturación por estar en modo gris.
-        saturado = (ahora - E.ultima_vez_saturado.get(nombre, -math.inf)) <= C.DURACION_SATURACION_SEG
+        # En oculta no hay aviso: el indicador está apagado del todo.
+        saturado = ((ahora - E.ultima_vez_saturado.get(nombre, -math.inf)) <= C.DURACION_SATURACION_SEG
+                    and not widgets.get("oculta"))
 
         _log_debug_vu(nombre, nivel_mul_crudo, datos_vigentes, saturado, ahora)
 
@@ -523,7 +535,9 @@ def actualizar_vu_meters_ui():
             # 0.8s quieto y después cae.
             pico = widgets.get("vu_pico_db", -60.0)
             pico_t = widgets.get("vu_pico_t", 0.0)
-            if db_objetivo >= pico:
+            if widgets.get("oculta"):
+                pico, pico_t = -60.0, ahora
+            elif db_objetivo >= pico:
                 pico, pico_t = db_objetivo, ahora
             elif ahora - pico_t > 0.8:
                 pico = max(db_objetivo, pico - E.CAIDA_POR_CUADRO)

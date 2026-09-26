@@ -247,6 +247,7 @@ def _sincronizar_mute_remoto(nombre, muted):
     )
     mod_ui_tarjeta._actualizar_estado_gris(nombre)
     mod_ui_tarjeta._reubicar_si_activas()
+    mod_ui_tarjeta._reforzar_oculta_en_obs(nombre)
 
 
 def on_input_volume_changed(datos):
@@ -294,6 +295,7 @@ def _sincronizar_monitor_remoto(nombre, tipo):
     mod_ui_dibujo._actualizar_boton_circular(widgets["monitor"], color_nuevo=(
         mod_ui_dibujo._cuadrado_monitor(tipo) if E.es_moderna()
         else C.COLORES_MONITOREO.get(tipo, "#394151")))
+    mod_ui_tarjeta._reforzar_oculta_en_obs(nombre)
 
 
 def on_input_name_changed(datos):

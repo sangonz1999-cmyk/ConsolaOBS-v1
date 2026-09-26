@@ -558,6 +558,47 @@ def _aplicar_ocultar_en_obs(nombre):
         print(f"No se pudo apagar el monitoreo de '{nombre}' al ocultar: {e}")
 
 
+def _reforzar_oculta_en_obs(nombre):
+    """Refuerzo: si una fuente OCULTA aparece desmuteada o monitoreada
+    (alguien la tocó a mano desde OBS o desde sus propios botones), se
+    la devuelve a mute + monitor OFF. Vale desde cualquier hilo; si ya
+    está como debe, no hace nada. Converge sola: el eco del evento ya
+    vuelve con el estado correcto, así que no hay bucle."""
+    try:
+        if not E.conectado or not _es_oculta(nombre):
+            return
+        widgets = E.fuentes.get(nombre)
+        if not widgets:
+            return
+        if bool(widgets.get("muted", False)) and str(
+                widgets.get("tipo_monitor") or "") == "OBS_MONITORING_TYPE_NONE":
+            return
+        try:
+            widgets["muted"] = True
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["mute"], texto_nuevo="🔇",
+                color_nuevo=mod_ui_dibujo._color_mute(True))
+        except Exception:
+            pass
+        try:
+            widgets["tipo_monitor"] = "OBS_MONITORING_TYPE_NONE"
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["monitor"], color_nuevo=(
+                    mod_ui_dibujo._cuadrado_monitor("OBS_MONITORING_TYPE_NONE")
+                    if E.es_moderna()
+                    else C.COLORES_MONITOREO.get("OBS_MONITORING_TYPE_NONE", "#394151")))
+        except Exception:
+            pass
+        try:
+            _actualizar_estado_gris(nombre)
+        except Exception:
+            pass
+        threading.Thread(target=_aplicar_ocultar_en_obs, args=(nombre,),
+                         daemon=True).start()
+    except Exception:
+        pass
+
+
 def mostrar_fuente(nombre):
     """Desoculta una fuente (Fase 3): la saca del fondo y le restaura el
     mute/monitoreo que tenía antes de ocultarla (si se sabe; si no, la
@@ -2001,6 +2042,7 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
 
     _actualizar_estado_gris(nombre)
     _reubicar_si_activas()
+    _reforzar_oculta_en_obs(nombre)
 
 
 
