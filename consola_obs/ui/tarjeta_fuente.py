@@ -231,36 +231,101 @@ def _filas_con_corte(nombres, columnas, corte):
     return pos, filas_arriba
 
 
-def _corte_filtros(orden):
-    """Cuántas del principio de 'orden' van arriba del divisor: sólo con
-    el criterio "filtros" prendido y si parte en dos grupos no vacíos.
-    Nunca lanza."""
+ETIQUETA_DIVISOR = {
+    "filtros": "↑ CON FILTROS",
+    "favoritos": "↑ FAVORITOS",
+    "colores": "↑ CON COLORES",
+    "activas": "↑ ACTIVAS",
+    "escena": "↑ ESCENA ACTUAL",
+}
+
+
+def _contexto_orden():
+    """Auxiliares del orden en un dict, para no calcular dos veces lo
+    mismo entre _clave (ordenar) y _grupo_primero (cortar)."""
     try:
-        if "filtros" not in _criterios_orden_activos():
-            return 0
+        criterios = _criterios_orden_activos()
+    except Exception:
+        criterios = []
+    try:
+        _orden_esc = list(getattr(E, "orden_escena_actual", None) or [])
+    except Exception:
+        _orden_esc = []
+    try:
+        favs = set(E.fuentes_principales or set())
+    except Exception:
+        favs = set()
+    try:
+        con_color = set((E.colores_fuentes or {}).keys())
+    except Exception:
+        con_color = set()
+    try:
         con_filtros = set(getattr(E, "filtros_activos", None) or set())
     except Exception:
-        return 0
+        con_filtros = set()
+    return {"criterios": criterios,
+            "pos_escena": {n: i for i, n in enumerate(_orden_esc)},
+            "favs": favs, "con_color": con_color, "con_filtros": con_filtros}
+
+
+def _grupo_primero(nombre, ctx):
+    """Nivel del PRIMER criterio activo para 'nombre' (0 = grupo de
+    arriba). None si no hay criterio o el primero no agrupa (el
+    alfabético ordena todo parejo: ahí no hay divisor)."""
     try:
+        criterios = ctx.get("criterios") or []
+        if not criterios:
+            return None
+        c0 = criterios[0]
+        if c0 == "filtros":
+            return 0 if nombre in ctx.get("con_filtros", set()) else 1
+        if c0 == "favoritos":
+            return 0 if nombre in ctx.get("favs", set()) else 1
+        if c0 == "colores":
+            # Mismo niveles que _clave: con color y activa arriba.
+            if nombre in ctx.get("con_color", set()) and _fuente_activa(nombre):
+                return 0
+            if not _fuente_activa(nombre):
+                return 2
+            return 1
+        if c0 == "activas":
+            return 0 if _fuente_activa(nombre) else 1
+        if c0 == "escena":
+            return 0 if nombre in ctx.get("pos_escena", {}) else 1
+        return None
+    except Exception:
+        return None
+
+
+def _corte_grupo(orden):
+    """Tamaño del grupo de arriba según el primer criterio activo (0 =
+    sin divisor: sin criterio, primero que no agrupa, o no parte en
+    dos grupos no vacíos). Nunca lanza."""
+    try:
+        ctx = _contexto_orden()
         lista = list(orden or [])
+        if not lista:
+            return 0
+        if _grupo_primero(lista[0], ctx) != 0:
+            return 0
+        n = 0
+        for nombre in lista:
+            if _grupo_primero(nombre, ctx) == 0:
+                n += 1
+            else:
+                break
+        if n <= 0 or n >= len(lista):
+            return 0
+        return n
     except Exception:
         return 0
-    n = 0
-    for nombre in lista:
-        if nombre in con_filtros:
-            n += 1
-        else:
-            break
-    if n <= 0 or n >= len(lista):
-        return 0
-    return n
 
 
 def _posiciones_grilla(orden, columnas):
     """([(nombre, fila, col)], fila_divisor_o_None) DENSAS: salta los
     nombres sin tarjeta viva para no dejar huecos (antes el índice venía
     del enumerate y un nombre sin tarjeta consumía celda vacía). El corte
-    se calcula sobre las presentes (ver _corte_filtros + _filas_con_corte).
+    se calcula sobre las presentes (ver _corte_grupo + _filas_con_corte).
     Nunca lanza."""
     try:
         presentes = [n for n in (orden or []) if _tiene_tarjeta_viva(n)]
@@ -270,7 +335,7 @@ def _posiciones_grilla(orden, columnas):
         except Exception:
             return [], None
     try:
-        return _filas_con_corte(presentes, columnas, _corte_filtros(presentes))
+        return _filas_con_corte(presentes, columnas, _corte_grupo(presentes))
     except Exception:
         try:
             columnas = max(1, int(columnas))
@@ -406,25 +471,13 @@ def orden_visible_fuentes():
     except Exception:
         ocultas = set()
     visibles, ocult_lista = _partir_ocultas(base, ocultas)
-    criterios = _criterios_orden_activos()
+    ctx = _contexto_orden()
+    criterios = ctx.get("criterios") or []
     if criterios:
-        try:
-            _orden_esc = list(getattr(E, "orden_escena_actual", None) or [])
-        except Exception:
-            _orden_esc = []
-        pos_escena = {n: i for i, n in enumerate(_orden_esc)}
-        try:
-            favs = set(E.fuentes_principales or set())
-        except Exception:
-            favs = set()
-        try:
-            con_color = set((E.colores_fuentes or {}).keys())
-        except Exception:
-            con_color = set()
-        try:
-            con_filtros = set(getattr(E, "filtros_activos", None) or set())
-        except Exception:
-            con_filtros = set()
+        favs = ctx.get("favs", set())
+        con_color = ctx.get("con_color", set())
+        con_filtros = ctx.get("con_filtros", set())
+        pos_escena = ctx.get("pos_escena", {})
 
         def _clave(n):
             clave = []
@@ -599,7 +652,7 @@ def ocultar_fuente(nombre):
         except Exception:
             pass
         _reubicar_fuentes()
-        _reubicar_si_activas()
+        _reubicar_si_hay_criterio()
         try:
             if E.conectado:
                 threading.Thread(
@@ -694,7 +747,7 @@ def mostrar_fuente(nombre):
         except Exception:
             pass
         _reubicar_fuentes()
-        _reubicar_si_activas()
+        _reubicar_si_hay_criterio()
         if previo:
             try:
                 if E.conectado:
@@ -761,7 +814,7 @@ def _sincronizar_tras_mostrar(nombre):
         except Exception:
             pass
         _actualizar_estado_gris(nombre)
-        _reubicar_si_activas()
+        _reubicar_si_hay_criterio()
     except Exception:
         pass
 
@@ -778,33 +831,19 @@ def alternar_oculta_fuente(nombre):
         pass
 
 
-def _reubicar_si_activas():
-    """Reubica si el criterio 'activas' está prendido. Para llamar tras
-    cambios de mute (locales o remotos): el orden por mute es estático,
-    no necesita loop. Siempre por after(0): vale desde cualquier hilo."""
+def _reubicar_si_hay_criterio():
+    """Reubica si hay ALGÚN criterio de orden prendido (el orden y el
+    divisor dependen de mute, escena, colores, filtros, nombres...).
+    Para llamar tras cualquier cambio que pueda reagrupar. Como el
+    reacomodo sale barato si la clave no cambió, llamar de más no
+    cuesta. Siempre por after(0): vale desde cualquier hilo."""
     try:
-        if "activas" not in _criterios_orden_activos():
+        if not _criterios_orden_activos():
             return
         try:
             E.ventana.after(0, _reubicar_fuentes)
         except Exception:
             _reubicar_fuentes()
-    except Exception:
-        pass
-
-
-def _reubicar_si_orden_dinamico():
-    """Reubica si hay criterio dinámico prendido (escena o activas:
-    ambos dependen de la membresía). Para llamar al aplicar membresía
-    de escena (corre en hilo UI)."""
-    try:
-        criterios = set(_criterios_orden_activos())
-    except Exception:
-        return
-    if "escena" not in criterios and "activas" not in criterios:
-        return
-    try:
-        _reubicar_fuentes()
     except Exception:
         pass
 
@@ -1039,9 +1078,9 @@ def _obtener_separador_filtros():
         return None
 
 
-def _acomodar_divisor_filtros(fila_divisor, columnas):
-    """Muestra el divisor en su fila (a todo el ancho) o lo esconde si
-    no parte nada. Nunca lanza."""
+def _acomodar_divisor_grupo(fila_divisor, columnas, texto="↑ GRUPO"):
+    """Muestra el divisor en su fila (a todo el ancho, con la etiqueta
+    del grupo de arriba) o lo esconde si no parte nada. Nunca lanza."""
     try:
         sep = getattr(E, "separador_filtros", None)
         try:
@@ -1061,7 +1100,7 @@ def _acomodar_divisor_filtros(fila_divisor, columnas):
                 return
         try:
             sep.config(bg=E.color_fondo_panel())
-            sep.etiqueta_divisor.config(bg=E.color_fondo_panel())
+            sep.etiqueta_divisor.config(bg=E.color_fondo_panel(), text=texto)
             sep.linea_divisor.config(bg=E.color_acento())
         except Exception:
             pass
@@ -1071,21 +1110,6 @@ def _acomodar_divisor_filtros(fila_divisor, columnas):
                      sticky="ew", padx=6, pady=2)
         except Exception:
             pass
-    except Exception:
-        pass
-
-
-def _reubicar_si_filtros():
-    """Reubica si el criterio 'filtros' está prendido (el divisor y el
-    orden dependen del set vivo). Siempre por after(0): vale desde
-    cualquier hilo."""
-    try:
-        if "filtros" not in _criterios_orden_activos():
-            return
-        try:
-            E.ventana.after(0, _reubicar_fuentes)
-        except Exception:
-            _reubicar_fuentes()
     except Exception:
         pass
 
@@ -1112,7 +1136,7 @@ def _actualizar_filtros_activos_fuente(nombre):
             E.filtros_activos.discard(nombre)
     except Exception:
         pass
-    _reubicar_si_filtros()
+    _reubicar_si_hay_criterio()
 
 
 def _reubicar_fuentes(forzar=False):
@@ -1159,14 +1183,21 @@ def _reubicar_fuentes(forzar=False):
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
     # La clave incluye el orden VISIBLE (manual + criterio + ocultas)
-    # y el corte del divisor: cambiar el criterio o los filtros activos
+    # y el corte del divisor: cambiar el criterio o el grupo de arriba
     # reordena aunque la lista manual no cambie.
     orden = orden_visible_fuentes()
     try:
-        corte = _corte_filtros([n for n in orden if _tiene_tarjeta_viva(n)])
+        _presentes_clave = [n for n in (orden or []) if _tiene_tarjeta_viva(n)]
     except Exception:
-        corte = 0
-    clave_grilla = (columnas, ancho_celda, corte, tuple(orden))
+        _presentes_clave = list(orden or [])
+    corte = _corte_grupo(_presentes_clave)
+    try:
+        _criterios_clave = _criterios_orden_activos()
+        texto_divisor = ETIQUETA_DIVISOR.get(
+            _criterios_clave[0], "↑ GRUPO") if _criterios_clave else "↑ GRUPO"
+    except Exception:
+        texto_divisor = "↑ GRUPO"
+    clave_grilla = (columnas, ancho_celda, corte, texto_divisor, tuple(orden))
     # Si no cambió ni la cantidad de columnas ni el ancho, las posiciones
     # son idénticas: no hay nada que mover.
     if (not forzar) and E._ultima_grilla_fuentes.get("clave") == clave_grilla:
@@ -1191,9 +1222,9 @@ def _reubicar_fuentes(forzar=False):
         pass
     # Posiciones DENSAS: los nombres sin tarjeta no consumen celda (si
     # no, quedaban huecos vacíos en la grilla). Con corte hay una fila
-    # de divisor entre el grupo de filtros y el resto.
+    # de divisor entre el grupo de arriba y el resto.
     posiciones, fila_divisor = _posiciones_grilla(orden, columnas)
-    _acomodar_divisor_filtros(fila_divisor, columnas)
+    _acomodar_divisor_grupo(fila_divisor, columnas, texto_divisor)
     for nombre, fila, col in posiciones:
         try:
             if not E.fuentes[nombre]["tarjeta_sombra"].winfo_exists():
@@ -2292,6 +2323,7 @@ def _asignar_color_fuente(nombre, color):
         E.colores_fuentes[nombre] = color
     mod_configuracion.guardar_config_interfaz({"colores_fuentes": E.colores_fuentes})
     _actualizar_estado_gris(nombre)
+    _reubicar_si_hay_criterio()
 
 
 def _alternar_principal(nombre):
@@ -2306,6 +2338,7 @@ def _alternar_principal(nombre):
         marcada = True
     mod_configuracion.guardar_config_interfaz({"fuentes_principales": sorted(E.fuentes_principales)})
     _actualizar_estado_gris(nombre)
+    _reubicar_si_hay_criterio()
     if marcada and E.conectado:
         threading.Thread(
             target=mod_obs_cliente.asegurar_principales_en_permitidas,
@@ -2343,7 +2376,7 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     )
 
     _actualizar_estado_gris(nombre)
-    _reubicar_si_activas()
+    _reubicar_si_hay_criterio()
     _reforzar_oculta_en_obs(nombre)
 
 
@@ -2362,7 +2395,7 @@ def cambiar_mute(nombre):
             color_nuevo=mod_ui_dibujo._color_mute(nuevo_estado)
         )
         _actualizar_estado_gris(nombre)
-        _reubicar_si_activas()
+        _reubicar_si_hay_criterio()
     except Exception as e:
         print(f"Error cambiando mute de {nombre}: {e}")
 
