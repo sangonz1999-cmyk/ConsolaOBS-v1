@@ -184,9 +184,23 @@ def sincronizar(config=None, log=None):
         try:
             cli.ping()
         except ErrorSync as e:
+            detalle = str(e)
+            baja = detalle.lower()
+            if ("10061" in detalle or "actively refused" in baja
+                    or ("deneg" in baja and "expresamente" in baja)):
+                ayuda = ("Conexión RECHAZADA: la PC existe pero ahí no hay ningún "
+                         "servidor de sync escuchando. Prendé el programa en la otra "
+                         "PC (o `python3 sync_server_mini.py --dir assets --port "
+                         f"{puerto}`) y que el puerto coincida en ambas.")
+            elif ("10060" in detalle or "timed out" in baja
+                    or "tiempo de espera" in baja):
+                ayuda = ("Sin respuesta (timeout): suele ser firewall o red. Misma "
+                         "WiFi, `sudo ufw allow "
+                         f"{puerto}/tcp` en la otra PC, y probá hacerle ping.")
+            else:
+                ayuda = "Revisá que esté prendida, el programa abierto y el firewall."
             return False, {**resumen, "errores": [
-                f"La otra PC no responde en {ip}:{puerto}: {e}. "
-                "Revisá que esté prendida, el programa abierto y el firewall."]}
+                f"La otra PC no responde en {ip}:{puerto}: {e}. {ayuda}"]}
         _log(f"Sync: conectado con {ip}:{puerto}.")
         _log(f"Sync: raíz local {raiz}.")
 
