@@ -1305,6 +1305,19 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     )
     etiqueta_db.pack(pady=(3, 1))
 
+    # Insignia de "oculta" (ojo tachado, arriba a la derecha junto a
+    # los dB): se muestra SÓLO si la fuente está oculta (ver
+    # _actualizar_estado_gris). No se posiciona acá a propósito: eso
+    # lo decide el estado, así al crear la tarjeta ya nace correcta.
+    foto_oculta = mod_ui_dibujo._imagen_svg_menu("menu/menu_mostrar.svg", 18)
+    if foto_oculta is not None:
+        insignia_oculta = tk.Label(contenedor, image=foto_oculta, bg=color_cuerpo,
+                                   bd=0, highlightthickness=0)
+        insignia_oculta.imagen = foto_oculta
+    else:
+        # Sin Pillow/pymupdf: marca textual chica.
+        insignia_oculta = tk.Label(contenedor, text="🚫", bg=color_cuerpo, fg="#8a93a8",
+                                   font=(E.FUENTE_UI, 11), bd=0, highlightthickness=0)
 
     fila_vertical = tk.Frame(contenedor, bg=color_cuerpo)
     fila_vertical.pack(pady=1)
@@ -1491,6 +1504,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         "fila_iconos": fila_iconos,
         "fader": escala,
         "db": etiqueta_db,
+        "insignia_oculta": insignia_oculta,
         "mute": boton_mute,
         "monitor": boton_monitor,
         "vu_canvas": vu_canvas,
@@ -1672,6 +1686,27 @@ def _actualizar_estado_gris(nombre):
     else:
         widgets["fila_meta"].config(bg=(E.color_acento() if E.es_moderna() else color_meta))
 
+    # Insignia de oculta: visible sólo en ocultas, con el fondo del
+    # cuerpo para que no deje recuadro.
+    try:
+        insignia = widgets.get("insignia_oculta")
+        if insignia is not None:
+            if oculta:
+                try:
+                    insignia.config(bg=color_cuerpo)
+                except Exception:
+                    pass
+                insignia.place(in_=widgets["db"], relx=1.0, rely=0.5,
+                               anchor="e", x=-5)
+                try:
+                    insignia.lift()
+                except Exception:
+                    pass
+            else:
+                insignia.place_forget()
+    except Exception:
+        pass
+
 
 def _abrir_menu_contextual_panel_fuentes(event):
     """Menú de clic derecho sobre una zona VACÍA del panel de fuentes
@@ -1778,7 +1813,7 @@ def _abrir_menu_contextual_fuente(nombre, event):
           ("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
           lambda: _alternar_principal(nombre))
     if _es_oculta(nombre):
-        _item("menu/menu_ocultar.svg", "Mostrar fuente", "👁  Mostrar fuente",
+        _item("menu/menu_mostrar.svg", "Mostrar fuente", "👁  Mostrar fuente",
               lambda: mostrar_fuente(nombre))
     else:
         _item("menu/menu_ocultar.svg", "Ocultar fuente", "👁  Ocultar fuente",
