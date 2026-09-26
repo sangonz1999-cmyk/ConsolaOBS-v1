@@ -62,14 +62,25 @@ Más información -> Ejecutar de todos modos.
 
 LEEME_OBS = """CONSOLAOBS - PC DEL OBS (la principal)
 =====================================
-Esta carpeta tiene SOLO los sonidos (.mp3 de efectos y música).
-Acá no se instala nada: solo OBS + esta carpeta.
+Esta carpeta tiene SOLO los sonidos (.mp3 de efectos y música) más
+sync_server_mini.py (mini servidor para sincronizar sin instalar nada).
+Acá no se instala el programa completo: solo OBS + esta carpeta.
 
 REGLA DE ORO: esta carpeta tiene que quedar en la MISMA RUTA que la
 carpeta assets de la PC del sonidista (ej: las dos en C:\\ConsolaOBS,
 o sea que esta carpeta sea C:\\ConsolaOBS\\assets).
 Cuando el sonidista dispara un efecto, el OBS lo busca EN SU PROPIO
 DISCO: si el archivo no está acá, el stream queda en silencio.
+
+SINCRONIZAR SIN COPIAR A MANO (opcional, sin instalar nada):
+  1. En esta PC: python3 sync_server_mini.py --dir assets --port 4456
+     (solo necesita Python, sin pip ni nada más; la clave se genera
+     sola la primera vez y se muestra para copiarla en la consola).
+  2. En la consola: Ajustes -> Sincronización con la IP de esta PC,
+     puerto 4456 y LA MISMA clave. Botón SINCRONIZAR y listo.
+  En Windows abre el puerto con: netsh advfirewall firewall add rule
+  name="ConsolaOBS Sync" dir=in action=allow protocol=TCP localport=4456
+  (en Linux: sudo ufw allow 4456/tcp).
 """
 
 
@@ -158,7 +169,7 @@ def main():
     print(f"Consola: {n} entradas -> {os.path.getsize(ZIP_CONSOLA) / 1e9:.2f} GB",
           flush=True)
 
-    # 2) OBS (sólo audios).
+    # 2) OBS (sólo audios + mini servidor, sin programa completo).
     try:
         if os.path.exists(ZIP_OBS):
             os.remove(ZIP_OBS)
@@ -170,6 +181,12 @@ def main():
             m += _agregar_arbol(z, sub, "OBS/")
         _agregar_texto(z, "OBS/LEEME.txt", LEEME_OBS)
         m += 1
+        mini = os.path.join(RAIZ, "sync_server_mini.py")
+        if os.path.isfile(mini):
+            _agregar_archivo(z, mini, "OBS/sync_server_mini.py")
+            m += 1
+        else:
+            print("  AVISO: no existe sync_server_mini.py, el ZIP sale sin él.")
     print(f"OBS: {m} entradas -> {os.path.getsize(ZIP_OBS) / 1e9:.2f} GB", flush=True)
 
     # 3) Verificación mínima de lo armado.
@@ -187,7 +204,8 @@ def main():
                 errores.append("version.py del zip no coincide")
     with zipfile.ZipFile(ZIP_OBS) as z:
         nombres = set(z.namelist())
-        for clave in ("OBS/LEEME.txt", "OBS/assets/Sondidos_pad", "OBS/assets/Musica"):
+        for clave in ("OBS/LEEME.txt", "OBS/sync_server_mini.py",
+                      "OBS/assets/Sondidos_pad", "OBS/assets/Musica"):
             if not any(x == clave or x.startswith(clave + "/") for x in nombres):
                 errores.append(f"OBS sin {clave}")
         if any("/config/" in x or x.endswith(".exe") for x in nombres):
