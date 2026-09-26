@@ -26,12 +26,82 @@ import hmac
 import json
 import os
 import secrets
+import socket
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 CHUNK = 1024 * 1024
 RAIZ_SCRIPT = os.path.dirname(os.path.abspath(__file__))
+PUERTO_DISCOVERY = 4457
+APP_ID = "ConsolaOBS-sync"
+
+
+def iniciar_discovery(puerto_sync, puerto_disc=PUERTO_DISCOVERY):
+    """Responde el broadcast DISCOVER con HELLO (para que la consola
+    encuentre esta PC con 🔍 BUSCAR PCS) y rechaza PAIR con motivo (sin
+    pantalla no se puede aprobar: la clave va a mano). Hilo daemon."""
+    def _correr():
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            except Exception:
+                pass
+            s.bind(("0.0.0.0", puerto_disc))
+            s.settimeout(0.5)
+        except Exception:
+            return
+        while True:
+            try:
+                cuerpo, origen = s.recvfrom(2048)
+            except Exception:
+                continue
+            try:
+                datos = json.loads(cuerpo.decode("utf-8", "replace"))
+            except Exception:
+                continue
+            try:
+                if not isinstance(datos, dict) or datos.get("app") != APP_ID:
+                    continue
+                ip, pto = origen[0], int(origen[1])
+                if datos.get("t") == "DISCOVER":
+                    r = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    try:
+                        r.sendto(json.dumps({
+                            "t": "HELLO", "app": APP_ID, "v": 1,
+                            "host": socket.gethostname(), "port": puerto_sync,
+                            "mini": True,
+                        }).encode("utf-8"), (ip, pto))
+                    except Exception:
+                        pass
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+                elif datos.get("t") == "PAIR":
+                    r = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    try:
+                        r.sendto(json.dumps({
+                            "t": "PAIRED", "app": APP_ID, "v": 1, "ok": False,
+                            "motivo": "Mini-server sin pantalla: poné la clave "
+                                      "a mano (es la de sync.key).",
+                        }).encode("utf-8"), (ip, pto))
+                    except Exception:
+                        pass
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+            except Exception:
+                continue
+
+    try:
+        threading.Thread(target=_correr, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _sha256(ruta):
@@ -272,6 +342,7 @@ def main(argv=None):
         print(f"Tu clave es:\n\n{api_key}\n\nPoné LA MISMA en la consola "
               "(Ajustes -> Sincronización).")
     print("Ctrl+C para detener.")
+    iniciar_discovery(int(args.port))
     servidor = ThreadingHTTPServer(("0.0.0.0", int(args.port)),
                                    crear_handler(raiz, api_key))
     servidor.daemon_threads = True

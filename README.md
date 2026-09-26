@@ -111,7 +111,7 @@ Música de fondo para el directo, controlada toda desde el programa (OBS solo ej
 
 En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el programa trae un sync bidireccional (módulo `consola_obs/sync/`): compara por nombre + tamaño + mtime + sha256, copia lo faltante en ambas direcciones, propaga borrados y en conflictos gana el archivo más nuevo.
 
-- Una sola vez por PC: en Ajustes → SINCRONIZACIÓN poné la IP de la **otra** PC (puerto `4456`), y la **misma** API key en las dos (botón 🔑 VER CLAVE para verla; o variable `CONSOLAOBS_SYNC_KEY`). Botón 🛡 FIREWALL (como admin) para abrir el puerto.
+- Una sola vez por PC (con las 2 abiertas): en Ajustes → SINCRONIZACIÓN apretá 🔍 BUSCAR PCS, elegí la otra y después 🔗 VINCULAR (la otra acepta una vez y la clave viaja sola, queda guardada). O a mano: IP de la **otra** PC (puerto `4456`) + la **misma** API key en las dos (🔑 VER CLAVE; o variable `CONSOLAOBS_SYNC_KEY`). Ojo: en "PC remota" va la IP, no la clave. Botón 🛡 FIREWALL (como admin) para abrir el puerto.
 - Uso: botón 🔄 SINCRONIZAR (abre el registro de lo copiado/borrado). El servidor de cada PC arranca solo con el programa.
 - Requiere `pip install -r requirements.txt` (agrega `fastapi` + `uvicorn`) y estar en la misma red.
 - **PC del OBS sin programa completo**: el `ConsolaOBS-OBS.zip` trae `sync_server_mini.py` (un solo archivo, solo stdlib, sin pip ni nada): `python3 sync_server_mini.py --dir assets --port 4456` y la consola sincroniza contra esa PC igual. La clave sale de `CONSOLAOBS_SYNC_KEY`, `--key` o `sync.key` (se genera sola).
