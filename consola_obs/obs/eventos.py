@@ -365,7 +365,8 @@ def _calcular_ganancia_extra_fuente(nombre):
         return 0.0
     total_db = 0.0
     try:
-        filtros = E.cliente_obs.get_source_filter_list(nombre).filters or []
+        filtros = mod_obs_cliente._lista_de(
+            E.cliente_obs.get_source_filter_list(nombre), "filters")
     except Exception:
         return 0.0
     for filtro in filtros:

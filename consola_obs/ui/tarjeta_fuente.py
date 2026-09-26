@@ -2829,7 +2829,8 @@ def _abrir_permitidas():
 def _cargar_permitidas_en_hilo():
     try:
         escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName")
-                   for e in E.cliente_obs.get_scene_list().scenes]
+                   for e in mod_obs_cliente._lista_de(
+                       E.cliente_obs.get_scene_list(), "scenes")]
         escenas = sorted(s for s in escenas if s)
     except Exception as e:
         E.ventana.after(0, lambda e=e: messagebox.showerror(
@@ -3098,7 +3099,20 @@ def _actualizar_en_hilo_cuerpo():
         pass
 
     try:
-        entradas = E.cliente_obs.get_input_list().inputs
+        respuesta_lista = E.cliente_obs.get_input_list()
+        if respuesta_lista is None:
+            # El OBS contestó OK pero sin datos (típico de OBS viejos o
+            # de un corte a mitad del pedido): se avisa la causa probable
+            # en vez del AttributeError crudo de antes.
+            error_general = (
+                "El OBS no devolvió la lista de fuentes (respuesta vacía). "
+                "Causas típicas: OBS desactualizado en la otra PC (se necesita "
+                "OBS 28 o más nuevo, con WebSocket 5.x: mirá Ayuda > Acerca de) "
+                "o la red se cortó a mitad del pedido. Probá reconectar."
+            )
+            entradas = []
+        else:
+            entradas = respuesta_lista.inputs or []
     except Exception as e:
         error_general = str(e)
         entradas = []
@@ -3181,10 +3195,8 @@ def _actualizar_en_hilo_cuerpo():
                 pass
             try:
                 respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
-                try:
-                    items = respuesta_items.scene_items
-                except Exception:
-                    items = mod_obs_eventos._valor(respuesta_items, "scene_items", "sceneItems") or []
+                items = mod_obs_cliente._lista_de(
+                    respuesta_items, "scene_items", "sceneItems")
             except Exception:
                 items = []
             for it in items or []:

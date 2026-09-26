@@ -172,7 +172,9 @@ def _abrir_selector_nuevo_filtro(nombre_fuente, al_crear=None):
             etiqueta_error.config(text="Poné un nombre para el filtro.")
             return
         try:
-            filtros_actuales = E.cliente_obs.get_source_filter_list(nombre_fuente).filters or []
+            from consola_obs.obs import cliente as mod_obs_cliente
+            filtros_actuales = mod_obs_cliente._lista_de(
+                E.cliente_obs.get_source_filter_list(nombre_fuente), "filters")
         except Exception:
             filtros_actuales = []
         nombres_existentes = {
@@ -258,7 +260,9 @@ def abrir_filtros(nombre):
         for w in marco_lista.winfo_children():
             w.destroy()
         try:
-            filtros = E.cliente_obs.get_source_filter_list(nombre).filters
+            from consola_obs.obs import cliente as mod_obs_cliente
+            filtros = mod_obs_cliente._lista_de(
+                E.cliente_obs.get_source_filter_list(nombre), "filters")
         except Exception as e:
             tk.Label(
                 marco_lista, text=f"No se pudieron leer los filtros.\n\n{e}",

@@ -40,6 +40,33 @@ class _ClienteOBSSincronizado:
         return _llamada_con_lock
 
 
+def _version_obs_soportada(version_obs):
+    """True si el OBS remoto sirve (28+ con WebSocket 5.x). Lo ilegible
+    NO bloquea (devuelve True): ante la duda se conecta igual y los
+    errores concretos avisarán. Pura y testeable. Nunca lanza."""
+    try:
+        mayor = int(str(version_obs or "").strip().split(".")[0])
+        return mayor >= 28
+    except Exception:
+        return True
+
+
+def _lista_de(respuesta, *nombres):
+    """Lee una lista de una respuesta de OBS tolerando todo: respuesta
+    None (el servidor contestó OK pero sin datos: típico de OBS viejos
+    o cortes a mitad del pedido), campo ausente o con otro nombre.
+    Devuelve [] si no hay nada legible. Nunca lanza."""
+    try:
+        if respuesta is None:
+            return []
+        valor = mod_obs_eventos._valor(respuesta, *nombres)
+        if isinstance(valor, (list, tuple)):
+            return list(valor)
+        return []
+    except Exception:
+        return []
+
+
 def _leer_fuentes_globales_obs():
     """Los canales de audio 'globales' de OBS (Desktop Audio 1/2, Mic/Aux
     1 a 4, los que se eligen desde Configuración > Audio, no desde una
@@ -310,6 +337,7 @@ def conectar_obs():
         paso = "GET_VERSION"
         mod_red.log_conexion(paso, "pidiendo get_version ...")
         _ver = nuevo_cliente.get_version()
+        _vobs, _vws = "?", "?"
         try:
             _vobs = getattr(_ver, "obs_version", "?")
             _vws = getattr(_ver, "obs_websocket_version", "?")
@@ -324,6 +352,21 @@ def conectar_obs():
             E.plataforma_obs = ""
         if getattr(E, "plataforma_obs", ""):
             mod_red.log_conexion(paso, f"plataforma OBS: {E.plataforma_obs}")
+        # Puerta de versión: la consola necesita OBS 28+ (WebSocket 5.x
+        # integrado). Con un OBS viejo la lista de fuentes llega vacía o
+        # malformada y nada funciona: se avisa claro (no se bloquea, por
+        # si el número viene en un formato raro).
+        if not _version_obs_soportada(_vobs):
+            try:
+                mod_red.log_conexion(paso, f"OBS viejo o ilegible ({_vobs}): aviso")
+            except Exception:
+                pass
+            messagebox.showwarning(
+                "OBS desactualizado",
+                f"Ese OBS es la versión {_vobs} y la consola necesita OBS 28 o más "
+                "nuevo (con WebSocket 5.x).\n\nActualizá OBS en la otra PC "
+                "(Ayuda > Buscar actualizaciones) y volvé a conectar: con "
+                "versiones viejas la lista de fuentes llega vacía y nada funciona.")
         # Lista de tipos de fuente que trae ese OBS: sirve para elegir
         # kinds creables sin adivinar (y para diagnosticar 605).
         try:
@@ -642,7 +685,8 @@ def _asegurar_item_en_escena(nombre_fuente, escena):
         return False
     with E._lock_sincronizar_escenas:
         try:
-            items = E.cliente_obs.get_scene_item_list(escena).scene_items
+            items = _lista_de(E.cliente_obs.get_scene_item_list(escena),
+                              "scene_items", "sceneItems")
         except Exception as e:
             print(f"No se pudieron listar los ítems de '{escena}': {e}")
             return False
@@ -682,7 +726,8 @@ def asegurar_interna_en_escena_actual(nombre_fuente, kind, ajustes):
     with E._lock_sincronizar_escenas:
         try:
             entradas = [mod_obs_eventos._valor(i, "input_name", "inputName")
-                        for i in E.cliente_obs.get_input_list().inputs]
+                        for i in _lista_de(E.cliente_obs.get_input_list(),
+                                           "inputs", "inputs")]
         except Exception as e:
             print(f"No se pudieron listar las entradas: {e}")
             return False
@@ -703,7 +748,7 @@ def asegurar_todo_en_escena(escena):
         return
     try:
         entradas = set(mod_obs_eventos._valor(i, "input_name", "inputName")
-                       for i in E.cliente_obs.get_input_list().inputs)
+                       for i in _lista_de(E.cliente_obs.get_input_list(), "inputs"))
     except Exception as e:
         print(f"No se pudieron listar las entradas: {e}")
         return
@@ -752,7 +797,8 @@ def quitar_internas_de_otras_escenas():
     with E._lock_sincronizar_escenas:
         try:
             escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName")
-                       for e in E.cliente_obs.get_scene_list().scenes]
+                       for e in _lista_de(E.cliente_obs.get_scene_list(),
+                                          "scenes", "scenes")]
         except Exception as e:
             print(f"No se pudieron listar las escenas: {e}")
             return programa, quitadas
@@ -760,7 +806,8 @@ def quitar_internas_de_otras_escenas():
             if not escena or escena == programa:
                 continue
             try:
-                items = E.cliente_obs.get_scene_item_list(escena).scene_items
+                items = _lista_de(E.cliente_obs.get_scene_item_list(escena),
+                                  "scene_items", "sceneItems")
             except Exception as e:
                 print(f"No se pudieron listar los ítems de '{escena}': {e}")
                 continue
@@ -787,7 +834,8 @@ def _tiene_filtros_activos(nombre_fuente):
     if not E.conectado or not nombre_fuente:
         return False
     try:
-        filtros = E.cliente_obs.get_source_filter_list(nombre_fuente).filters or []
+        filtros = _lista_de(E.cliente_obs.get_source_filter_list(nombre_fuente),
+                            "filters")
     except Exception:
         return False
     for filtro in filtros or []:
@@ -814,7 +862,8 @@ def quitar_fuente_de_todas_las_escenas(nombre_fuente):
         return quitadas
     with E._lock_sincronizar_escenas:
         try:
-            escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName") for e in E.cliente_obs.get_scene_list().scenes]
+            escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName")
+                       for e in _lista_de(E.cliente_obs.get_scene_list(), "scenes")]
         except Exception as e:
             print(f"No se pudieron listar las escenas: {e}")
             return quitadas
@@ -822,7 +871,8 @@ def quitar_fuente_de_todas_las_escenas(nombre_fuente):
             if not escena:
                 continue
             try:
-                items = E.cliente_obs.get_scene_item_list(escena).scene_items
+                items = _lista_de(E.cliente_obs.get_scene_item_list(escena),
+                                  "scene_items", "sceneItems")
             except Exception as e:
                 print(f"No se pudieron listar los ítems de '{escena}': {e}")
                 continue
@@ -866,7 +916,7 @@ def asegurar_principales_en_permitidas(solo_nombre=None):
     with E._lock_sincronizar_escenas:
         try:
             entradas = set(mod_obs_eventos._valor(i, "input_name", "inputName")
-                           for i in E.cliente_obs.get_input_list().inputs)
+                           for i in _lista_de(E.cliente_obs.get_input_list(), "inputs"))
         except Exception as e:
             print(f"No se pudieron listar las entradas: {e}")
             return
@@ -884,7 +934,8 @@ def asegurar_principales_en_permitidas(solo_nombre=None):
                 continue
             for escena in permitidas:
                 try:
-                    items = E.cliente_obs.get_scene_item_list(escena).scene_items
+                    items = _lista_de(E.cliente_obs.get_scene_item_list(escena),
+                                      "scene_items", "sceneItems")
                 except Exception as e:
                     print(f"No se pudieron listar los ítems de '{escena}': {e}")
                     continue

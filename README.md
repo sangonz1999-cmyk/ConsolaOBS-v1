@@ -36,7 +36,7 @@ En [Releases](https://github.com/sangonz1999-cmyk/ConsolaOBS-v1/releases) hay do
 
 **Por qué los dos (regla de oro)**: cuando disparás un efecto, la consola le dice al OBS "reproducí `C:\...\X.mp3`" y el OBS lo busca **en su propio disco**. Si el archivo no está ahí, el stream queda en silencio (vos igual lo escuchás por los parlantes de la consola, pero eso es audio local y no va al stream). Por eso los sonidos tienen que quedar en la **misma ruta** en ambas PCs (ej: las dos en `C:\ConsolaOBS`).
 
-Notas: Windows SmartScreen avisa por ser un `.exe` sin firma (Más información → Ejecutar de todos modos). En OBS: Herramientas → WebSocket → habilitar, puerto 4455. Alternativa para programadores: clonar el repo en ambas PCs (misma ruta) y usar `instalar.bat` + `compilar.bat` (ver abajo).
+Notas: Windows SmartScreen avisa por ser un `.exe` sin firma (Más información → Ejecutar de todos modos). En OBS: Herramientas → WebSocket → habilitar, puerto 4455. El OBS tiene que ser **28 o más nuevo** (el WebSocket 5.x viene integrado; con versiones viejas la lista de fuentes llega vacía y el programa avisa). Alternativa para programadores: clonar el repo en ambas PCs (misma ruta) y usar `instalar.bat` + `compilar.bat` (ver abajo).
 
 ## Requisitos
 

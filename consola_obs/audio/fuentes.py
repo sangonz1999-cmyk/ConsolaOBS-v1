@@ -182,9 +182,10 @@ def _escena_donde_crear():
         print(f"No se pudo leer la escena al aire: {e}")
 
     try:
+        from consola_obs.obs import cliente as mod_obs_cliente
         escenas = [
             mod_obs_eventos._valor(s, "scene_name", "sceneName")
-            for s in E.cliente_obs.get_scene_list().scenes
+            for s in mod_obs_cliente._lista_de(E.cliente_obs.get_scene_list(), "scenes")
         ]
         for escena in escenas:
             if escena:
@@ -197,9 +198,10 @@ def _escena_donde_crear():
 
 def _nombres_de_fuentes_existentes():
     try:
+        from consola_obs.obs import cliente as mod_obs_cliente
         return {
             mod_obs_eventos._valor(i, "input_name", "inputName")
-            for i in E.cliente_obs.get_input_list().inputs
+            for i in mod_obs_cliente._lista_de(E.cliente_obs.get_input_list(), "inputs")
         }
     except Exception as e:
         print(f"No se pudo leer la lista de fuentes: {e}")
