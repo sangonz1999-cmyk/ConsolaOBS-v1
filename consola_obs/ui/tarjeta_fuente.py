@@ -887,6 +887,19 @@ def _reubicar_fuentes(forzar=False):
             mod_ui_ventana._log_fuentes(f"reubica desde {_quien}")
     except Exception:
         pass
+    # Las columnas se recalculan acá mismo (barato: una lectura de
+    # ancho + una división), no sólo en el camino rápido de 15 ms:
+    # todos los asentados (soltada, vigilante, salida del modo super,
+    # divisor, maximizar) llaman a _reubicar_fuentes, y sin esto lo
+    # hacían con el valor viejo y la grilla nunca se expandía (el
+    # soundboard sí lo recalcula en _reubicar_pads, por eso sólo los
+    # faders quedaban con el hueco vacío en pantalla completa).
+    try:
+        nuevas_columnas = _columnas_disponibles_fuentes()
+        if nuevas_columnas != E.columnas_fuentes:
+            E.columnas_fuentes = nuevas_columnas
+    except Exception:
+        pass
     columnas = max(1, E.columnas_fuentes)
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
