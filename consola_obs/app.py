@@ -739,6 +739,14 @@ def main():
     except Exception as e:
         print(f"Sync: no se pudo armar la sección de sincronización: {e}")
 
+    # Actualización automática desde GitHub (módulo aislado
+    # consola_obs/update). Igual criterio: nunca frena el arranque.
+    try:
+        from consola_obs.update import ui as mod_update_ui
+        mod_update_ui.construir_seccion_actualizacion()
+    except Exception as e:
+        print(f"Update: no se pudo armar la sección de actualización: {e}")
+
     tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")
 
 
@@ -769,6 +777,13 @@ def main():
         mod_sync_ui.iniciar_servidor()
     except Exception as e:
         print(f"Sync: no se pudo iniciar el servidor: {e}")
+    # Chequeo automático de actualización en GitHub (hilo daemon, con
+    # demora para no competir con el arranque).
+    try:
+        from consola_obs.update import ui as mod_update_ui
+        mod_update_ui.verificar_al_arranque()
+    except Exception as e:
+        print(f"Update: no se pudo programar el chequeo: {e}")
     E.ventana.after(500, mod_ui_soundboard._refrescar_barra_progreso)
     if not P._ES_WINDOWS:
         # Foto inicial de la interfaz recién armada (sólo hace falta en el

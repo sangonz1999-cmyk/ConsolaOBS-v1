@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 dist/
 build/
+_build_tmp/
+_build_upd_tmp/
 *.spec
 *.log
 # El .exe se genera localmente con compilar.bat, no se versiona

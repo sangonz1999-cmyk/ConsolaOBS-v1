@@ -1,0 +1,30 @@
+# UTF-8
+# Metadatos del actualizador separado (Propiedades > Detalles).
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 1, 3, 0),
+    prodvers=(1, 1, 3, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '040904B0',
+          [StringStruct('CompanyName', 'ConsolaOBS'),
+           StringStruct('FileDescription', 'ConsolaOBS Updater (actualizador separado)'),
+           StringStruct('FileVersion', '1.1.3'),
+           StringStruct('InternalName', 'updater'),
+           StringStruct('LegalCopyright', 'ConsolaOBS'),
+           StringStruct('OriginalFilename', 'updater.exe'),
+           StringStruct('ProductName', 'ConsolaOBS'),
+           StringStruct('ProductVersion', '1.1.3')])
+      ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

@@ -102,6 +102,12 @@ En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el 
 - Uso: botón 🔄 SINCRONIZAR (abre el registro de lo copiado/borrado). El servidor de cada PC arranca solo con el programa.
 - Requiere `pip install -r requirements.txt` (agrega `fastapi` + `uvicorn`) y estar en la misma red.
 
+## Actualización automática (desde v1.1.3)
+
+El programa consulta solo las Releases de GitHub al arrancar (y con Ajustes → ACTUALIZACIÓN → 🔍 BUSCAR ACTUALIZACIONES). Si hay versión más nueva, pregunta [Actualizar][Más tarde]: descarga el `ConsolaOBS-Consola.zip` a `%TEMP%`, cierra el programa y `updater.exe` (actualizador separado) reemplaza los archivos preservando `config/` (contraseña, ajustes, pads, clave de sync), verifica la instalación y reabre la nueva versión. Si algo falla (sin Internet, ZIP corrupto, versión inesperada), la instalación actual no se toca.
+
+Para publicar una actualización: 1) cambiá `VERSION` en `consola_obs/update/version.py` y en `version_info.txt` (más `updater_version.txt` si tocaste el updater), 2) doble clic en `compilar.bat` (genera `ConsolaOBS.exe` + `updater.exe`), 3) creá la Release `vX.Y.Z` y subí los dos ZIP.
+
 ## Instalar Git y clonar el repo (Windows)
 
 1. Descargá Git de https://git-scm.com/download/win e instalalo con las opciones por defecto.

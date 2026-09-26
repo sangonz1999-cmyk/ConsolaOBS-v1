@@ -116,6 +116,30 @@ if not exist "%CARPETA_DESTINO%\ConsolaOBS.exe" (
     exit /b 1
 )
 
+echo.
+echo Compilando updater.exe (actualizador separado, solo stdlib)...
+REM Si el updater anterior sigue abierto, Windows lo bloquea.
+taskkill /F /IM updater.exe 2>nul
+set CARPETA_BUILD_UPD=%~dp0_build_upd_tmp
+rmdir /s /q "%CARPETA_BUILD_UPD%" 2>nul
+del updater.spec 2>nul
+REM --console a proposito: el updater MUESTRA su progreso en consola.
+%PY% -m PyInstaller --onefile --console --name updater --version-file "%~dp0updater_version.txt" --distpath "%CARPETA_DESTINO%." --workpath "%CARPETA_BUILD_UPD%" updater.py
+
+if not exist "%CARPETA_DESTINO%\updater.exe" (
+    echo.
+    echo ======================================================
+    echo  AVISO: no se pudo generar updater.exe.
+    echo  El ConsolaOBS.exe de arriba SI quedo bien; solo el
+    echo  auto-update quedara sin actualizador local.
+    echo  Igual se puede actualizar a mano desde GitHub.
+    echo ======================================================
+) else (
+    echo updater.exe generado OK.
+)
+rmdir /s /q "%CARPETA_BUILD_UPD%" 2>nul
+del updater.spec 2>nul
+
 echo Limpiando carpeta temporal...
 rmdir /s /q "%CARPETA_BUILD%" 2>nul
 del ConsolaOBS.spec 2>nul
@@ -125,5 +149,6 @@ echo ======================================================
 echo  Listo. El ejecutable esta en: %CARPETA_DESTINO%\ConsolaOBS.exe
 echo  Fecha/hora del .exe generado:
 for %%A in ("%CARPETA_DESTINO%\ConsolaOBS.exe") do echo    %%~tA
+for %%A in ("%CARPETA_DESTINO%\updater.exe") do echo    updater.exe: %%~tA
 echo ======================================================
 pause
