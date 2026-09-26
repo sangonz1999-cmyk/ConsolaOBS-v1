@@ -141,6 +141,36 @@ def on_current_program_scene_changed(_datos):
     threading.Thread(target=mod_obs_cliente._refrescar_membresia_escena, daemon=True).start()
 
 
+def on_current_scene_collection_changed(datos):
+    """Cambió la COLECCIÓN de escenas en OBS: cambian todas las escenas
+    y todas las fuentes a la vez, así que se actualiza la variable y se
+    dispara el refresco completo (agrupado) de la lista."""
+    try:
+        coleccion = _valor(datos, "scene_collection_name", "sceneCollectionName") or ""
+    except Exception:
+        coleccion = ""
+    if coleccion:
+        try:
+            E.coleccion_actual = coleccion
+        except Exception:
+            pass
+
+    def _hacer():
+        try:
+            from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+            mod_ui_tarjeta._refrescar_titulo_escena()
+        except Exception:
+            pass
+        try:
+            _programar_refresco_lista_fuentes()
+        except Exception:
+            pass
+    try:
+        E.ventana.after(0, _hacer)
+    except Exception:
+        pass
+
+
 def on_scene_item_enable_state_changed(_datos):
     """Alguien prendió/apagó el 'ojito' de una fuente en la escena
     actual: puede cambiar si esa fuente cuenta como 'en escena'."""

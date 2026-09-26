@@ -65,6 +65,29 @@ def _leer_fuentes_globales_obs():
     return nombres
 
 
+def _leer_coleccion_actual():
+    """(lista, actual) de colecciones de escenas de OBS. La respuesta
+    trae el nombre de la actual junto a la lista (currentScene-
+    CollectionName). Nunca lanza: ([], "") si falla."""
+    try:
+        respuesta = E.cliente_obs.get_scene_collection_list()
+    except Exception as e:
+        print(f"No se pudieron leer las colecciones de escenas: {e}")
+        return [], ""
+    try:
+        actual = mod_obs_eventos._valor(
+            respuesta, "current_scene_collection_name",
+            "currentSceneCollectionName") or ""
+    except Exception:
+        actual = ""
+    try:
+        lista = mod_obs_eventos._valor(
+            respuesta, "scene_collections", "sceneCollections") or []
+    except Exception:
+        lista = []
+    return lista, actual
+
+
 def _refrescar_membresia_escena():
     """Vuelve a leer qué fuentes están presentes Y activas en la escena
     que está al aire ahora mismo, para poder mostrar en gris las que no
@@ -91,6 +114,23 @@ def _refrescar_membresia_escena():
         return
     try:
         E.escena_actual_nombre = escena_actual or ""
+    except Exception:
+        pass
+    # Colección: si cambió, cambiaron TODAS las escenas y TODAS las
+    # fuentes → refresco completo de la lista (agrupado, no uno por
+    # evento). Sin cambio no se hace nada de más.
+    try:
+        _lista_col, coleccion = _leer_coleccion_actual()
+        if coleccion and coleccion != getattr(E, "coleccion_actual", ""):
+            E.coleccion_actual = coleccion
+            try:
+                mod_red.log_conexion("FUENTES", f"colección '{coleccion}': refresco completo")
+            except Exception:
+                pass
+            try:
+                mod_obs_eventos._programar_refresco_lista_fuentes()
+            except Exception:
+                pass
     except Exception:
         pass
     nombres_en_escena = set()
@@ -310,7 +350,7 @@ def conectar_obs():
             subs=(
                 obs.Subs.LOW_VOLUME | obs.Subs.INPUTVOLUMEMETERS |
                 obs.Subs.INPUTS | obs.Subs.SCENES | obs.Subs.SCENEITEMS |
-                obs.Subs.FILTERS | obs.Subs.MEDIAINPUTS
+                obs.Subs.FILTERS | obs.Subs.MEDIAINPUTS | obs.Subs.GENERAL
             )
         )
         mod_red.log_conexion(paso, "OK")
@@ -320,6 +360,7 @@ def conectar_obs():
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_media_input_playback_ended)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_created)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_program_scene_changed)
+        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_scene_collection_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_enable_state_changed)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_created)
         nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_removed)
@@ -463,6 +504,10 @@ def desconectar_obs():
     E.orden_fuentes.clear()
     E.escena_actual_nombres = set()
     E.escena_actual_obtenida = False
+    try:
+        E.coleccion_actual = ""
+    except Exception:
+        pass
 
     actualizar_estado_conexion()
 

@@ -789,8 +789,9 @@ def _vigilancia_escena_tick():
 
 
 def _refrescar_titulo_escena():
-    """Muestra la escena al aire en el título del panel (diagnóstico
-    visible: de un vistazo se ve qué escena sigue la consola)."""
+    """Muestra la escena al aire (y la colección) en el título del panel
+    (diagnóstico visible: de un vistazo se ve qué escena y qué colección
+    sigue la consola)."""
     try:
         etiqueta = getattr(E, "titulo_fuentes", None)
         if etiqueta is None:
@@ -799,8 +800,16 @@ def _refrescar_titulo_escena():
             escena = str(getattr(E, "escena_actual_nombre", "") or "")
         except Exception:
             escena = ""
+        try:
+            coleccion = str(getattr(E, "coleccion_actual", "") or "")
+        except Exception:
+            coleccion = ""
         base = "FUENTES DE AUDIO   ·   arrastrá para mover el panel"
-        etiqueta.config(text=base + (f"   ·   🎬 {escena}" if escena else ""))
+        if escena:
+            base += f"   ·   🎬 {escena}"
+        if coleccion:
+            base += f"   ·   📁 {coleccion}"
+        etiqueta.config(text=base)
     except Exception:
         pass
 
@@ -2952,6 +2961,13 @@ def _actualizar_en_hilo_cuerpo():
             escena_leida_ok = True
     except Exception as e:
         print(f"No se pudo leer la escena activa: {e}")
+
+    try:
+        _lista_col, coleccion = mod_obs_cliente._leer_coleccion_actual()
+        if coleccion:
+            E.coleccion_actual = coleccion
+    except Exception as e:
+        print(f"No se pudo leer la colección de escenas: {e}")
 
     try:
         nombres_en_escena |= mod_obs_cliente._leer_fuentes_globales_obs()

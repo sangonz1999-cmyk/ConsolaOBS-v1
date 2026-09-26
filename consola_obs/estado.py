@@ -185,7 +185,11 @@ escenas_permitidas = set()
 _estado_previo_oculta = {}
 escena_actual_nombres = set()
 escena_actual_obtenida = False
-orden_escena_actual = []                                                            
+orden_escena_actual = []
+# Colección de escenas activa en OBS (dato vivo, se lee al conectar y
+# ante cada cambio: al cambiar de colección cambian TODAS las escenas y
+# TODAS las fuentes, así que dispara un refresco completo).
+coleccion_actual = ""
 
 _dialogo_filtros_abierto = {"nombre": None, "refrescar": None, "ventana": None}
 

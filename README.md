@@ -421,6 +421,7 @@ Inputs / auditorio:
 Escena / showing:
 - on_current_program_scene_changed
 - on_scene_item_* (created/removed/enable state changes) Se usa para saber qué fuentes están al aire en la escena activa y atenuar (poner en gris) las que no están.
+- on_current_scene_collection_changed → cambia `E.coleccion_actual` (visible en el título como 📁) y dispara el refresco completo de la lista, porque otra colección = otras escenas y otras fuentes. Lo mismo chequea `_refrescar_membresia_escena` por si el evento se pierde.
 
 Filtros:
 - on_source_filter_created / removed / enable_state_changed / list_reindexed / name_changed → refrescan el editor de filtros.
