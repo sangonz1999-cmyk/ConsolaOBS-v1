@@ -37,15 +37,15 @@ TIPOS_MONITOREO = [
 
 PALETA_ETIQUETAS = [
     None,
-    "#e53935",   # rojo
-    "#fb8c00",   # naranja
-    "#fdd835",   # amarillo
-    "#43a047",   # verde
-    "#00acc1",   # turquesa/cian
-    "#1e88e5",   # azul
-    "#5e35b1",   # índigo
-    "#8e24aa",   # violeta
-    "#e91e63",   # rosa/magenta
+    "#ff3b30",   # rojo (saturado)
+    "#ff9500",   # naranja (saturado)
+    "#ffd600",   # amarillo (saturado)
+    "#00e676",   # verde (saturado)
+    "#00e5ff",   # turquesa/cian (saturado)
+    "#2979ff",   # azul (saturado)
+    "#651fff",   # índigo (saturado)
+    "#d500f9",   # violeta (saturado)
+    "#ff1744",   # rosa/magenta (saturado)
 ]
 
 

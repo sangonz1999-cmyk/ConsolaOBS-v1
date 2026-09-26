@@ -1577,10 +1577,13 @@ def _actualizar_estado_gris(nombre):
         color_cuerpo = "#0a0b0f"
         color_meta = "#0a0b0f"
     elif atenuado:
-        color_cabecera = C.COLOR_GRIS_ATENUADO
+        # Fase 4: gris CALCULADO desde la etiqueta (mismo tono
+        # desaturado), no un gris fijo. Sin etiqueta, el fijo.
+        base_gris = mod_ui_dibujo._gris_apagado_de(color_etiqueta)
+        color_cabecera = base_gris
         color_texto = "#202633"
-        color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.42)
-        color_meta = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.30)
+        color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(base_gris, 0.42)
+        color_meta = mod_ui_dibujo._oscurecer_color_pct(base_gris, 0.30)
     elif E.es_moderna():
         if color_etiqueta:
             _base_suave = mod_ui_dibujo._desaturar_color(color_etiqueta)

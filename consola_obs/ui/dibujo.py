@@ -253,6 +253,24 @@ def _desaturar_color(color_hex, cantidad=0.45):
         return color_hex
 
 
+def _gris_apagado_de(color_hex):
+    """Gris calculado desde la etiqueta (Fase 4): la fuente muteada o
+    fuera de escena se pinta con SU MISMO tono desaturado, no con un
+    gris fijo. Sin etiqueta (None) se usa el gris fijo de siempre.
+    Pura y testeable (no toca Tk). Nunca lanza."""
+    try:
+        fijo = C.COLOR_GRIS_ATENUADO
+    except Exception:
+        fijo = "#8e98ad"
+    try:
+        if not color_hex or not isinstance(color_hex, str):
+            return fijo
+        _hex_a_rgb(color_hex)
+        return _desaturar_color(color_hex, 0.82)
+    except Exception:
+        return fijo
+
+
 def _gradiente_imagen(tam, color_arriba, color_abajo):
     """Franja vertical de color continuo (sin escalones), hecha con una
     tira de 1 pixel de ancho que después se estira: es la forma barata
