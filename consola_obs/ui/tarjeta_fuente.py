@@ -2811,10 +2811,36 @@ def _quitar_internas_en_hilo():
 
 def _guardar_permitidas():
     try:
+        mapa = getattr(E, "escenas_permitidas", None) or {}
+        if not isinstance(mapa, dict):
+            mapa = {}
         mod_configuracion.guardar_config_interfaz(
-            {"escenas_permitidas": sorted(getattr(E, "escenas_permitidas", set()) or set())})
+            {"escenas_permitidas": {col: sorted(val) for col, val in mapa.items()}})
     except Exception:
         pass
+
+
+def _migrar_permitidas_legacy():
+    """Pasa el formato viejo (lista plana) a la colección al aire, una
+    sola vez. Devuelve True si migró algo. Nunca lanza."""
+    try:
+        legacy = list(getattr(E, "_permitidas_legacy", None) or [])
+        if not legacy:
+            return False
+        col = str(getattr(E, "coleccion_actual", "") or "")
+        if not col:
+            return False
+        if not isinstance(getattr(E, "escenas_permitidas", None), dict):
+            E.escenas_permitidas = {}
+        if col in E.escenas_permitidas:
+            E._permitidas_legacy = []
+            return False
+        E.escenas_permitidas[col] = set(legacy)
+        E._permitidas_legacy = []
+        _guardar_permitidas()
+        return True
+    except Exception:
+        return False
 
 
 def _abrir_permitidas():
@@ -2836,20 +2862,31 @@ def _cargar_permitidas_en_hilo():
         E.ventana.after(0, lambda e=e: messagebox.showerror(
             "Error", f"No se pudieron listar las escenas.\n\n{e}"))
         return
-    E.ventana.after(0, lambda: _mostrar_dialogo_permitidas(escenas))
+    try:
+        coleccion = str(getattr(E, "coleccion_actual", "") or "")
+    except Exception:
+        coleccion = ""
+    E.ventana.after(0, lambda: _mostrar_dialogo_permitidas(escenas, coleccion))
 
 
-def _alternar_permitida(nombre, marcada):
-    """Tilda/destilda una escena (marcada = bool). Al tildar deja todo
+def _alternar_permitida(nombre, marcada, coleccion):
+    """Tilda/destilda una escena DENTRO de su colección (los tildes son
+    por colección porque los nombres se repiten). Al tildar deja todo
     (internas + favoritas) ya armado ahí."""
     try:
-        if not isinstance(getattr(E, "escenas_permitidas", None), set):
-            E.escenas_permitidas = set()
+        if not coleccion:
+            return False
+        if not isinstance(getattr(E, "escenas_permitidas", None), dict):
+            E.escenas_permitidas = {}
+        grupo = E.escenas_permitidas.get(coleccion)
+        if not isinstance(grupo, set):
+            grupo = set()
+            E.escenas_permitidas[coleccion] = grupo
         if marcada:
-            E.escenas_permitidas.add(nombre)
+            grupo.add(nombre)
             tildada = True
         else:
-            E.escenas_permitidas.discard(nombre)
+            grupo.discard(nombre)
             tildada = False
         _guardar_permitidas()
     except Exception:
@@ -2863,17 +2900,27 @@ def _alternar_permitida(nombre, marcada):
     return tildada
 
 
-def _mostrar_dialogo_permitidas(escenas):
-    """Checklist de escenas (lista blanca): SÓLO en las tildadas pueden
-    estar Efectos/Música. En las demás no se crea nada nunca, ni
-    siquiera al aire (ahí el efecto sale sólo por parlantes y la música
-    no se inyecta). Lo no tildado está a salvo por defecto. Si
-    renombrás una escena, volvé a tildarla."""
+def _mostrar_dialogo_permitidas(escenas, coleccion):
+    """Checklist de escenas (lista blanca POR COLECCIÓN): SÓLO en las
+    tildadas de ESTA colección pueden estar Efectos/Música. En las demás
+    no se crea nada nunca, ni siquiera al aire (ahí el efecto sale sólo
+    por parlantes y la música no se inyecta). Lo no tildado está a salvo
+    por defecto. Si renombrás una escena, volvé a tildarla."""
     try:
+        if not coleccion:
+            messagebox.showinfo(
+                "Escenas permitidas",
+                "Todavía no se leyó la colección activa. Esperá a que "
+                "termine de conectar y abrí de nuevo.")
+            return
         win = tk.Toplevel(E.ventana)
     except Exception:
         return
-    win.title("Escenas permitidas")
+    try:
+        tildadas = set((getattr(E, "escenas_permitidas", None) or {}).get(coleccion) or set())
+    except Exception:
+        tildadas = set()
+    win.title(f"Escenas permitidas ({coleccion})")
     win.configure(bg=C.COLOR_MENU_FONDO)
     try:
         win.attributes("-topmost", True)
@@ -2892,7 +2939,8 @@ def _mostrar_dialogo_permitidas(escenas):
         tk.Label(cabecera, image=foto_titulo, bg=C.COLOR_MENU_FONDO,
                  bd=0, highlightthickness=0).pack(side="left", padx=(0, 8))
     tk.Label(
-        cabecera, text="SÓLO en estas escenas pueden estar\nEfectos y Música:",
+        cabecera,
+        text=f"Colección: {coleccion}\nSÓLO en estas escenas pueden estar\nEfectos y Música:",
         bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
         font=(E.FUENTE_UI, 9), justify="left",
     ).pack(side="left")
@@ -2913,9 +2961,15 @@ def _mostrar_dialogo_permitidas(escenas):
                  bg=C.COLOR_MENU_FONDO, fg="#8fa0bd",
                  font=(E.FUENTE_UI, 9)).pack(anchor="w")
 
+    def _tildadas_ahora():
+        try:
+            return set((getattr(E, "escenas_permitidas", None) or {}).get(coleccion) or set())
+        except Exception:
+            return set()
+
     def _pintar_fila(etiqueta_icono, nombre):
         try:
-            marcada = nombre in (getattr(E, "escenas_permitidas", None) or set())
+            marcada = nombre in _tildadas_ahora()
             if con_iconos:
                 etiqueta_icono.config(image=foto_on if marcada else foto_off)
             else:
@@ -2925,8 +2979,7 @@ def _mostrar_dialogo_permitidas(escenas):
 
     def _al_click(nombre, etiqueta_icono):
         try:
-            marcada_ahora = nombre in (getattr(E, "escenas_permitidas", None) or set())
-            _alternar_permitida(nombre, not marcada_ahora)
+            _alternar_permitida(nombre, nombre not in _tildadas_ahora(), coleccion)
         except Exception:
             pass
         _pintar_fila(etiqueta_icono, nombre)
@@ -2936,12 +2989,12 @@ def _mostrar_dialogo_permitidas(escenas):
             fila = tk.Frame(marco, bg=C.COLOR_MENU_FONDO, cursor="hand2")
             fila.pack(anchor="w", fill="x", pady=1)
             if con_iconos:
-                marcada_ini = escena in (getattr(E, "escenas_permitidas", None) or set())
+                marcada_ini = escena in tildadas
                 et_icono = tk.Label(
                     fila, image=foto_on if marcada_ini else foto_off,
                     bg=C.COLOR_MENU_FONDO, bd=0, highlightthickness=0)
             else:
-                marcada_ini = escena in (getattr(E, "escenas_permitidas", None) or set())
+                marcada_ini = escena in tildadas
                 et_icono = tk.Label(
                     fila, text="☑ " if marcada_ini else "☐ ",
                     bg=C.COLOR_MENU_FONDO, fg="white",
@@ -3239,6 +3292,16 @@ def _actualizar_en_hilo_cuerpo():
 def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_leida_ok=False, orden_escena=None):
 
     E.boton_actualizar.config(state="normal", text="ACTUALIZAR FUENTES")
+
+    # Migración una sola vez del formato viejo de permitidas (lista
+    # plana) a la colección al aire (E.coleccion_actual ya se leyó en el
+    # hilo). Después de esto los tildes viejos valen para esta colección
+    # y las demás arrancan cerradas.
+    try:
+        if _migrar_permitidas_legacy():
+            print("Permitidas migradas a la colección al aire.")
+    except Exception:
+        pass
 
     if error is not None:
         messagebox.showerror(

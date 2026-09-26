@@ -651,13 +651,26 @@ def _nombre_programa_actual():
         return ""
 
 
-def _escena_permitida(nombre_escena):
-    """True si la escena está tildada en la lista blanca (sólo ahí
-    pueden estar Efectos/Música). Lista vacía = ninguna (cierra por
-    defecto). Pura respecto a red (lee sólo memoria). Nunca lanza."""
+def _permitidas_actuales():
+    """Set permitido para la colección al aire (vacío si no se sabe).
+    Clave por colección porque los nombres se repiten entre colecciones
+    y entre PCs: un set global tildaría homónimas sin configurar."""
     try:
-        return bool(nombre_escena) and nombre_escena in (
-            getattr(E, "escenas_permitidas", None) or set())
+        col = str(getattr(E, "coleccion_actual", "") or "")
+        mapa = getattr(E, "escenas_permitidas", None) or {}
+        if isinstance(mapa, dict) and col:
+            return set(mapa.get(col) or set())
+    except Exception:
+        pass
+    return set()
+
+
+def _escena_permitida(nombre_escena):
+    """True si la escena está tildada para la colección al aire (sólo
+    ahí pueden estar Efectos/Música). Sin colección o sin tildes =
+    ninguna (cierra por defecto). Pura respecto a red. Nunca lanza."""
+    try:
+        return bool(nombre_escena) and nombre_escena in _permitidas_actuales()
     except Exception:
         return False
 
@@ -904,7 +917,7 @@ def asegurar_principales_en_permitidas(solo_nombre=None):
     if not E.conectado:
         return
     try:
-        permitidas = sorted(getattr(E, "escenas_permitidas", None) or set())
+        permitidas = sorted(_permitidas_actuales())
     except Exception:
         permitidas = []
     if not permitidas:

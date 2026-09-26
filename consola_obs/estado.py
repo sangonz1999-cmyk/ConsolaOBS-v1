@@ -179,10 +179,15 @@ mostrar_ocultas = True
 # programa solo, no el usuario).
 filtros_activos = set()
 separador_filtros = None
-# Escenas donde Efectos/Música PUEDEN estar (lista blanca): en las
-# demás no se crea nada nunca, ni siquiera al aire. Vacía = no se crea
-# en ninguna (cierra por defecto: lo olvidado queda a salvo solo).
-escenas_permitidas = set()
+# Escenas donde Efectos/Música PUEDEN estar (lista blanca POR
+# COLECCIÓN: {coleccion: set(escenas)}). Los nombres se repiten entre
+# colecciones y entre PCs, así que un set global tildaría sin querer
+# una escena homónima de otra colección. En las no tildadas no se crea
+# nada nunca, ni siquiera al aire. Vacía = cerrado por defecto.
+escenas_permitidas = {}
+# Formato viejo (lista plana sin colección, de la primera versión del
+# diálogo): se migra solo a la colección al aire en el primer refresco.
+_permitidas_legacy = []
 # Estado previo al ocultar (Fase 3): por fuente oculta, {"muted": bool,
 # "monitor": str} tal como estaba antes de ocultarla. Vive en memoria y
 # se persiste en config_interfaz.json ("fuentes_ocultas_previo") para

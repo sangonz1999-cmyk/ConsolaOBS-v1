@@ -559,7 +559,7 @@ además van primeras con su criterio de orden y viven en las permitidas.
 
 <a id="sec-9b"></a>
 ## 9b. ESCENAS PERMITIDAS (lista blanca) + OCULTAR FUENTE
-`escenas_permitidas` (set, persistido en `config_interfaz.json`): sólo ahí pueden existir Efectos/Música/favoritas. Vacío = cerrado por defecto (lo no tildado no se toca ni al aire).
+`escenas_permitidas` (dict `{coleccion: [escenas]}`, persistido en `config_interfaz.json`): sólo ahí pueden existir Efectos/Música/favoritas. Es POR COLECCIÓN porque los nombres se repiten entre colecciones y entre PCs (un set global tildaría homónimas sin configurar). Vacío = cerrado por defecto (lo no tildado no se toca ni al aire). El formato viejo (lista plana) se migra solo a la colección al aire en el primer refresco.
 
 - Internas: `asegurar_interna_en_escena_actual` (input + ítem sólo en la escena al aire si está permitida) se llama al conectar/refrescar, al cambiar de escena (hilo aparte en `_refrescar_membresia_escena`) y justo antes de disparar un efecto (`reproduccion.py`) o un tema (`musica.py`). Con escena no permitida al aire: el efecto sale sólo por parlantes, la música no se inyecta (no es error).
 - Diálogo ✅ (checklist desde `get_scene_list`, casilleros propios con `menu_check_on/off.svg`): al tildar se arma todo ahí (`asegurar_todo_en_escena`); al destildar no se borra nada. 🧹 (`quitar_internas_de_otras_escenas`) limpia las demás dejando sólo la del aire.

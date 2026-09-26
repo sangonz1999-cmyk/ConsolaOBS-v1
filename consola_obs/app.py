@@ -175,10 +175,18 @@ def main():
     else:
         E.fuentes_ocultas = set()
     _permitidas = E.config_interfaz_previa.get("escenas_permitidas", [])
-    if isinstance(_permitidas, list):
-        E.escenas_permitidas = set(n for n in _permitidas if isinstance(n, str))
+    if isinstance(_permitidas, dict):
+        E.escenas_permitidas = {
+            str(col): set(n for n in val if isinstance(n, str))
+            for col, val in _permitidas.items() if isinstance(val, list)}
+        E._permitidas_legacy = []
+    elif isinstance(_permitidas, list):
+        # Formato viejo (sin colección): se migra solo al conectar.
+        E.escenas_permitidas = {}
+        E._permitidas_legacy = [n for n in _permitidas if isinstance(n, str)]
     else:
-        E.escenas_permitidas = set()
+        E.escenas_permitidas = {}
+        E._permitidas_legacy = []
     _previo_guardado = E.config_interfaz_previa.get("fuentes_ocultas_previo", {})
     if isinstance(_previo_guardado, dict):
         E._estado_previo_oculta = {
