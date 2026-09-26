@@ -244,8 +244,10 @@ def lanzar_updater_y_cerrar(info, ruta_zip):
         if reinicio:
             args += ["--restart", reinicio]
         _log_sync("UPDATE", f"lanzo updater v{info.get('version')} y cierro.")
+        # Consola PROPIA a propósito (no heredada ni suprimida): es la
+        # ventana de progreso del updater, no un parpadeo.
         subprocess.Popen(args, cwd=R.CARPETA_SCRIPT,
-                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+                         creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
     except Exception as e:
         messagebox.showerror("Actualización", f"No se pudo lanzar el updater: {e}")
         return

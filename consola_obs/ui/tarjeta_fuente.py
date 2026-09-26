@@ -1435,12 +1435,17 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             return
         try:
             db = float(valor)
+            # En oculta la fila de dB muestra el ojo, no el texto: el
+            # fader se sigue aplicando, sólo no se reescribe la etiqueta.
+            oculta_ahora = bool(E.fuentes.get(nombre, {}).get("oculta", False))
             if db <= E.UMBRAL_SILENCIO:
                 E.cliente_obs.set_input_volume(nombre, vol_mul=0)
-                etiqueta_db.config(text="SILENCIO", fg=col_db_silencio)
+                if not oculta_ahora:
+                    etiqueta_db.config(text="SILENCIO", fg=col_db_silencio)
             else:
                 E.cliente_obs.set_input_volume(nombre, vol_db=db)
-                etiqueta_db.config(text=f"{db:.1f} dB", fg=col_db_activo)
+                if not oculta_ahora:
+                    etiqueta_db.config(text=f"{db:.1f} dB", fg=col_db_activo)
             if nombre == C.NOMBRE_FUENTE_EFECTOS:
                 # El fader movido a mano es el nivel base al que vuelve
                 # cada fundido (import lazy: audio importa UI).
@@ -1727,24 +1732,41 @@ def _actualizar_estado_gris(nombre):
     else:
         widgets["fila_meta"].config(bg=(E.color_acento() if E.es_moderna() else color_meta))
 
-    # Insignia de oculta: visible sólo en ocultas, con el fondo del
-    # cuerpo para que no deje recuadro.
+    # Insignia de oculta: mientras está, los dB se esconden y el ojo
+    # va CENTRADO en su fila (antes quedaba superpuesto al texto,
+    # ilegible). Al desocultar vuelve el texto del fader.
     try:
         insignia = widgets.get("insignia_oculta")
         if insignia is not None:
             if oculta:
                 try:
+                    widgets["db"].config(text="")
+                except Exception:
+                    pass
+                try:
                     insignia.config(bg=color_cuerpo)
                 except Exception:
                     pass
-                insignia.place(in_=widgets["db"], relx=1.0, rely=0.5,
-                               anchor="e", x=-5)
+                insignia.place(in_=widgets["db"], relx=0.5, rely=0.5,
+                               anchor="center")
                 try:
                     insignia.lift()
                 except Exception:
                     pass
             else:
                 insignia.place_forget()
+                try:
+                    vol = float(widgets["fader"].get())
+                except Exception:
+                    vol = -60.0
+                if vol <= E.UMBRAL_SILENCIO:
+                    widgets["db"].config(
+                        text="SILENCIO",
+                        fg=C.MOD_APAGADO if E.es_moderna() else "#828da6")
+                else:
+                    widgets["db"].config(
+                        text=f"{vol:.1f} dB",
+                        fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
     except Exception:
         pass
 
@@ -2021,10 +2043,13 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     widgets = E.fuentes[nombre]
 
     widgets["fader"].set(vol_db)
-    if vol_db <= E.UMBRAL_SILENCIO:
-        widgets["db"].config(text="SILENCIO", fg=C.MOD_APAGADO if E.es_moderna() else "#828da6")
-    else:
-        widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
+    # En oculta la fila muestra el ojo (ver _actualizar_estado_gris):
+    # no se pisa con texto.
+    if not widgets.get("oculta"):
+        if vol_db <= E.UMBRAL_SILENCIO:
+            widgets["db"].config(text="SILENCIO", fg=C.MOD_APAGADO if E.es_moderna() else "#828da6")
+        else:
+            widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
 
     widgets["muted"] = muted
     mod_ui_dibujo._actualizar_boton_circular(

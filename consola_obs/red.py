@@ -20,6 +20,21 @@ import sys
 _ES_WINDOWS = sys.platform.startswith("win")
 
 
+def _kwargs_sin_ventana():
+    """En el .exe (--windowed, sin consola) cada subprocess abriría una
+    ventana de terminal visible que parpadea y se cierra sola (se nota
+    al arrancar, por el chequeo de firewall del sync). Se suprime acá:
+    en ventana propia no cambia nada."""
+    try:
+        if _ES_WINDOWS:
+            info = subprocess.STARTUPINFO()
+            info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            return {"startupinfo": info}
+    except Exception:
+        pass
+    return {}
+
+
 def log_conexion(paso, detalle=""):
     """Log de conexión: terminal + archivo config/conexion.log.
 
@@ -126,6 +141,7 @@ def regla_firewall_existe(puerto):
         r = subprocess.run(
             ["netsh", "advfirewall", "firewall", "show", "rule", f"name={nombre}"],
             capture_output=True, text=True, timeout=10,
+            **_kwargs_sin_ventana(),
         )
         salida = (r.stdout or "") + (r.stderr or "")
         # Cuando no existe dice "No rules match / No hay reglas".
@@ -164,6 +180,7 @@ def asegurar_regla_firewall(puerto):
                 "profile=private,domain", "description=Permitir ConsolaOBS a OBS WebSocket",
             ],
             capture_output=True, text=True, timeout=15,
+            **_kwargs_sin_ventana(),
         )
         salida = ((r.stdout or "") + " " + (r.stderr or "")).strip()
         if r.returncode == 0:

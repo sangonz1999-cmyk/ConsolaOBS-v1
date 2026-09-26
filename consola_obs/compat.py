@@ -11,8 +11,17 @@ except ImportError:
     try:
         import subprocess
         import sys as _sys
+        _kwargs = {}
+        try:
+            if _sys.platform.startswith("win"):
+                _info = subprocess.STARTUPINFO()
+                _info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                _kwargs = {"startupinfo": _info}
+        except Exception:
+            pass
         subprocess.check_call(
-            [_sys.executable, "-m", "pip", "install", "--quiet", "Pillow"]
+            [_sys.executable, "-m", "pip", "install", "--quiet", "Pillow"],
+            **_kwargs,
         )
         from PIL import Image, ImageDraw, ImageOps, ImageTk, ImageFile, ImageFilter, ImageChops
         HAY_PILLOW = True

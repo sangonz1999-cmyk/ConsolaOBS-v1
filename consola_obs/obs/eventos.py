@@ -272,6 +272,10 @@ def _sincronizar_volumen_remoto(nombre, vol_db):
             mod_audio_reproduccion.nota_volumen_usuario(vol_db)
         except Exception:
             pass
+    # En oculta la fila muestra el ojo, no el texto: no se reescribe
+    # la etiqueta.
+    if widgets.get("oculta"):
+        return
     if vol_db <= E.UMBRAL_SILENCIO:
         widgets["db"].config(text="SILENCIO", fg="#828da6")
     else:
