@@ -955,6 +955,23 @@ def _imagen_svg_menu(nombre_archivo, lado):
         return None
 
 
+def _imagen_vacia(lado=16):
+    """Imagen transparente de `lado` px para filas de menú SIN icono
+    propio: el texto queda alineado verticalmente con las filas que sí
+    tienen icono (sin esto, Tk pega el texto al borde y se desalinean).
+    Cacheada. None sin Tk."""
+    lado = max(8, int(lado))
+    clave = ("vacia", lado)
+    if clave in _cache_svg:
+        return _cache_svg[clave]
+    try:
+        foto = tk.PhotoImage(width=lado, height=lado)
+        _cache_svg[clave] = foto
+        return foto
+    except Exception:
+        return None
+
+
 def _imagen_monitor_svg(tam_px, color_cuadrado):
     """Auricular SVG original sobre su cuadrado de estado (azul/verde);
     apagado usa mixer-headphones-off.svg tal cual (ya trae su X y su diadema

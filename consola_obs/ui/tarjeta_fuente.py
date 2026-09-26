@@ -848,26 +848,39 @@ def _abrir_menu_orden_fuentes(event=None):
         return
 
     def _check(texto, marcada, accion):
+        real = None
         try:
-            foto = _icono_check_menu(marcada)
+            real = _icono_check_menu(marcada)
         except Exception:
-            foto = None
+            pass
+        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
         try:
             if foto is None:
                 menu.add_command(
                     label=("☑ " if marcada else "☐ ") + texto, command=accion)
             else:
                 menu._imagenes.append(foto)
-                menu.add_command(label=texto, image=foto, compound="left",
-                                 command=accion)
+                menu.add_command(
+                    label=texto if real is not None else ("☑ " if marcada else "☐ ") + texto,
+                    image=foto, compound="left", command=accion)
         except Exception:
             pass
 
     for texto, marcada, accion in checks:
         _check(texto, marcada, accion)
     try:
-        menu.add_command(label="↩ Orden manual",
-                         command=limpiar_criterios_orden_fuentes)
+        foto_manual = mod_ui_dibujo._imagen_vacia(16)
+    except Exception:
+        foto_manual = None
+    try:
+        if foto_manual is None:
+            menu.add_command(label="↩ Orden manual",
+                             command=limpiar_criterios_orden_fuentes)
+        else:
+            menu._imagenes.append(foto_manual)
+            menu.add_command(label="↩ Orden manual", image=foto_manual,
+                             compound="left",
+                             command=limpiar_criterios_orden_fuentes)
     except Exception:
         pass
     try:
@@ -1816,15 +1829,20 @@ def _abrir_menu_contextual_panel_fuentes(event):
     menu._imagenes = []
 
     def _cmd(svg, texto, texto_respaldo, comando):
+        # Toda fila lleva imagen (real o transparente): así el texto
+        # arranca siempre en la misma x y queda alineado verticalmente.
+        real = None
         try:
-            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
+            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
-            foto = None
+            pass
+        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
         if foto is None:
             menu.add_command(label=texto_respaldo, command=comando)
         else:
             menu._imagenes.append(foto)
-            menu.add_command(label=texto, image=foto, compound="left", command=comando)
+            menu.add_command(label=texto if real is not None else texto_respaldo,
+                             image=foto, compound="left", command=comando)
 
     if not E.conectado:
         menu.add_command(label="Conectate a OBS para agregar fuentes", state="disabled")
@@ -1854,11 +1872,34 @@ def _abrir_menu_contextual_panel_fuentes(event):
                         )
                     )
             submenu_tipos.add_separator()
-        submenu_tipos.add_command(
-            label="⋯  Otros tipos de fuente…",
-            command=mod_audio_fuentes.abrir_selector_nueva_fuente
-        )
-        menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
+        try:
+            foto_etc = mod_ui_dibujo._imagen_vacia(16)
+        except Exception:
+            foto_etc = None
+        if foto_etc is None:
+            submenu_tipos.add_command(
+                label="⋯  Otros tipos de fuente…",
+                command=mod_audio_fuentes.abrir_selector_nueva_fuente
+            )
+        else:
+            submenu_tipos._imagenes.append(foto_etc)
+            submenu_tipos.add_command(
+                label="⋯  Otros tipos de fuente…", image=foto_etc, compound="left",
+                command=mod_audio_fuentes.abrir_selector_nueva_fuente
+            )
+        real_agregar = None
+        try:
+            real_agregar = mod_ui_dibujo._imagen_svg_menu("menu/menu_agregar.svg", 16)
+        except Exception:
+            pass
+        foto_agregar = real_agregar if real_agregar is not None else mod_ui_dibujo._imagen_vacia(16)
+        if foto_agregar is None:
+            menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
+        else:
+            menu._imagenes.append(foto_agregar)
+            menu.add_cascade(
+                label="Agregar fuente" if real_agregar is not None else "➕  Agregar fuente",
+                image=foto_agregar, compound="left", menu=submenu_tipos)
         menu.add_separator()
         _cmd("menu/menu_actualizar.svg", "Actualizar fuentes",
              "↻  Actualizar fuentes", actualizar)
@@ -1889,26 +1930,32 @@ def _abrir_menu_contextual_fuente(nombre, event):
     menu._imagenes = []
 
     def _item(svg, texto, texto_respaldo, comando):
+        real = None
         try:
-            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
+            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
-            foto = None
+            pass
+        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
         if foto is None:
             menu.add_command(label=texto_respaldo, command=comando)
         else:
             menu._imagenes.append(foto)
-            menu.add_command(label=texto, image=foto, compound="left", command=comando)
+            menu.add_command(label=texto if real is not None else texto_respaldo,
+                             image=foto, compound="left", command=comando)
 
     def _cascada(svg, texto, texto_respaldo, submenu):
+        real = None
         try:
-            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
+            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
         except Exception:
-            foto = None
+            pass
+        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
         if foto is None:
             menu.add_cascade(label=texto_respaldo, menu=submenu)
         else:
             menu._imagenes.append(foto)
-            menu.add_cascade(label=texto, image=foto, compound="left", menu=submenu)
+            menu.add_cascade(label=texto if real is not None else texto_respaldo,
+                             image=foto, compound="left", menu=submenu)
 
     _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
           lambda: _iniciar_renombrar_fuente(nombre))
