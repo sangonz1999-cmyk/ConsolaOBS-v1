@@ -730,6 +730,15 @@ def main():
         lambda e: mod_audio_reproduccion.cambiar_nivelar_efectos(E.variable_nivelar.get())
     )
 
+    # Sincronización bidireccional de assets con la otra PC (módulo
+    # aislado consola_obs/sync: no toca la lógica actual). Si algo
+    # falla acá, el resto del menú se arma igual.
+    try:
+        from consola_obs.sync import ui as mod_sync_ui
+        mod_sync_ui.construir_seccion_sync()
+    except Exception as e:
+        print(f"Sync: no se pudo armar la sección de sincronización: {e}")
+
     tk.Frame(E.barra, bg=C.COLOR_MENU_FONDO, height=14).pack(fill="x")
 
 
@@ -753,6 +762,13 @@ def main():
     mod_ui_medidores.actualizar_vu_meters_ui()
     mod_obs_eventos._programar_refresco_ganancia()
     mod_audio_reproduccion._programar_refresco_reproduccion()
+    # Servidor de sync para la otra PC (hilo daemon; si FastAPI no
+    # está, avisa y sigue sin servidor).
+    try:
+        from consola_obs.sync import ui as mod_sync_ui
+        mod_sync_ui.iniciar_servidor()
+    except Exception as e:
+        print(f"Sync: no se pudo iniciar el servidor: {e}")
     E.ventana.after(500, mod_ui_soundboard._refrescar_barra_progreso)
     if not P._ES_WINDOWS:
         # Foto inicial de la interfaz recién armada (sólo hace falta en el

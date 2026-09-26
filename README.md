@@ -94,6 +94,14 @@ Música de fondo para el directo, controlada toda desde el programa (OBS solo ej
 - El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
 - Si el OBS está en otra PC: ver "Guía de conexión" más arriba (copiar los mp3 allá + Carpeta OBS una vez).
 
+## Sincronización de assets entre las 2 PCs (sin USB ni releases)
+
+En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el programa trae un sync bidireccional (módulo `consola_obs/sync/`): compara por nombre + tamaño + mtime + sha256, copia lo faltante en ambas direcciones, propaga borrados y en conflictos gana el archivo más nuevo.
+
+- Una sola vez por PC: en Ajustes → SINCRONIZACIÓN poné la IP de la **otra** PC (puerto `4456`), y la **misma** API key en las dos (botón 🔑 VER CLAVE para verla; o variable `CONSOLAOBS_SYNC_KEY`). Botón 🛡 FIREWALL (como admin) para abrir el puerto.
+- Uso: botón 🔄 SINCRONIZAR (abre el registro de lo copiado/borrado). El servidor de cada PC arranca solo con el programa.
+- Requiere `pip install -r requirements.txt` (agrega `fastapi` + `uvicorn`) y estar en la misma red.
+
 ## Instalar Git y clonar el repo (Windows)
 
 1. Descargá Git de https://git-scm.com/download/win e instalalo con las opciones por defecto.
