@@ -174,11 +174,11 @@ def main():
         E.fuentes_ocultas = set(n for n in _ocultas_guardadas if isinstance(n, str))
     else:
         E.fuentes_ocultas = set()
-    _protegidas = E.config_interfaz_previa.get("escenas_protegidas", [])
-    if isinstance(_protegidas, list):
-        E.escenas_protegidas = set(n for n in _protegidas if isinstance(n, str))
+    _permitidas = E.config_interfaz_previa.get("escenas_permitidas", [])
+    if isinstance(_permitidas, list):
+        E.escenas_permitidas = set(n for n in _permitidas if isinstance(n, str))
     else:
-        E.escenas_protegidas = set()
+        E.escenas_permitidas = set()
     _previo_guardado = E.config_interfaz_previa.get("fuentes_ocultas_previo", {})
     if isinstance(_previo_guardado, dict):
         E._estado_previo_oculta = {

@@ -1830,8 +1830,8 @@ def _abrir_menu_contextual_panel_fuentes(event):
         menu.add_separator()
         menu.add_command(label="🧹  Quitar Efectos/Música de otras escenas…",
                          command=_quitar_internas_de_otras_escenas)
-        menu.add_command(label="🛡  Escenas protegidas…",
-                         command=_abrir_protegidas)
+        menu.add_command(label="✅  Escenas permitidas…",
+                         command=_abrir_permitidas)
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
@@ -2478,24 +2478,24 @@ def _quitar_internas_en_hilo():
     E.ventana.after(0, _avisar)
 
 
-def _guardar_protegidas():
+def _guardar_permitidas():
     try:
         mod_configuracion.guardar_config_interfaz(
-            {"escenas_protegidas": sorted(getattr(E, "escenas_protegidas", set()) or set())})
+            {"escenas_permitidas": sorted(getattr(E, "escenas_permitidas", set()) or set())})
     except Exception:
         pass
 
 
-def _abrir_protegidas():
-    """Abre el diálogo de escenas protegidas (las que el programa no
-    toca nunca, ni siquiera al aire). Lee la lista de OBS en hilo."""
+def _abrir_permitidas():
+    """Abre el diálogo de escenas permitidas (lista blanca: sólo ahí
+    pueden estar Efectos/Música). Lee la lista de OBS en hilo."""
     if not E.conectado:
         messagebox.showwarning("Sin conexión", "Conectate a OBS para ver las escenas.")
         return
-    threading.Thread(target=_cargar_protegidas_en_hilo, daemon=True).start()
+    threading.Thread(target=_cargar_permitidas_en_hilo, daemon=True).start()
 
 
-def _cargar_protegidas_en_hilo():
+def _cargar_permitidas_en_hilo():
     try:
         escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName")
                    for e in E.cliente_obs.get_scene_list().scenes]
@@ -2504,39 +2504,40 @@ def _cargar_protegidas_en_hilo():
         E.ventana.after(0, lambda e=e: messagebox.showerror(
             "Error", f"No se pudieron listar las escenas.\n\n{e}"))
         return
-    E.ventana.after(0, lambda: _mostrar_dialogo_protegidas(escenas))
+    E.ventana.after(0, lambda: _mostrar_dialogo_permitidas(escenas))
 
 
-def _alternar_protegida(nombre, var):
+def _alternar_permitida(nombre, var):
     try:
-        if not isinstance(getattr(E, "escenas_protegidas", None), set):
-            E.escenas_protegidas = set()
+        if not isinstance(getattr(E, "escenas_permitidas", None), set):
+            E.escenas_permitidas = set()
         if var.get():
-            E.escenas_protegidas.add(nombre)
+            E.escenas_permitidas.add(nombre)
         else:
-            E.escenas_protegidas.discard(nombre)
-        _guardar_protegidas()
+            E.escenas_permitidas.discard(nombre)
+        _guardar_permitidas()
     except Exception:
         pass
 
 
-def _mostrar_dialogo_protegidas(escenas):
-    """Checklist de escenas: las tildadas no se tocan nunca (ni
-    Efectos ni Música, ni siquiera al aire: ahí el efecto sale sólo
-    por parlantes y la música no se inyecta). Si renombrás una escena,
-    volvé a marcarla."""
+def _mostrar_dialogo_permitidas(escenas):
+    """Checklist de escenas (lista blanca): SÓLO en las tildadas pueden
+    estar Efectos/Música. En las demás no se crea nada nunca, ni
+    siquiera al aire (ahí el efecto sale sólo por parlantes y la música
+    no se inyecta). Lo no tildado está a salvo por defecto. Si
+    renombrás una escena, volvé a tildarla."""
     try:
         win = tk.Toplevel(E.ventana)
     except Exception:
         return
-    win.title("Escenas protegidas")
+    win.title("Escenas permitidas")
     win.configure(bg=C.COLOR_MENU_FONDO)
     try:
         win.attributes("-topmost", True)
     except Exception:
         pass
     tk.Label(
-        win, text="El programa NO crea nada en estas escenas,\nni siquiera al aire:",
+        win, text="SÓLO en estas escenas pueden estar\nEfectos y Música:",
         bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
         font=(E.FUENTE_UI, 9), justify="left",
     ).pack(anchor="w", padx=14, pady=(12, 6))
@@ -2548,13 +2549,13 @@ def _mostrar_dialogo_protegidas(escenas):
                  font=(E.FUENTE_UI, 9)).pack(anchor="w")
     for escena in escenas:
         try:
-            var = tk.BooleanVar(value=escena in (getattr(E, "escenas_protegidas", None) or set()))
+            var = tk.BooleanVar(value=escena in (getattr(E, "escenas_permitidas", None) or set()))
             cb = tk.Checkbutton(
                 marco, text=escena, variable=var, anchor="w",
                 bg=C.COLOR_MENU_FONDO, fg="white", selectcolor="#242d3d",
                 activebackground=C.COLOR_MENU_FONDO, activeforeground="white",
                 font=(E.FUENTE_UI, 10),
-                command=lambda n=escena, v=var: _alternar_protegida(n, v))
+                command=lambda n=escena, v=var: _alternar_permitida(n, v))
             cb.pack(anchor="w", fill="x")
         except Exception:
             continue

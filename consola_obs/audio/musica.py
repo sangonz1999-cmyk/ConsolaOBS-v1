@@ -470,12 +470,13 @@ def _hacer_reproducir(rel, token):
             return False
     except Exception:
         pass
-    # Escena al aire protegida: la música (sólo-stream por diseño, sin
-    # salida local) no se inyecta ahí. No es un error: es la protección.
+    # Escena al aire NO permitida: la música (sólo-stream por diseño,
+    # sin salida local) no se inyecta ahí. No es un error: es la lista
+    # blanca (tildá la escena en Escenas permitidas si tiene que sonar).
     try:
         from consola_obs.obs import cliente as mod_obs_cliente
-        if mod_obs_cliente.programa_actual_protegido():
-            print("Escena al aire protegida: la música no se inyecta ahí.")
+        if not mod_obs_cliente.programa_actual_permitido():
+            print("Escena al aire no permitida: la música no se inyecta ahí.")
             return False
     except Exception:
         pass

@@ -563,21 +563,22 @@ def _nombre_programa_actual():
         return ""
 
 
-def _escena_protegida(nombre_escena):
-    """True si la escena está en la lista de protegidas (nunca se toca).
-    Pura respecto a red (lee sólo memoria). Nunca lanza."""
+def _escena_permitida(nombre_escena):
+    """True si la escena está tildada en la lista blanca (sólo ahí
+    pueden estar Efectos/Música). Lista vacía = ninguna (cierra por
+    defecto). Pura respecto a red (lee sólo memoria). Nunca lanza."""
     try:
         return bool(nombre_escena) and nombre_escena in (
-            getattr(E, "escenas_protegidas", None) or set())
+            getattr(E, "escenas_permitidas", None) or set())
     except Exception:
         return False
 
 
-def programa_actual_protegido():
-    """True si la escena que está al aire AHORA está protegida (lectura
+def programa_actual_permitido():
+    """True si la escena que está al aire AHORA está permitida (lectura
     en vivo: sólo para hilos, nunca desde el hilo de UI)."""
     try:
-        return _escena_protegida(_nombre_programa_actual())
+        return _escena_permitida(_nombre_programa_actual())
     except Exception:
         return False
 
@@ -586,12 +587,13 @@ def _asegurar_item_en_escena(nombre_fuente, escena):
     """Asegura el ÍTEM de una fuente (que ya existe como input) en UNA
     escena puntual: si falta se agrega activado; si está deshabilitado
     ('ojito' apagado) se habilita. No crea inputs ni toca ninguna otra
-    escena. Las protegidas no se tocan nunca (devuelve False).
-    Serializada con _lock_sincronizar_escenas para no duplicar el ítem
-    si dos hilos la piden a la vez. Devuelve True si quedó bien."""
+    escena. Sólo en escenas permitidas (en las demás devuelve False sin
+    tocar nada). Serializada con _lock_sincronizar_escenas para no
+    duplicar el ítem si dos hilos la piden a la vez. Devuelve True si
+    quedó bien."""
     if not E.conectado or not escena or not nombre_fuente:
         return False
-    if _escena_protegida(escena):
+    if not _escena_permitida(escena):
         return False
     with E._lock_sincronizar_escenas:
         try:
@@ -623,14 +625,14 @@ def _asegurar_item_en_escena(nombre_fuente, escena):
 def asegurar_interna_en_escena_actual(nombre_fuente, kind, ajustes):
     """Asegura una fuente INTERNA (Efectos/Música) en la escena que está
     al aire AHORA: si el input no existe se crea ahí; si existe pero le
-    falta el ítem, se agrega activado. NUNCA toca otras escenas: las de
-    cámaras o capturas quedan intactas. Si la escena al aire está
-    protegida no se hace nada (devuelve False). Devuelve True si quedó
-    bien."""
+    falta el ítem, se agrega activado. NUNCA toca otras escenas, y sólo
+    si la del aire está permitida (si no, no se hace nada y devuelve
+    False: lo no tildado no se toca por más que esté al aire). Devuelve
+    True si quedó bien."""
     if not E.conectado:
         return False
     escena = _nombre_programa_actual()
-    if not escena or _escena_protegida(escena):
+    if not escena or not _escena_permitida(escena):
         return False
     with E._lock_sincronizar_escenas:
         try:

@@ -405,14 +405,14 @@ def _cargar_y_disparar(indice, accion, token):
 
     try:
         from consola_obs.obs import cliente as mod_obs_cliente
-        programa_protegido = mod_obs_cliente.programa_actual_protegido()
+        programa_permitido = mod_obs_cliente.programa_actual_permitido()
     except Exception:
-        programa_protegido = False
-    if programa_protegido:
-        # Escena al aire protegida (cámaras, capturas): el efecto sale
-        # sólo por los parlantes (hilo local ya lanzado, el pad se apaga
-        # solo al terminar) y OBS no se toca en absoluto.
-        print("Escena al aire protegida: efecto sólo local, sin tocar OBS.")
+        programa_permitido = False
+    if not programa_permitido:
+        # Escena al aire NO permitida: el efecto sale sólo por los
+        # parlantes (hilo local ya lanzado, el pad se apaga solo al
+        # terminar) y OBS no se toca en absoluto.
+        print("Escena al aire no permitida: efecto sólo local, sin tocar OBS.")
         return
 
     try:
