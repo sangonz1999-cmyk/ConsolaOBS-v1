@@ -269,16 +269,14 @@ def _contexto_orden():
 
 
 def _grupo_primero(nombre, ctx):
-    """Nivel del criterio que MANDA para 'nombre' (0 = grupo de arriba).
-    La escena manda siempre que está prendida (los demás criterios
-    ordenan adentro, pero el corte es el suyo); si no, manda el primero.
-    None si no hay criterio o el que manda no agrupa (el alfabético
-    ordena todo parejo: ahí no hay divisor)."""
+    """Nivel del PRIMER criterio activo para 'nombre' (0 = grupo de
+    arriba). None si no hay criterio o el primero no agrupa (el
+    alfabético ordena todo parejo: ahí no hay divisor)."""
     try:
         criterios = ctx.get("criterios") or []
         if not criterios:
             return None
-        c0 = "escena" if "escena" in criterios else criterios[0]
+        c0 = criterios[0]
         if c0 == "filtros":
             return 0 if nombre in ctx.get("con_filtros", set()) else 1
         if c0 == "favoritos":
@@ -300,25 +298,35 @@ def _grupo_primero(nombre, ctx):
 
 
 def _corte_grupo(orden):
-    """Tamaño del grupo de arriba según el primer criterio activo (0 =
-    sin divisor: sin criterio, primero que no agrupa, o no parte en
-    dos grupos no vacíos). Nunca lanza."""
+    """Dónde va la línea (0 = sin divisor). Si la escena está prendida,
+    la línea es SIEMPRE la suya: tras la ÚLTIMA fuente al aire (debajo
+    no hay ninguna al aire), sin importar los demás criterios, que sólo
+    ordenan. Si no, corta tras el grupo de arriba del primer criterio.
+    Nunca lanza."""
     try:
         ctx = _contexto_orden()
+        criterios = ctx.get("criterios") or []
         lista = list(orden or [])
-        if not lista:
+        if not criterios or not lista:
             return 0
-        if _grupo_primero(lista[0], ctx) != 0:
+        if "escena" in criterios:
+            ultimo = -1
+            for i, nombre in enumerate(lista):
+                if nombre in ctx.get("pos_escena", {}):
+                    ultimo = i
+            corte = ultimo + 1
+        else:
+            if _grupo_primero(lista[0], ctx) != 0:
+                return 0
+            corte = 0
+            for nombre in lista:
+                if _grupo_primero(nombre, ctx) == 0:
+                    corte += 1
+                else:
+                    break
+        if corte <= 0 or corte >= len(lista):
             return 0
-        n = 0
-        for nombre in lista:
-            if _grupo_primero(nombre, ctx) == 0:
-                n += 1
-            else:
-                break
-        if n <= 0 or n >= len(lista):
-            return 0
-        return n
+        return corte
     except Exception:
         return 0
 
@@ -483,15 +491,6 @@ def orden_visible_fuentes():
 
         def _clave(n):
             clave = []
-            if "escena" in criterios:
-                # La escena MANDA sobre el resto cuando está prendida:
-                # el bloque al aire siempre abre, con su orden OBS
-                # (posición en escena; resto al fondo, estable = manual).
-                # Tupla de 2 para comparar parejo.
-                if n in pos_escena:
-                    clave.append((0, pos_escena[n]))
-                else:
-                    clave.append((1, 0))
             if "filtros" in criterios:
                 clave.append(0 if n in con_filtros else 1)
             if "favoritos" in criterios:
@@ -508,6 +507,15 @@ def orden_visible_fuentes():
                     clave.append(1)
             if "activas" in criterios:
                 clave.append(0 if _fuente_activa(n) else 1)
+            if "escena" in criterios:
+                # Orden del OBS (posición en escena; resto al fondo,
+                # estable = manual). Tupla de 2 para comparar parejo.
+                # OJO: la escena NO domina el orden (eso lo deciden todos
+                # los criterios juntos); sólo pone la línea divisoria.
+                if n in pos_escena:
+                    clave.append((0, pos_escena[n]))
+                else:
+                    clave.append((1, 0))
             if "alfabetico" in criterios:
                 clave.append(_nombre_mostrado_fuente(n).lower())
             return tuple(clave)
