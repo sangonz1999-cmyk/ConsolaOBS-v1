@@ -277,9 +277,24 @@ def mostrar_pestana_ajustes(nombre):
 
 def abrir_ajustes(pestana="Conexión"):
     """Abre la ventana de Ajustes en la pestaña pedida (por defecto
-    Conexión, que oficia de general)."""
+    Conexión, que oficia de general), centrada sobre la principal (no en
+    la esquina como la deja el sistema)."""
     try:
         mostrar_pestana_ajustes(pestana)
+        try:
+            E.ventana.update_idletasks()
+            E.ventana_ajustes.update_idletasks()
+            ancho = max(E.ventana_ajustes.winfo_width(),
+                        E.ventana_ajustes.winfo_reqwidth())
+            alto = max(E.ventana_ajustes.winfo_height(),
+                       E.ventana_ajustes.winfo_reqheight())
+            x = E.ventana.winfo_rootx() + (E.ventana.winfo_width() - ancho) // 2
+            y = E.ventana.winfo_rooty() + (E.ventana.winfo_height() - alto) // 2
+            x = max(0, min(x, E.ventana.winfo_screenwidth() - ancho))
+            y = max(0, min(y, E.ventana.winfo_screenheight() - alto))
+            E.ventana_ajustes.geometry(f"+{int(x)}+{int(y)}")
+        except Exception:
+            pass
         E.ventana_ajustes.deiconify()
         E.ventana_ajustes.lift()
         try:
