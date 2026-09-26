@@ -269,14 +269,16 @@ def _contexto_orden():
 
 
 def _grupo_primero(nombre, ctx):
-    """Nivel del PRIMER criterio activo para 'nombre' (0 = grupo de
-    arriba). None si no hay criterio o el primero no agrupa (el
-    alfabético ordena todo parejo: ahí no hay divisor)."""
+    """Nivel del criterio que MANDA para 'nombre' (0 = grupo de arriba).
+    La escena manda siempre que está prendida (los demás criterios
+    ordenan adentro, pero el corte es el suyo); si no, manda el primero.
+    None si no hay criterio o el que manda no agrupa (el alfabético
+    ordena todo parejo: ahí no hay divisor)."""
     try:
         criterios = ctx.get("criterios") or []
         if not criterios:
             return None
-        c0 = criterios[0]
+        c0 = "escena" if "escena" in criterios else criterios[0]
         if c0 == "filtros":
             return 0 if nombre in ctx.get("con_filtros", set()) else 1
         if c0 == "favoritos":
@@ -481,6 +483,15 @@ def orden_visible_fuentes():
 
         def _clave(n):
             clave = []
+            if "escena" in criterios:
+                # La escena MANDA sobre el resto cuando está prendida:
+                # el bloque al aire siempre abre, con su orden OBS
+                # (posición en escena; resto al fondo, estable = manual).
+                # Tupla de 2 para comparar parejo.
+                if n in pos_escena:
+                    clave.append((0, pos_escena[n]))
+                else:
+                    clave.append((1, 0))
             if "filtros" in criterios:
                 clave.append(0 if n in con_filtros else 1)
             if "favoritos" in criterios:
@@ -497,13 +508,6 @@ def orden_visible_fuentes():
                     clave.append(1)
             if "activas" in criterios:
                 clave.append(0 if _fuente_activa(n) else 1)
-            if "escena" in criterios:
-                # Orden del OBS (posición en escena; resto al fondo,
-                # estable = manual). Tupla de 2 para comparar parejo.
-                if n in pos_escena:
-                    clave.append((0, pos_escena[n]))
-                else:
-                    clave.append((1, 0))
             if "alfabetico" in criterios:
                 clave.append(_nombre_mostrado_fuente(n).lower())
             return tuple(clave)
@@ -1065,10 +1069,12 @@ def _obtener_separador_filtros():
                 pass
         sep = tk.Frame(E.panel_fuentes, bg=E.color_fondo_panel())
         etiqueta = tk.Label(
-            sep, text="↑ CON FILTROS", bg=E.color_fondo_panel(), fg="#8fa0bd",
+            sep, text="↑ GRUPO", bg=E.color_fondo_panel(), fg="#6b7385",
             font=(E.FUENTE_UI, 7, "bold"), bd=0, highlightthickness=0)
         etiqueta.pack(side="left", padx=(6, 8))
-        linea = tk.Frame(sep, bg=E.color_acento(), height=2)
+        # Gris oscuro a propósito: el divisor marca sin gritar (nada de
+        # acento brillante).
+        linea = tk.Frame(sep, bg="#394151", height=2)
         linea.pack(side="left", fill="x", expand=True, padx=(0, 6), pady=8)
         sep.etiqueta_divisor = etiqueta
         sep.linea_divisor = linea
@@ -1101,7 +1107,7 @@ def _acomodar_divisor_grupo(fila_divisor, columnas, texto="↑ GRUPO"):
         try:
             sep.config(bg=E.color_fondo_panel())
             sep.etiqueta_divisor.config(bg=E.color_fondo_panel(), text=texto)
-            sep.linea_divisor.config(bg=E.color_acento())
+            sep.linea_divisor.config(bg="#394151")
         except Exception:
             pass
         try:
@@ -1193,8 +1199,9 @@ def _reubicar_fuentes(forzar=False):
     corte = _corte_grupo(_presentes_clave)
     try:
         _criterios_clave = _criterios_orden_activos()
-        texto_divisor = ETIQUETA_DIVISOR.get(
-            _criterios_clave[0], "↑ GRUPO") if _criterios_clave else "↑ GRUPO"
+        _manda = "escena" if "escena" in _criterios_clave else (
+            _criterios_clave[0] if _criterios_clave else "")
+        texto_divisor = ETIQUETA_DIVISOR.get(_manda, "↑ GRUPO")
     except Exception:
         texto_divisor = "↑ GRUPO"
     clave_grilla = (columnas, ancho_celda, corte, texto_divisor, tuple(orden))
