@@ -425,11 +425,8 @@ def _fuente_activa(nombre):
                 return False
         except Exception:
             pass
-        try:
-            if nombre in (E.fuentes_principales or set()):
-                return True
-        except Exception:
-            pass
+        # Espejo del gris (ver _actualizar_estado_gris): la principal
+        # fuera de escena NO es activa, aunque tenga el borde.
         try:
             if not E.escena_actual_obtenida:
                 return True
@@ -1896,7 +1893,11 @@ def _actualizar_estado_gris(nombre):
     es_principal = nombre in E.fuentes_principales
     oculta = _es_oculta(nombre)
     muted = widgets.get("muted", False)
-    en_escena = es_principal or (not E.escena_actual_obtenida) or (nombre in E.escena_actual_nombres)
+    # OJO: la principal NO cuenta como en escena por serlo (antes sí,
+    # cuando se forzaban en todas): ahora sólo vive en las permitidas,
+    # así que vale lo que dice OBS. El resaltado de favorita sigue por
+    # el borde, no por el color.
+    en_escena = (not E.escena_actual_obtenida) or (nombre in E.escena_actual_nombres)
     widgets["en_escena"] = en_escena
     # Borde blanco = está ESTRUCTURALMENTE en la escena (aunque esté
     # apagada/muteada y se vea gris). Las principales conservan su acento.
