@@ -4,7 +4,13 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 
 ## Características
 
-- **Mixer en tiempo real**: faders en dB, medidores VU LED, mute, monitoreo, renombrado, colores, fuentes principales y drag & drop.
+- **Mixer en tiempo real**: faders en dB, medidores VU LED, mute, monitoreo, renombrado, colores, favoritas (★) y drag & drop.
+- **Orden de fuentes** (botón ☰): criterios combinables (favoritos, colores, activas, escena actual, alfabético) + orden manual con drag & drop, todo persistido.
+- **Ocultar fuente** (clic derecho): la mutea y apaga el monitoreo, va al fondo en casi negro con el medidor apagado e insignia 👁‍🗨; al mostrarla restaura todo.
+- **Escenas permitidas** (lista blanca): Efectos, Música y favoritas sólo existen en las escenas tildadas; las de cámaras/capturas no se tocan nunca. Con 🧹 se limpian las ya contaminadas.
+- **Sincronización entre PCs**: copia efectos, imágenes y música en ambas direcciones (ver abajo).
+- **Actualización automática**: avisa y descarga la release nueva desde GitHub, preservando tu config (ver abajo).
+- **Ajustes por pestañas**: Conexión, Apariencia, Audio, Sincronización y Actualización, cada una con su ayuda.
 - **Soundboard**: pads con sonido e imagen; clic reproduce, clic de nuevo detiene con fundido; menú contextual y drag & drop.
 - **Detección de carpetas**: los audios nuevos de `assets/Sondidos_pad/` se convierten solos en pads (entran primeros en la fila) con su imagen gemela de `assets/Imagenes_pad/`.
 - **Audio local**: cada efecto suena en OBS y a la vez en los parlantes de la PC (miniaudio), con on/off en Ajustes → Audio.
@@ -25,7 +31,7 @@ Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED
 
 En [Releases](https://github.com/sangonz1999-cmyk/ConsolaOBS-v1/releases) hay dos `.zip`. Hacen falta **los dos**, uno por PC:
 
-- **PC del sonidista (consola/laptop) → `ConsolaOBS-Consola.zip`**: el programa (`ConsolaOBS.exe`) + sonidos, imágenes, iconos y fuentes. Se descomprime y se abre el `.exe` con doble clic.
+- **PC del sonidista (consola/laptop) → `ConsolaOBS-Consola.zip`**: el programa (`ConsolaOBS.exe` + `updater.exe`) + sonidos, imágenes, iconos y fuentes. Se descomprime y se abre el `.exe` con doble clic. Las versiones nuevas llegan solas con la actualización automática.
 - **PC principal (la del OBS) → `ConsolaOBS-OBS.zip`**: solo los sonidos (`.mp3` de efectos y de música). Acá no se instala nada: solo OBS + esta carpeta.
 
 **Por qué los dos (regla de oro)**: cuando disparás un efecto, la consola le dice al OBS "reproducí `C:\...\X.mp3`" y el OBS lo busca **en su propio disco**. Si el archivo no está ahí, el stream queda en silencio (vos igual lo escuchás por los parlantes de la consola, pero eso es audio local y no va al stream). Por eso los sonidos tienen que quedar en la **misma ruta** en ambas PCs (ej: las dos en `C:\ConsolaOBS`).
@@ -34,7 +40,7 @@ Notas: Windows SmartScreen avisa por ser un `.exe` sin firma (Más información 
 
 ## Requisitos
 
-- Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`, `pymupdf`).
+- Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`, `pymupdf`, `fastapi`, `uvicorn`).
 - OBS Studio con el servidor WebSocket v5 activado (puerto 4455).
 
 ## Uso
@@ -46,7 +52,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Con doble clic en `compilar.bat` se genera `ConsolaOBS.exe` en la misma carpeta (con el icono de `assets/iconos/`).
+Con doble clic en `compilar.bat` se generan `ConsolaOBS.exe` y `updater.exe` en la misma carpeta (con el icono de `assets/iconos/`).
 
 ## Linux (y macOS)
 
@@ -94,6 +100,13 @@ Música de fondo para el directo, controlada toda desde el programa (OBS solo ej
 - El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
 - Si el OBS está en otra PC: ver "Guía de conexión" más arriba (copiar los mp3 allá + Carpeta OBS una vez).
 
+## Orden, ocultas y escenas permitidas
+
+- **Botón ☰** (barra de Fuentes): ordena por Favoritos, Con colores, Activas, Escena actual y/o Alfabético (combinables), o vuelve a ↩ Orden manual. El drag & drop sigue valiendo dentro de cada grupo. Hay toggle para mostrar/ocultar las ocultas. Todo se guarda solo.
+- **Ocultar fuente** (clic derecho > Ocultar): la mutea, le apaga los auriculares y la manda al fondo en casi negro con el ojo 👁‍🗨, los dB escondidos y el medidor apagado. Si la tocan desde OBS, la consola la vuelve a mutear. Al mostrarla, restaura mute/monitoreo previos (incluso tras reiniciar).
+- **Favoritas (★)**: borde resaltado + van primeras con su criterio. Se crean/activan en tus escenas permitidas (y en ninguna otra).
+- **Escenas permitidas** (clic derecho en el fondo de Fuentes > ✅): lista blanca de dónde pueden estar Efectos, Música y favoritas. Lo no tildado no se toca nunca, ni siquiera al aire (ahí el efecto sale solo por parlantes). Clave para escenas de cámaras o capturas. Con 🧹 limpiás las ya contaminadas dejando solo la del aire.
+
 ## Sincronización de assets entre las 2 PCs (sin USB ni releases)
 
 En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el programa trae un sync bidireccional (módulo `consola_obs/sync/`): compara por nombre + tamaño + mtime + sha256, copia lo faltante en ambas direcciones, propaga borrados y en conflictos gana el archivo más nuevo.
@@ -137,10 +150,13 @@ Al terminar borrás la carpeta y no queda nada instalado.
 
 ```text
 main.py
-compilar.bat         # genera ConsolaOBS.exe (PyInstaller, Windows)
+updater.py           # actualizador separado (reemplaza archivos con el programa cerrado)
+compilar.bat         # genera ConsolaOBS.exe + updater.exe (PyInstaller, Windows)
+armar_release.bat    # arma ConsolaOBS-Consola.zip + ConsolaOBS-OBS.zip para la Release
 version_info.txt     # nombre/versión/autor que lleva el .exe adentro
+updater_version.txt  # ídem para updater.exe
 consola_obs/
-├── app.py            # arranque (ventana + menú de ajustes)
+├── app.py            # arranque (ventana + ajustes por pestañas)
 ├── estado.py         # estado compartido
 ├── constantes.py     # colores, medidas, esquemas
 ├── rutas.py          # carpetas y archivos
@@ -148,6 +164,15 @@ consola_obs/
 ├── plataforma.py     # Windows/DPI/fuentes del sistema
 ├── configuracion.py  # JSONs de configuración
 ├── utilidades.py     # medida actual (tamaño + alto de tarjeta)
+├── sync/             # sincronización bidireccional entre PCs
+│   ├── configuracion.py  # sync_config.json + último índice
+│   ├── servidor.py       # FastAPI: files/download/upload/delete
+│   ├── motor.py          # comparar + copiar + borrados + conflictos
+│   └── ui.py             # pestaña Sincronización + arranque del server
+├── update/           # actualización automática desde GitHub
+│   ├── version.py    # VERSION (única fuente, igual que version_info.txt)
+│   ├── checker.py    # releases/latest + comparación + descarga a %TEMP%
+│   └── ui.py         # pestaña Actualización + prompt + progreso
 ├── obs/
 │   ├── cliente.py    # comandos: volumen, filtros, fuentes, escenas, efectos
 │   └── eventos.py    # callbacks push de OBS-WebSocket
@@ -214,7 +239,13 @@ Funcionamiento, mecánicas y arquitectura en detalle:
 
 ---
 
-[🔗](#sec-9) **9. Fuentes "principales" (favoritos que se generan siempre)**
+[🔗](#sec-9) **9. Fuentes "principales" (favoritas: sólo en permitidas)**
+
+---
+
+[🔗](#sec-9b) **9b. Escenas permitidas (lista blanca) + ocultar fuente**
+
+---
 
 ---
 
@@ -281,7 +312,7 @@ mesa de mezcla, con:
 - Botones de mute y de monitoreo por auriculares (iconos SVG originales de OBS).
 - Filtros de audio reales de OBS editables en vivo (compresor, EQ...).
 - Un soundboard con pads que reproducen sonidos/efectos bajo demanda, con barra de progreso.
-- Fuentes marcadas como "principales" que se aseguran activas en todas las escenas.
+- Fuentes marcadas como "principales" (★): borde resaltado, primeras en el orden y viven en las escenas permitidas.
 - Reordenamiento por arrastre tanto de tarjetas de fuente como de pads.
 - Todo sincronizado en tiempo real con OBS, en ambas direcciones.
 
@@ -474,7 +505,7 @@ Cabecera de la tarjeta:
 - Botón de mute (Profesional: circular; Moderna: SVG plano 🔊/🔇 con X en mute).
 - Botón de monitoreo (Profesional: circular; en Moderna, SVG originales de OBS: auricular sobre cuadrado de estado verde con borde en salida, azul en solo-yo, headphones-off apagado; mute con X).
 - Toda la tarjeta se atenúa en gris si está muteada o fuera de la escena al aire (sin LED puntual).
-- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Filtros…", "Propiedades…", color de etiqueta, "Quitar de todas las escenas…" y "Eliminar fuente…".
+- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Ocultar/Mostrar fuente", "Filtros…", "Propiedades…", color de etiqueta, "Quitar de todas las escenas…" y "Eliminar fuente…" (iconos `menu_*.svg` a 16 px, alineados con placeholder transparente).
 - Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
 
 Cuerpo de la tarjeta:
@@ -510,22 +541,29 @@ algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
 
 
 <a id="sec-9"></a>
-## 9. FUENTES "PRINCIPALES" (favoritas que se generan SIEMPRE)
+## 9. FUENTES "PRINCIPALES" (favoritas: sólo en permitidas)
 Una fuente marcada como "principal" (★ en el menú contextual de la
 tarjeta) se comporta distinto al resto:
 
 - Se guarda en fuentes_principales (set) y se persiste en config_interfaz.json ("fuentes_principales": [..]).
-- `_asegurar_fuente_en_todas_las_escenas(nombre)`: se asegura de que esa fuente esté creada Y ACTIVA en TODAS las escenas de OBS:
-  - recorre cada escena (get_scene_list),
-  - si no existe el item en esa escena → create_scene_item(escena, nombre, True),
-  - si existe pero está deshabilitada → set_scene_item_enabled. Serializado con _lock_sincronizar_escenas (para no crear la fuente dos veces si dos hilos corren en paralelo).
-- Se ejecuta al iniciar la conexión (`asegurar_fuentes_principales_en_todas_las_escenas()` al conectar) y cada vez que se marca una fuente como principal.
+- `asegurar_principales_en_permitidas(solo_nombre=None)`: crea/activa esas fuentes SÓLO en las escenas permitidas (lista blanca, ver sec. 9b): si el input no existe en OBS se poda de favoritas con aviso; si existe pero falta el ítem en una permitida → create_scene_item, y si está deshabilitado → set_scene_item_enabled. Serializado con _lock_sincronizar_escenas.
+- Se ejecuta al conectar/refrescar, al marcar una principal y al tildar una escena (`asegurar_todo_en_escena`). Las escenas no permitidas no se tocan nunca.
 - Visualmente la tarjeta principal tiene borde resaltado naranja (COLOR_BORDE_PRINCIPAL, borde más grueso).
 - Renombrar: si se renombra una fuente principal, se actualiza el nombre en fuentes_principales también (ver `_renombrar_fuente()`).
 
 DIFERENCIA CLAVE con el resto: el resto de las fuentes SOLO se muestran
 tal como estén (grises si no están en la escena activa); las principales
-se fuerzan a estar activas en todas las escenas siempre.
+además van primeras con su criterio de orden y viven en las permitidas.
+
+
+<a id="sec-9b"></a>
+## 9b. ESCENAS PERMITIDAS (lista blanca) + OCULTAR FUENTE
+`escenas_permitidas` (set, persistido en `config_interfaz.json`): sólo ahí pueden existir Efectos/Música/favoritas. Vacío = cerrado por defecto (lo no tildado no se toca ni al aire).
+
+- Internas: `asegurar_interna_en_escena_actual` (input + ítem sólo en la escena al aire si está permitida) se llama al conectar/refrescar, al cambiar de escena (hilo aparte en `_refrescar_membresia_escena`) y justo antes de disparar un efecto (`reproduccion.py`) o un tema (`musica.py`). Con escena no permitida al aire: el efecto sale sólo por parlantes, la música no se inyecta (no es error).
+- Diálogo ✅ (checklist desde `get_scene_list`, casilleros propios con `menu_check_on/off.svg`): al tildar se arma todo ahí (`asegurar_todo_en_escena`); al destildar no se borra nada. 🧹 (`quitar_internas_de_otras_escenas`) limpia las demás dejando sólo la del aire.
+- Ocultar (`ocultar_fuente`/`mostrar_fuente`): guarda previo {muted, monitor}, aplica mute + `MONITORING_TYPE_NONE` en OBS (hilo), manda al fondo (`orden_visible_fuentes`), pinta casi negro con insignia 👁‍🗨 (`menu_mostrar.svg`, dB escondidos) y apaga el VU (`medidores.py`: nivel 0 + pico -60 + sin clip). `_reforzar_oculta_en_obs` re-mutea cambios venidos de OBS (converge, sin bucle). Mostrar restaura el previo (persistido en `fuentes_ocultas_previo`).
+- Orden (botón ☰): `orden_visible_fuentes` = manual estable + criterios combinables (`favoritos > colores > activas > escena > abc`) + ocultas siempre al fondo (o excluidas con el toggle). Menú con `menu_check_on/off.svg` a 16 px.
 
 
 <a id="sec-10"></a>
@@ -633,7 +671,7 @@ Cabecera (ventana_cabecera):
 - Logo (marco_icono_cabecera): carga assets/iconos/logo_cabecera.png con Pillow (o dibuja un ecualizador a mano si no está → _dibujar_icono_ecualizador).
 - Título "CONSOLA OBS" + subtítulo.
 - Estado de conexión: etiqueta ● CONECTADO / ● DESCONECTADO (chips).
-- Botón engranaje (⚙) que abre un menú desplegable "Ajustes" (CONEXIÓN: Host, Puerto, Contraseña, botones CONECTAR/DESCONECTAR, ACTUALIZAR y AGREGAR FUENTE; APARIENCIA: Íconos, Alto, Diseño, Tipografía, Interfaz; AUDIO: Escuchar acá). El cambio de tipografía se aplica en el acto a todo (cuerpo reconstruido + menú/cabecera re-fuenteados, sin reabrir).
+- Botón engranaje (⚙) que abre la ventana "Ajustes" por pestañas (lista a la izquierda: Conexión —la general—, Apariencia, Audio, Sincronización, Actualización; panel a la derecha con ayudas bajo cada grupo). Se cierra con la X, Escape o el engranaje. El cambio de tipografía se aplica en el acto a todo (cuerpo reconstruido + menú/cabecera re-fuenteados, sin reabrir).
 - Al pie del panel de soundboard: botones DETECTAR SONIDOS DE LA CARPETA y AGREGAR PAD.
 
 ### Orquestación de paneles (orientacion_paneles):
@@ -676,7 +714,8 @@ Archivos (se guardan en `config/` junto al .py/.exe):
 
 - config/config_conexion.json   {host, puerto, password}
 - config/config_soundboard.json {num_pads_soundboard, pads: {indice: {nombre, archivo, imagen, color}}}
-- config/config_interfaz.json   {orientacion_paneles, orden_paneles, tamano_icono, alto_tarjeta, fuente_ui, escuchar_en_pc, tema_interfaz, num_pads_soundboard, colores_fuentes, fuentes_principales, orden_fuentes, posicion_divisor_*, geometria_ventana}
+- config/config_interfaz.json   {orientacion_paneles, orden_paneles, tamano_icono, alto_tarjeta, fuente_ui, escuchar_en_pc, nivelar_efectos, tema_interfaz, num_pads_soundboard, colores_fuentes, fuentes_principales, orden_fuentes, orden_fuentes_criterios, mostrar_ocultas, fuentes_ocultas, fuentes_ocultas_previo, escenas_permitidas, carpeta_base_obs, kinds_con_audio, kinds_sin_audio, posicion_divisor_*, geometria_ventana}
+- config/sync_config.json       {carpeta_local, ip_remota, puerto, api_key} + config/ultimo_indice.json (snapshot del último sync)
 
 Se cargan al arrancar (si existen) con try/except, y se guardan al
 cerrar (al_cerrar) junto con la posición/geometría de la ventana y la
@@ -762,14 +801,14 @@ Reglas de oro implementadas:
 - hilo principal: Tk (UI).
 - hilo de VU: recorre fuentes y pide niveles a OBS.
 - hilo de eventos OBS: recibe callbacks push.
-- hilos puntuales para: reproducir sonido del pad (daemon), decodificar su duración (daemon), asegurar fuente en todas las escenas, sondeo de ganancia de filtros, refresco de estados al conectar.
+- hilos puntuales para: reproducir sonido del pad (daemon), decodificar su duración (daemon), asegurar internas/favoritas en permitidas, sondeo de ganancia de filtros, refresco de estados al conectar, checker de update, sync y updater.
 - loops de UI (hilo principal, vía after): barra de progreso del pad (~40 ms), refresco de reproducción (~150 ms).
 - Los valores que comparten los hilos con la UI (niveles_actuales, ultima_vez_saturado, fuentes...) viven en dicts globales y se protegen con locks cuando hay riesgo de carrera; el resto se copia por valor (inmutables) hacia la UI.
 
 
 <a id="sec-19"></a>
-## 19. CÓMO COMPILAR A .EXE
-Doble clic en `compilar.bat` (usa PyInstaller, Windows):
+## 19. CÓMO COMPILAR A .EXE (+ ARMAR LOS ZIPS)
+Doble clic en `compilar.bat` (usa PyInstaller, Windows): genera `ConsolaOBS.exe` + `updater.exe`. Después, doble clic en `armar_release.bat`: arma `ConsolaOBS-Consola.zip` (`ConsolaOBS/` = exes + código + assets completos) y `ConsolaOBS-OBS.zip` (`OBS/` = sólo `assets/` con sonidos + música, para la PC del OBS) tal cual los espera la Release, sin `config/` (cada instalación genera la suya) ni temporales. Esos dos zips se suben a mano a la Release `vX.Y.Z` (el `VERSION` de `consola_obs/update/version.py` tiene que coincidir con el tag).
 
 ```
 py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --collect-all pymupdf --version-file "version_info.txt" --icon "assets\iconos\app_icon.ico" main.py

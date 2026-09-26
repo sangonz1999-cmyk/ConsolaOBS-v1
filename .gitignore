@@ -10,6 +10,9 @@ _build_upd_tmp/
 *.log
 # El .exe se genera localmente con compilar.bat, no se versiona
 *.exe
+# Los ZIP de la Release pesan ~1 GB cada uno: se arman localmente con
+# armar_release.bat y se suben a mano a GitHub, no se commitean
+ConsolaOBS-*.zip
 # Configuracion local (config_conexion.json contiene la contrasena de OBS)
 config_*.json
 config/*.json
