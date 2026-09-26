@@ -127,16 +127,11 @@ def on_input_volume_meters(datos):
         print(f"Error procesando niveles de audio: {e}")
 
 def on_scene_created(_datos):
-    """Cuando se crea una escena nueva en OBS, la igualamos al resto:
-    le agregamos la fuente de efectos del soundboard, la de música de
-    fondo y las fuentes marcadas como 'principales' (ver
-    _alternar_principal), sin que el usuario tenga que acordarse de
-    apretar 'Actualizar fuentes'. El resto de las fuentes de audio YA
-    NO se fuerzan a todas las escenas: sólo se muestran (grises si no
-    están en la escena al aire)."""
-    threading.Thread(target=mod_obs_cliente.preparar_fuente_efectos, daemon=True).start()
-    threading.Thread(target=mod_obs_cliente.preparar_fuente_musica, daemon=True).start()
-    threading.Thread(target=mod_obs_cliente.asegurar_fuentes_principales_en_todas_las_escenas, daemon=True).start()
+    """Cuando se crea una escena nueva en OBS no se le agrega NADA: las
+    escenas especiales (cámaras, capturas) tienen que nacer limpias. Si
+    el usuario la pone al aire, el cambio de escena asegura ahí las
+    internas; si dispara un efecto o música, se aseguran al disparar."""
+    return
 
 
 def on_current_program_scene_changed(_datos):

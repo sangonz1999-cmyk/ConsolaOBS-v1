@@ -470,6 +470,14 @@ def _hacer_reproducir(rel, token):
             return False
     except Exception:
         pass
+    # La fuente tiene que estar en la escena al aire para sonar: se
+    # asegura ahí (sólo ahí) justo antes de disparar (import lazy).
+    try:
+        from consola_obs.obs import cliente as mod_obs_cliente
+        mod_obs_cliente.asegurar_interna_en_escena_actual(
+            C.NOMBRE_FUENTE_MUSICA, "ffmpeg_source", C.AJUSTES_FUENTE_MUSICA)
+    except Exception as e:
+        print(f"No se pudo asegurar la fuente de música en escena: {e}")
     try:
         mod_rutas_obs.intentar_aprender_base()
     except Exception:

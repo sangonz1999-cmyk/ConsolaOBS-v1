@@ -1827,6 +1827,9 @@ def _abrir_menu_contextual_panel_fuentes(event):
         menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
         menu.add_separator()
         menu.add_command(label="↻  Actualizar fuentes", command=actualizar)
+        menu.add_separator()
+        menu.add_command(label="🧹  Quitar Efectos/Música de otras escenas…",
+                         command=_quitar_internas_de_otras_escenas)
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
@@ -2021,19 +2024,15 @@ def _asignar_color_fuente(nombre, color):
 
 
 def _alternar_principal(nombre):
-    """Marca/desmarca una fuente como 'principal'. Las principales son
-    las ÚNICAS que este programa fuerza a crear y mantener activas en
-    TODAS las escenas; el resto sólo se muestran tal cual estén."""
+    """Marca/desmarca una fuente como 'principal': sólo resaltado visual
+    (borde) + criterio de orden. Ya no se fuerza nada en ninguna escena:
+    las escenas especiales (cámaras, capturas) no se tocan nunca."""
     if nombre in E.fuentes_principales:
         E.fuentes_principales.discard(nombre)
     else:
         E.fuentes_principales.add(nombre)
     mod_configuracion.guardar_config_interfaz({"fuentes_principales": sorted(E.fuentes_principales)})
     _actualizar_estado_gris(nombre)
-    if nombre in E.fuentes_principales and E.conectado:
-        threading.Thread(
-            target=mod_obs_cliente._asegurar_fuente_en_todas_las_escenas, args=(nombre,), daemon=True
-        ).start()
 
 
 def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
@@ -2430,6 +2429,54 @@ def _quitar_de_escenas_en_hilo(nombre):
 
 
 
+def _quitar_internas_de_otras_escenas():
+    """Limpieza para escenas ya 'contaminadas' por el modo anterior
+    (Efectos/Música en todas): los quita de todas SALVO la que está al
+    aire. Ideal para escenas de cámaras o capturas que tienen que quedar
+    limpias. Los inputs no se borran."""
+    if not E.conectado:
+        messagebox.showwarning("Sin conexión", "Conectate a OBS para limpiar las escenas.")
+        return
+    if not messagebox.askyesno(
+        "Quitar Efectos/Música de otras escenas",
+        "Se van a quitar las fuentes internas (Efectos y Música) de TODAS "
+        "las escenas SALVO la que está al aire ahora.\n"
+        "Las fuentes NO se borran: siguen existiendo para usarlas donde "
+        "corresponda.\n\n¿Confirmar?"
+    ):
+        return
+    threading.Thread(target=_quitar_internas_en_hilo, daemon=True).start()
+
+
+def _quitar_internas_en_hilo():
+    try:
+        programa, cuantas = mod_obs_cliente.quitar_internas_de_otras_escenas()
+    except Exception as e:
+        E.ventana.after(0, lambda e=e: messagebox.showerror(
+            "Error al limpiar",
+            f"No se pudieron limpiar las escenas.\n\n{e}"
+        ))
+        return
+
+    def _avisar():
+        try:
+            actualizar()
+        except Exception:
+            pass
+        if cuantas:
+            messagebox.showinfo(
+                "Listo",
+                f"Efectos/Música quitados de {cuantas} escena(s). "
+                f"Siguen en '{programa or 'la escena al aire'}'.")
+        else:
+            messagebox.showinfo(
+                "Sin cambios",
+                "Efectos/Música ya estaban sólo en la escena al aire.")
+
+    E.ventana.after(0, _avisar)
+
+
+
 def _kinds_sin_audio():
     try:
         return set(getattr(E, "_kinds_sin_audio", None) or set())
@@ -2547,11 +2594,6 @@ def _actualizar_en_hilo_cuerpo():
         mod_obs_cliente.preparar_fuente_musica()
     except Exception as e:
         print(f"No se pudo preparar la fuente de música: {e}")
-
-    try:
-        mod_obs_cliente.asegurar_fuentes_principales_en_todas_las_escenas()
-    except Exception as e:
-        print(f"No se pudo asegurar las fuentes principales en todas las escenas: {e}")
 
     try:
         # STOP de orden: solo sin sesión activa (con un efecto en curso
