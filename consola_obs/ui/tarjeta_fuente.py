@@ -264,12 +264,24 @@ def _criterios_orden_activos():
     return [c for c, _t in CRITERIOS_ORDEN_FUENTES if c in lista]
 
 
+def _es_oculta(nombre):
+    """True si la fuente está oculta (Fase 3). Nunca lanza."""
+    try:
+        return nombre in (getattr(E, "fuentes_ocultas", None) or set())
+    except Exception:
+        return False
+
+
 def _fuente_activa(nombre):
     """Activa = prendida Y en escena: el espejo del gris de la tarjeta
     (atenuado = muted o fuera de escena). Se calcula en fresco para que
     el toggle de mute reordene ya, sin esperar al repintado. Sin
-    widgets o sin dato: activa (no se castiga lo desconocido)."""
+    widgets o sin dato: activa (no se castiga lo desconocido).
+    Una fuente oculta (Fase 3) nunca cuenta como activa, aunque alguien
+    la desmutee a mano desde OBS: sigue al fondo hasta desocultarla."""
     try:
+        if _es_oculta(nombre):
+            return False
         widgets = E.fuentes.get(nombre)
         if not widgets:
             return True
@@ -304,6 +316,22 @@ def _nombre_mostrado_fuente(nombre):
         return str(nombre)
 
 
+def _partir_ocultas(base, ocultas):
+    """Parte 'base' en (visibles, ocultas_en_orden), conservando el
+    orden manual en ambas. Pura y testeable sin Tk ni globales."""
+    try:
+        set_ocultas = set(ocultas or set())
+    except Exception:
+        set_ocultas = set()
+    try:
+        lista = list(base or [])
+    except Exception:
+        return [], []
+    visibles = [n for n in lista if n not in set_ocultas]
+    ocult_lista = [n for n in lista if n in set_ocultas]
+    return visibles, ocult_lista
+
+
 def orden_visible_fuentes():
     """Orden manual + criterio + ocultas: la lista a dibujar. Estable
     (los empates conservan el orden manual del drag & drop). Las
@@ -317,8 +345,7 @@ def orden_visible_fuentes():
         ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
     except Exception:
         ocultas = set()
-    visibles = [n for n in base if n not in ocultas]
-    ocult_lista = [n for n in base if n in ocultas]
+    visibles, ocult_lista = _partir_ocultas(base, ocultas)
     criterios = _criterios_orden_activos()
     if criterios:
         try:
@@ -377,10 +404,27 @@ def orden_visible_fuentes():
 
 def _guardar_orden_fuentes():
     try:
+        try:
+            previo = dict(getattr(E, "_estado_previo_oculta", None) or {})
+        except Exception:
+            previo = {}
+        # Sólo se persiste lo serializable (bool + str por fuente).
+        previo_limpio = {}
+        try:
+            for k, v in previo.items():
+                if not isinstance(k, str) or not isinstance(v, dict):
+                    continue
+                previo_limpio[k] = {
+                    "muted": bool(v.get("muted", False)),
+                    "monitor": str(v.get("monitor") or "OBS_MONITORING_TYPE_NONE"),
+                }
+        except Exception:
+            previo_limpio = {}
         mod_configuracion.guardar_config_interfaz({
             "orden_fuentes_criterios": list(getattr(E, "orden_fuentes_criterios", []) or []),
             "mostrar_ocultas": bool(getattr(E, "mostrar_ocultas", True)),
             "fuentes_ocultas": sorted(getattr(E, "fuentes_ocultas", set()) or set()),
+            "fuentes_ocultas_previo": previo_limpio,
         })
     except Exception:
         pass
@@ -419,6 +463,210 @@ def _alternar_mostrar_ocultas():
         E.mostrar_ocultas = not bool(getattr(E, "mostrar_ocultas", True))
         _guardar_orden_fuentes()
         _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _es_fuente_interna(nombre):
+    """Fuentes propias del programa: no se pueden ocultar (igual que no
+    se pueden eliminar ni quitar de escena)."""
+    return nombre in (C.NOMBRE_FUENTE_EFECTOS, C.NOMBRE_FUENTE_MUSICA)
+
+
+def ocultar_fuente(nombre):
+    """Oculta una fuente (Fase 3): la mutea + le apaga el monitoreo en
+    OBS, guarda cómo estaba para restaurar al desocultar, la manda al
+    fondo (ver orden_visible_fuentes) y la pinta casi negra si el
+    toggle de mostrar está prendido. Nunca lanza."""
+    try:
+        if nombre not in E.fuentes:
+            return
+        if _es_fuente_interna(nombre):
+            try:
+                messagebox.showinfo(
+                    "No se puede ocultar",
+                    "Esa es una fuente interna del programa y tiene que "
+                    "quedar visible.",
+                )
+            except Exception:
+                pass
+            return
+        try:
+            ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        except Exception:
+            ocultas = set()
+        if nombre in ocultas:
+            return
+        widgets = E.fuentes.get(nombre) or {}
+        previo = {
+            "muted": bool(widgets.get("muted", False)),
+            "monitor": str(widgets.get("tipo_monitor") or "OBS_MONITORING_TYPE_NONE"),
+        }
+        try:
+            if not isinstance(getattr(E, "_estado_previo_oculta", None), dict):
+                E._estado_previo_oculta = {}
+            E._estado_previo_oculta[nombre] = previo
+        except Exception:
+            pass
+        ocultas.add(nombre)
+        E.fuentes_ocultas = ocultas
+        _guardar_orden_fuentes()
+        # Optimista en UI: mute + monitor off ya, sin esperar a OBS.
+        try:
+            widgets["muted"] = True
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["mute"], texto_nuevo="🔇",
+                color_nuevo=mod_ui_dibujo._color_mute(True))
+        except Exception:
+            pass
+        try:
+            widgets["tipo_monitor"] = "OBS_MONITORING_TYPE_NONE"
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["monitor"], color_nuevo=(
+                    mod_ui_dibujo._cuadrado_monitor("OBS_MONITORING_TYPE_NONE")
+                    if E.es_moderna()
+                    else C.COLORES_MONITOREO.get("OBS_MONITORING_TYPE_NONE", "#394151")))
+        except Exception:
+            pass
+        try:
+            _actualizar_estado_gris(nombre)
+        except Exception:
+            pass
+        _reubicar_fuentes()
+        _reubicar_si_activas()
+        try:
+            if E.conectado:
+                threading.Thread(
+                    target=_aplicar_ocultar_en_obs, args=(nombre,),
+                    daemon=True).start()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _aplicar_ocultar_en_obs(nombre):
+    """Mute + monitor OFF reales en OBS (hilo daemon)."""
+    try:
+        E.cliente_obs.set_input_muted(nombre, True)
+    except Exception as e:
+        print(f"No se pudo mutear '{nombre}' al ocultar: {e}")
+    try:
+        E.cliente_obs.set_input_audio_monitor_type(
+            nombre, "OBS_MONITORING_TYPE_NONE")
+    except Exception as e:
+        print(f"No se pudo apagar el monitoreo de '{nombre}' al ocultar: {e}")
+
+
+def mostrar_fuente(nombre):
+    """Desoculta una fuente (Fase 3): la saca del fondo y le restaura el
+    mute/monitoreo que tenía antes de ocultarla (si se sabe; si no, la
+    deja como está para no adivinar). Nunca lanza."""
+    try:
+        try:
+            ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        except Exception:
+            ocultas = set()
+        if nombre not in ocultas:
+            return
+        ocultas.discard(nombre)
+        E.fuentes_ocultas = ocultas
+        try:
+            previo = dict((getattr(E, "_estado_previo_oculta", None) or {}).get(nombre) or {})
+        except Exception:
+            previo = {}
+        try:
+            if isinstance(getattr(E, "_estado_previo_oculta", None), dict):
+                E._estado_previo_oculta.pop(nombre, None)
+        except Exception:
+            pass
+        _guardar_orden_fuentes()
+        try:
+            if nombre in E.fuentes:
+                _actualizar_estado_gris(nombre)
+        except Exception:
+            pass
+        _reubicar_fuentes()
+        _reubicar_si_activas()
+        if previo:
+            try:
+                if E.conectado:
+                    threading.Thread(
+                        target=_aplicar_mostrar_en_obs,
+                        args=(nombre, bool(previo.get("muted", False)),
+                              str(previo.get("monitor") or "OBS_MONITORING_TYPE_NONE")),
+                        daemon=True).start()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _aplicar_mostrar_en_obs(nombre, muted_previo, monitor_previo):
+    """Restaura mute/monitor previos en OBS (hilo daemon)."""
+    try:
+        E.cliente_obs.set_input_muted(nombre, muted_previo)
+    except Exception as e:
+        print(f"No se pudo restaurar el mute de '{nombre}' al mostrar: {e}")
+    try:
+        if monitor_previo not in E.TIPOS_MONITOREO:
+            monitor_previo = "OBS_MONITORING_TYPE_NONE"
+        E.cliente_obs.set_input_audio_monitor_type(nombre, monitor_previo)
+    except Exception as e:
+        print(f"No se pudo restaurar el monitoreo de '{nombre}' al mostrar: {e}")
+    try:
+        E.ventana.after(0, lambda: _sincronizar_tras_mostrar(nombre))
+    except Exception:
+        pass
+
+
+def _sincronizar_tras_mostrar(nombre):
+    """Refresca la tarjeta tras restaurar en OBS (hilo UI)."""
+    try:
+        widgets = E.fuentes.get(nombre)
+        if not widgets:
+            return
+        try:
+            respuesta_mute = E.cliente_obs.get_input_mute(nombre)
+            muted = mod_obs_eventos._valor(respuesta_mute, "input_muted", "inputMuted")
+            if muted is None:
+                muted = widgets.get("muted", False)
+        except Exception:
+            muted = widgets.get("muted", False)
+        try:
+            respuesta_mon = E.cliente_obs.get_input_audio_monitor_type(nombre)
+            tipo = mod_obs_eventos._valor(respuesta_mon, "monitor_type", "monitorType")
+            if not tipo:
+                tipo = widgets.get("tipo_monitor", "OBS_MONITORING_TYPE_NONE")
+        except Exception:
+            tipo = widgets.get("tipo_monitor", "OBS_MONITORING_TYPE_NONE")
+        widgets["muted"] = bool(muted)
+        widgets["tipo_monitor"] = tipo
+        try:
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["mute"],
+                texto_nuevo=("🔇" if muted else "🔊"),
+                color_nuevo=mod_ui_dibujo._color_mute(bool(muted)))
+            mod_ui_dibujo._actualizar_boton_circular(
+                widgets["monitor"], color_nuevo=(
+                    mod_ui_dibujo._cuadrado_monitor(tipo) if E.es_moderna()
+                    else C.COLORES_MONITOREO.get(tipo, "#394151")))
+        except Exception:
+            pass
+        _actualizar_estado_gris(nombre)
+        _reubicar_si_activas()
+    except Exception:
+        pass
+
+
+def alternar_oculta_fuente(nombre):
+    """Toggle del menú contextual: oculta si está visible, muestra si
+    está oculta."""
+    try:
+        if _es_oculta(nombre):
+            mostrar_fuente(nombre)
+        else:
+            ocultar_fuente(nombre)
     except Exception:
         pass
 
@@ -653,6 +901,22 @@ def _reubicar_fuentes(forzar=False):
         mod_ui_ventana.actualizar_scroll()
         return
     E._ultima_grilla_fuentes["clave"] = clave_grilla
+    try:
+        en_grilla = set(orden or [])
+    except Exception:
+        en_grilla = set()
+    # Las excluidas por el toggle (mostrar ocultas OFF) se sacan de la
+    # grilla: si no, quedaban a la vista en su posición vieja porque
+    # este reacomodo sólo grilla lo visible y nunca desgrillaba nada.
+    try:
+        for otro in list(E.fuentes.keys()):
+            if otro not in en_grilla:
+                try:
+                    E.fuentes[otro]["tarjeta_sombra"].grid_forget()
+                except Exception:
+                    pass
+    except Exception:
+        pass
     # Posiciones DENSAS: los nombres sin tarjeta no consumen celda (si
     # no, quedaban huecos vacíos en la grilla).
     for nombre, fila, col in _posiciones_grilla(orden, columnas):
@@ -1282,12 +1546,15 @@ def _actualizar_estado_gris(nombre):
     actualizar_vu_meters_ui). El resto de los controles (fader, mute,
     filtros) siguen funcionando igual: el gris es sólo para que de un
     vistazo se note cuál fuente está realmente sonando en el programa y
-    cuál no."""
+    cuál no.
+    Fase 3: una fuente oculta manda sobre todo lo anterior y se pinta
+    casi negra (barra incluida), marcando que está apagada."""
     widgets = E.fuentes.get(nombre)
     if not widgets:
         return
 
     es_principal = nombre in E.fuentes_principales
+    oculta = _es_oculta(nombre)
     muted = widgets.get("muted", False)
     en_escena = es_principal or (not E.escena_actual_obtenida) or (nombre in E.escena_actual_nombres)
     widgets["en_escena"] = en_escena
@@ -1298,11 +1565,18 @@ def _actualizar_estado_gris(nombre):
     except Exception:
         en_orden = False
 
-    atenuado = muted or not en_escena
+    atenuado = bool(oculta) or muted or not en_escena
     widgets["atenuado"] = atenuado
+    widgets["oculta"] = bool(oculta)
 
     color_etiqueta = E.colores_fuentes.get(nombre)
-    if atenuado:
+    if oculta:
+        # Casi negro (manda sobre muteada y sobre etiqueta de color).
+        color_cabecera = "#14161c"
+        color_texto = "#6b7385"
+        color_cuerpo = "#0a0b0f"
+        color_meta = "#0a0b0f"
+    elif atenuado:
         color_cabecera = C.COLOR_GRIS_ATENUADO
         color_texto = "#202633"
         color_cuerpo = mod_ui_dibujo._oscurecer_color_pct(C.COLOR_GRIS_ATENUADO, 0.42)
@@ -1362,6 +1636,13 @@ def _actualizar_estado_gris(nombre):
             if dib.get("id_divisora") is not None:
                 widgets["vu_canvas"].itemconfig(dib["id_divisora"], fill=color_cuerpo)
             dib["bg"] = color_cuerpo
+        elif oculta:
+            # Profesional: el canvas LED tiene fondo propio fijo; en
+            # oculta se tiñe casi negro con el resto (barra incluida).
+            try:
+                widgets["vu_canvas"].config(bg=color_cuerpo)
+            except Exception:
+                pass
     except Exception:
         pass
     for hijo in widgets["fila_iconos"].winfo_children():
@@ -1370,7 +1651,10 @@ def _actualizar_estado_gris(nombre):
         elif getattr(hijo, "es_plano", False):
             hijo.config(bg=color_cuerpo)
 
-    widgets["fila_meta"].config(bg=(E.color_acento() if E.es_moderna() else color_meta))
+    if oculta:
+        widgets["fila_meta"].config(bg=color_meta)
+    else:
+        widgets["fila_meta"].config(bg=(E.color_acento() if E.es_moderna() else color_meta))
 
 
 def _abrir_menu_contextual_panel_fuentes(event):
@@ -1477,6 +1761,12 @@ def _abrir_menu_contextual_fuente(nombre, event):
           ("Quitar de principales" if es_principal else "Marcar como principal"),
           ("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
           lambda: _alternar_principal(nombre))
+    if _es_oculta(nombre):
+        _item("menu/menu_ocultar.svg", "Mostrar fuente", "👁  Mostrar fuente",
+              lambda: mostrar_fuente(nombre))
+    else:
+        _item("menu/menu_ocultar.svg", "Ocultar fuente", "👁  Ocultar fuente",
+              lambda: ocultar_fuente(nombre))
     _item("menu/menu_filtros.svg", "Filtros…", "🎚  Filtros…",
           lambda: mod_audio_filtros.abrir_filtros(nombre))
     _item("menu/menu_propiedades.svg", "Propiedades…", "⚙  Propiedades…",
@@ -1793,6 +2083,26 @@ def _renombrar_fuente_localmente(nombre_viejo, nombre_nuevo):
 
     if nombre_viejo in E.orden_fuentes:
         E.orden_fuentes[E.orden_fuentes.index(nombre_viejo)] = nombre_nuevo
+
+    try:
+        ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        if nombre_viejo in ocultas:
+            ocultas.discard(nombre_viejo)
+            ocultas.add(nombre_nuevo)
+            E.fuentes_ocultas = ocultas
+    except Exception:
+        pass
+    try:
+        previo_map = getattr(E, "_estado_previo_oculta", None) or {}
+        if nombre_viejo in previo_map:
+            previo_map[nombre_nuevo] = previo_map.pop(nombre_viejo)
+            E._estado_previo_oculta = previo_map
+    except Exception:
+        pass
+    try:
+        _guardar_orden_fuentes()
+    except Exception:
+        pass
 
     if nombre_viejo in E.escena_actual_nombres:
         E.escena_actual_nombres.discard(nombre_viejo)
@@ -2365,6 +2675,23 @@ def _podar_orden_sin_tarjeta():
             mod_configuracion.guardar_config_interfaz({"orden_fuentes": list(E.orden_fuentes)})
     except Exception:
         pass
+    try:
+        ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        fantasmas = [n for n in ocultas if n not in E.fuentes]
+        if fantasmas:
+            for n in fantasmas:
+                ocultas.discard(n)
+            E.fuentes_ocultas = ocultas
+            try:
+                previo_map = dict(getattr(E, "_estado_previo_oculta", None) or {})
+                for n in fantasmas:
+                    previo_map.pop(n, None)
+                E._estado_previo_oculta = previo_map
+            except Exception:
+                pass
+            _guardar_orden_fuentes()
+    except Exception:
+        pass
 
 
 def _limpiar_referencias_fuente_borrada(nombre):
@@ -2384,6 +2711,22 @@ def _limpiar_referencias_fuente_borrada(nombre):
     if nombre in E.colores_fuentes:
         E.colores_fuentes.pop(nombre, None)
         cambios_interfaz["colores_fuentes"] = E.colores_fuentes
+    try:
+        ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        if nombre in ocultas:
+            ocultas.discard(nombre)
+            E.fuentes_ocultas = ocultas
+            cambios_interfaz["fuentes_ocultas"] = sorted(ocultas)
+    except Exception:
+        pass
+    try:
+        previo_map = getattr(E, "_estado_previo_oculta", None) or {}
+        if nombre in previo_map:
+            previo_map.pop(nombre, None)
+            E._estado_previo_oculta = previo_map
+            cambios_interfaz["fuentes_ocultas_previo"] = dict(previo_map)
+    except Exception:
+        pass
     if cambios_interfaz:
         mod_configuracion.guardar_config_interfaz(cambios_interfaz)
 

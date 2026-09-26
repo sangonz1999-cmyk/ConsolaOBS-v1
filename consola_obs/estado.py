@@ -174,6 +174,11 @@ _kinds_con_audio = set()
 fuentes_ocultas = set()
 orden_fuentes_criterios = []
 mostrar_ocultas = True
+# Estado previo al ocultar (Fase 3): por fuente oculta, {"muted": bool,
+# "monitor": str} tal como estaba antes de ocultarla. Vive en memoria y
+# se persiste en config_interfaz.json ("fuentes_ocultas_previo") para
+# que desocultar después de un reinicio también restaure.
+_estado_previo_oculta = {}
 escena_actual_nombres = set()
 escena_actual_obtenida = False
 orden_escena_actual = []                                                            

@@ -174,6 +174,16 @@ def main():
         E.fuentes_ocultas = set(n for n in _ocultas_guardadas if isinstance(n, str))
     else:
         E.fuentes_ocultas = set()
+    _previo_guardado = E.config_interfaz_previa.get("fuentes_ocultas_previo", {})
+    if isinstance(_previo_guardado, dict):
+        E._estado_previo_oculta = {
+            k: {"muted": bool(v.get("muted", False)),
+                "monitor": str(v.get("monitor") or "OBS_MONITORING_TYPE_NONE")}
+            for k, v in _previo_guardado.items()
+            if isinstance(k, str) and isinstance(v, dict)
+        }
+    else:
+        E._estado_previo_oculta = {}
 
     E.num_pads_soundboard = E.config_interfaz_previa.get("num_pads_soundboard", C.NUM_BOTONES_SOUNDBOARD_INICIAL)
     if not isinstance(E.num_pads_soundboard, int) or E.num_pads_soundboard < 1:
