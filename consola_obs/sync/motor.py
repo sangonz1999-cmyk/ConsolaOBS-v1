@@ -42,11 +42,12 @@ def _sha256(ruta):
     return h.hexdigest()
 
 
-def listar_local(raiz):
+def listar_local(raiz, omitidos=None):
     """{relpath: {size, mtime, sha256}} de la carpeta local. Reusa el
-    listado del servidor (misma regla: sin .tmp/.part)."""
+    listado del servidor (misma regla: sin .tmp/.part). Si se pasa lista
+    `omitidos`, trae los ilegibles para avisar."""
     return {d["name"]: {"size": d["size"], "mtime": d["mtime"], "sha256": d["sha256"]}
-            for d in srv.listar_archivos(raiz)}
+            for d in srv.listar_archivos(raiz, omitidos)}
 
 
 class Cliente:
@@ -187,8 +188,13 @@ def sincronizar(config=None, log=None):
                 f"La otra PC no responde en {ip}:{puerto}: {e}. "
                 "Revisá que esté prendida, el programa abierto y el firewall."]}
         _log(f"Sync: conectado con {ip}:{puerto}.")
+        _log(f"Sync: raíz local {raiz}.")
 
-        local = listar_local(raiz)
+        omitidos = []
+        local = listar_local(raiz, omitidos)
+        for rel in omitidos:
+            _log(f"Sync: no se pudo leer {rel} (bloqueado o sin permiso): "
+                 "no entra al sync hasta poder leerse.")
         remoto = cli.lista_remota()
         previo = cfg_sync.cargar_ultimo_indice()
         plan = comparar(local, remoto, previo)
@@ -197,6 +203,12 @@ def sincronizar(config=None, log=None):
              f"{len(plan['borrar_local'])} borrar acá, {len(plan['borrar_remoto'])} borrar allá, "
              f"{len(plan['conflictos'])} conflictos.")
 
+        # Fallos por operación: el índice final sólo refleja lo que quedó
+        # CONFIRMADO en ambos lados. Un fallo NO se marca como hecho:
+        # si no, una subida fallida haría que el próximo sync tome el
+        # archivo nuevo por "borrado del otro lado" y lo borre acá.
+        fallidos_subir = set()
+        fallidos_borrar_remoto = set()
         for nombre in plan["subir"]:
             try:
                 info = local[nombre]
@@ -204,6 +216,7 @@ def sincronizar(config=None, log=None):
                 resumen["subidos"] += 1
                 _log(f"Sync: subido {nombre}")
             except Exception as e:
+                fallidos_subir.add(nombre)
                 resumen["errores"].append(f"Subir {nombre}: {e}")
         for nombre in plan["bajar"]:
             try:
@@ -227,15 +240,23 @@ def sincronizar(config=None, log=None):
                 resumen["borrados_remoto"] += 1
                 _log(f"Sync: borrado allá (lo borraste acá) {nombre}")
             except Exception as e:
+                fallidos_borrar_remoto.add(nombre)
                 resumen["errores"].append(f"Borrar remoto {nombre}: {e}")
         resumen["conflictos"] = plan["conflictos"]
         for nombre, ganador in plan["conflictos"]:
             _log(f"Sync: conflicto en {nombre} (distinto contenido): "
                  f"gana el más nuevo ({'esta PC' if ganador == 'local' else 'la otra PC'}).")
 
-        # Snapshot post-sync: lo que quedó de cada lado tras aplicar el plan.
+        # Snapshot post-sync: lo listado ahora, MENOS lo que falló al
+        # subir (se reintenta como nuevo) MÁS lo que falló al borrar
+        # allá (sigue allá: se reintenta el borrado).
         try:
             final = listar_local(raiz)
+            for nombre in fallidos_subir:
+                final.pop(nombre, None)
+            for nombre in fallidos_borrar_remoto:
+                if nombre in previo:
+                    final[nombre] = previo[nombre]
             cfg_sync.guardar_ultimo_indice(final)
         except Exception as e:
             resumen["errores"].append(f"Guardar índice: {e}")

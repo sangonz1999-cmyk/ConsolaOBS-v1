@@ -216,6 +216,17 @@ def sincronizar_ahora():
             ok, resumen = motor_sync.sincronizar(log=_log)
         except Exception as e:
             ok, resumen = False, {"errores": [str(e)]}
+        # Si bajaron audios nuevos, se convierten en pads solos (igual
+        # que al arrancar): si no, el archivo llega pero el pad recién
+        # aparece al reiniciar.
+        try:
+            if (resumen or {}).get("bajados"):
+                from consola_obs.ui import soundboard as mod_ui_soundboard
+                E.ventana.after(
+                    0, lambda: mod_ui_soundboard.detectar_sonidos_carpeta(avisar=False))
+                _log("Sync: buscando pads nuevos entre lo bajado…")
+        except Exception:
+            pass
 
         def _terminar():
             try:

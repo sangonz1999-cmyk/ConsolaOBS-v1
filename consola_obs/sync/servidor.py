@@ -52,9 +52,12 @@ def _es_temporal(nombre):
     return bajo.endswith(".tmp") or bajo.endswith(".part")
 
 
-def listar_archivos(raiz):
+def listar_archivos(raiz, omitidos=None):
     """[{name, size, mtime, sha256}] recursivo bajo raíz, con rutas
-    relativas en formato con /. Pura (testeable sin FastAPI)."""
+    relativas en formato con /. Los ilegibles (bloqueados, sin permiso)
+    se saltean y, si se pasa lista `omitidos`, se anotan ahí para
+    avisar: si no, un archivo nuevo parecería "no existir" en silencio.
+    Pura (testeable sin FastAPI)."""
     items = []
     try:
         raiz_abs = os.path.abspath(raiz)
@@ -78,6 +81,11 @@ def listar_archivos(raiz):
                     "sha256": _sha256(ruta),
                 })
             except Exception:
+                try:
+                    if omitidos is not None:
+                        omitidos.append(rel)
+                except Exception:
+                    pass
                 continue
     items.sort(key=lambda d: d["name"])
     return items
