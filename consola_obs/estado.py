@@ -174,6 +174,11 @@ _kinds_con_audio = set()
 fuentes_ocultas = set()
 orden_fuentes_criterios = []
 mostrar_ocultas = True
+# Fuentes con al menos un filtro de audio HABILITADO (criterio "con
+# filtros primero"; el Nivelador propio no cuenta porque lo pone el
+# programa solo, no el usuario).
+filtros_activos = set()
+separador_filtros = None
 # Escenas donde Efectos/Música PUEDEN estar (lista blanca): en las
 # demás no se crea nada nunca, ni siquiera al aire. Vacía = no se crea
 # en ninguna (cierra por defecto: lo olvidado queda a salvo solo).

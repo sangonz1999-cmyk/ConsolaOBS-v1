@@ -779,6 +779,29 @@ def quitar_internas_de_otras_escenas():
     return programa, quitadas
 
 
+def _tiene_filtros_activos(nombre_fuente):
+    """True si la fuente tiene al menos un filtro HABILITADO (los
+    apagados no cuentan, y el Nivelador propio tampoco porque lo pone
+    el programa solo al nivelar, no el usuario). Para el criterio de
+    orden "con filtros primero". Nunca lanza."""
+    if not E.conectado or not nombre_fuente:
+        return False
+    try:
+        filtros = E.cliente_obs.get_source_filter_list(nombre_fuente).filters or []
+    except Exception:
+        return False
+    for filtro in filtros or []:
+        try:
+            if not mod_obs_eventos._valor(filtro, "filter_enabled", "filterEnabled"):
+                continue
+            if mod_obs_eventos._valor(filtro, "filter_name", "filterName") == C.NOMBRE_FILTRO_NIVEL:
+                continue
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def quitar_fuente_de_todas_las_escenas(nombre_fuente):
     """Saca 'nombre_fuente' de TODAS las escenas (RemoveSceneItem por
     cada ítem de primer nivel que la referencie) SIN borrar el input de

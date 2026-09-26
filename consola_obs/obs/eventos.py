@@ -422,24 +422,38 @@ def _quizas_refrescar_ganancia_por_evento(datos):
         _refrescar_ganancia_fuente_en_hilo(nombre)
 
 
+def _quizas_actualizar_filtros_activos(datos):
+    """Un filtro se creó/borró/prendió/apagó/reordenó: puede cambiar si
+    su fuente cuenta para el criterio 'con filtros primero'."""
+    nombre = _valor(datos, "source_name", "sourceName")
+    if nombre:
+        threading.Thread(
+            target=mod_ui_tarjeta._actualizar_filtros_activos_fuente,
+            args=(nombre,), daemon=True).start()
+
+
 def on_source_filter_created(datos):
     _quizas_refrescar_dialogo_filtros(datos)
     _quizas_refrescar_ganancia_por_evento(datos)
+    _quizas_actualizar_filtros_activos(datos)
 
 
 def on_source_filter_removed(datos):
     _quizas_refrescar_dialogo_filtros(datos)
     _quizas_refrescar_ganancia_por_evento(datos)
+    _quizas_actualizar_filtros_activos(datos)
 
 
 def on_source_filter_enable_state_changed(datos):
     _quizas_refrescar_dialogo_filtros(datos)
     _quizas_refrescar_ganancia_por_evento(datos)
+    _quizas_actualizar_filtros_activos(datos)
 
 
 def on_source_filter_list_reindexed(datos):
     _quizas_refrescar_dialogo_filtros(datos)
     _quizas_refrescar_ganancia_por_evento(datos)
+    _quizas_actualizar_filtros_activos(datos)
 
 
 def on_source_filter_name_changed(datos):

@@ -204,22 +204,80 @@ def _tiene_tarjeta_viva(nombre):
         return False
 
 
+def _filas_con_corte(nombres, columnas, corte):
+    """Puro y testeable: reparte 'nombres' en filas con una fila de
+    DIVISOR entre el grupo de arriba (los primeros 'corte') y el resto.
+    Devuelve ([(nombre, fila, col)], fila_divisor_o_None). Si el corte
+    no parte en dos grupos no vacíos, no hay divisor."""
+    try:
+        columnas = max(1, int(columnas))
+    except Exception:
+        columnas = 1
+    try:
+        corte = max(0, int(corte))
+    except Exception:
+        corte = 0
+    try:
+        nombres = list(nombres or [])
+    except Exception:
+        return [], None
+    if corte <= 0 or corte >= len(nombres):
+        return ([(n, i // columnas, i % columnas) for i, n in enumerate(nombres)],
+                None)
+    filas_arriba = (corte + columnas - 1) // columnas
+    pos = [(n, i // columnas, i % columnas) for i, n in enumerate(nombres[:corte])]
+    pos += [(n, (i // columnas) + filas_arriba + 1, i % columnas)
+            for i, n in enumerate(nombres[corte:])]
+    return pos, filas_arriba
+
+
+def _corte_filtros(orden):
+    """Cuántas del principio de 'orden' van arriba del divisor: sólo con
+    el criterio "filtros" prendido y si parte en dos grupos no vacíos.
+    Nunca lanza."""
+    try:
+        if "filtros" not in _criterios_orden_activos():
+            return 0
+        con_filtros = set(getattr(E, "filtros_activos", None) or set())
+    except Exception:
+        return 0
+    try:
+        lista = list(orden or [])
+    except Exception:
+        return 0
+    n = 0
+    for nombre in lista:
+        if nombre in con_filtros:
+            n += 1
+        else:
+            break
+    if n <= 0 or n >= len(lista):
+        return 0
+    return n
+
+
 def _posiciones_grilla(orden, columnas):
-    """[(nombre, fila, col)] DENSAS: salta los nombres sin tarjeta viva
-    para no dejar huecos (antes el índice venía del enumerate y un
-    nombre sin tarjeta consumía celda vacía). Nunca lanza."""
+    """([(nombre, fila, col)], fila_divisor_o_None) DENSAS: salta los
+    nombres sin tarjeta viva para no dejar huecos (antes el índice venía
+    del enumerate y un nombre sin tarjeta consumía celda vacía). El corte
+    se calcula sobre las presentes (ver _corte_filtros + _filas_con_corte).
+    Nunca lanza."""
     try:
         presentes = [n for n in (orden or []) if _tiene_tarjeta_viva(n)]
     except Exception:
         try:
             presentes = list(orden or [])
         except Exception:
-            return []
+            return [], None
     try:
-        columnas = max(1, int(columnas))
+        return _filas_con_corte(presentes, columnas, _corte_filtros(presentes))
     except Exception:
-        columnas = 1
-    return [(n, i // columnas, i % columnas) for i, n in enumerate(presentes)]
+        try:
+            columnas = max(1, int(columnas))
+        except Exception:
+            columnas = 1
+        return ([(n, i // columnas, i % columnas) for i, n in enumerate(presentes)],
+                None)
 
 
 def _fila_col_fuente(nombre):
@@ -231,7 +289,8 @@ def _fila_col_fuente(nombre):
     if nombre not in E.orden_fuentes:
         E.orden_fuentes.append(nombre)
     try:
-        for _n, _f, _c in _posiciones_grilla(orden_visible_fuentes(), E.columnas_fuentes):
+        _pos, _div = _posiciones_grilla(orden_visible_fuentes(), E.columnas_fuentes)
+        for _n, _f, _c in _pos:
             if _n == nombre:
                 return _f, _c
         raise ValueError(nombre)
@@ -246,6 +305,7 @@ def _fila_col_fuente(nombre):
 
 
 CRITERIOS_ORDEN_FUENTES = (
+    ("filtros", "Con filtros primero"),
     ("favoritos", "Favoritos primero"),
     ("colores", "Con colores primero"),
     ("activas", "Activas primero"),
@@ -361,9 +421,15 @@ def orden_visible_fuentes():
             con_color = set((E.colores_fuentes or {}).keys())
         except Exception:
             con_color = set()
+        try:
+            con_filtros = set(getattr(E, "filtros_activos", None) or set())
+        except Exception:
+            con_filtros = set()
 
         def _clave(n):
             clave = []
+            if "filtros" in criterios:
+                clave.append(0 if n in con_filtros else 1)
             if "favoritos" in criterios:
                 clave.append(0 if n in favs else 1)
             if "colores" in criterios:
@@ -946,6 +1012,109 @@ def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
 _ultimo_log_reubica_fuentes = {"quien": None, "t": 0.0}
 
 
+def _obtener_separador_filtros():
+    """Tira divisoria '↑ CON FILTROS' (línea de acento + etiqueta): se
+    crea una sola vez como hija del panel y se re-grilla en cada
+    reacomodo. None si no se pudo."""
+    try:
+        sep = getattr(E, "separador_filtros", None)
+        if sep is not None:
+            try:
+                if sep.winfo_exists():
+                    return sep
+            except Exception:
+                pass
+        sep = tk.Frame(E.panel_fuentes, bg=E.color_fondo_panel())
+        etiqueta = tk.Label(
+            sep, text="↑ CON FILTROS", bg=E.color_fondo_panel(), fg="#8fa0bd",
+            font=(E.FUENTE_UI, 7, "bold"), bd=0, highlightthickness=0)
+        etiqueta.pack(side="left", padx=(6, 8))
+        linea = tk.Frame(sep, bg=E.color_acento(), height=2)
+        linea.pack(side="left", fill="x", expand=True, padx=(0, 6), pady=8)
+        sep.etiqueta_divisor = etiqueta
+        sep.linea_divisor = linea
+        E.separador_filtros = sep
+        return sep
+    except Exception:
+        return None
+
+
+def _acomodar_divisor_filtros(fila_divisor, columnas):
+    """Muestra el divisor en su fila (a todo el ancho) o lo esconde si
+    no parte nada. Nunca lanza."""
+    try:
+        sep = getattr(E, "separador_filtros", None)
+        try:
+            existe = sep is not None and bool(sep.winfo_exists())
+        except Exception:
+            existe = False
+        if fila_divisor is None:
+            if existe:
+                try:
+                    sep.grid_forget()
+                except Exception:
+                    pass
+            return
+        if not existe:
+            sep = _obtener_separador_filtros()
+            if sep is None:
+                return
+        try:
+            sep.config(bg=E.color_fondo_panel())
+            sep.etiqueta_divisor.config(bg=E.color_fondo_panel())
+            sep.linea_divisor.config(bg=E.color_acento())
+        except Exception:
+            pass
+        try:
+            sep.grid(row=int(fila_divisor), column=0,
+                     columnspan=max(1, int(columnas)),
+                     sticky="ew", padx=6, pady=2)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _reubicar_si_filtros():
+    """Reubica si el criterio 'filtros' está prendido (el divisor y el
+    orden dependen del set vivo). Siempre por after(0): vale desde
+    cualquier hilo."""
+    try:
+        if "filtros" not in _criterios_orden_activos():
+            return
+        try:
+            E.ventana.after(0, _reubicar_fuentes)
+        except Exception:
+            _reubicar_fuentes()
+    except Exception:
+        pass
+
+
+def _actualizar_filtros_activos_fuente(nombre):
+    """Recalcula si 'nombre' tiene filtros prendidos (hilo daemon, desde
+    eventos de filtros) y reubica si cambió algo con el criterio activo."""
+    try:
+        tiene = bool(mod_obs_cliente._tiene_filtros_activos(nombre))
+    except Exception:
+        return
+    try:
+        if not isinstance(getattr(E, "filtros_activos", None), set):
+            E.filtros_activos = set()
+        antes = nombre in E.filtros_activos
+    except Exception:
+        return
+    if tiene == antes:
+        return
+    try:
+        if tiene:
+            E.filtros_activos.add(nombre)
+        else:
+            E.filtros_activos.discard(nombre)
+    except Exception:
+        pass
+    _reubicar_si_filtros()
+
+
 def _reubicar_fuentes(forzar=False):
     """Reacomoda (sin recrear) las tarjetas de fuente ya existentes según
     la cantidad de columnas actual. No recrear evita perder el estado
@@ -989,10 +1158,15 @@ def _reubicar_fuentes(forzar=False):
     ancho_celda = _ancho_celda_fuentes()
     ancho_sin_cambios = (not forzar) and (E._ultimo_ancho_celda_fuentes["valor"] == ancho_celda)
     E._ultimo_ancho_celda_fuentes["valor"] = ancho_celda
-    # La clave incluye el orden VISIBLE (manual + criterio + ocultas):
-    # cambiar el criterio reordena aunque la lista manual no cambie.
+    # La clave incluye el orden VISIBLE (manual + criterio + ocultas)
+    # y el corte del divisor: cambiar el criterio o los filtros activos
+    # reordena aunque la lista manual no cambie.
     orden = orden_visible_fuentes()
-    clave_grilla = (columnas, ancho_celda, tuple(orden))
+    try:
+        corte = _corte_filtros([n for n in orden if _tiene_tarjeta_viva(n)])
+    except Exception:
+        corte = 0
+    clave_grilla = (columnas, ancho_celda, corte, tuple(orden))
     # Si no cambió ni la cantidad de columnas ni el ancho, las posiciones
     # son idénticas: no hay nada que mover.
     if (not forzar) and E._ultima_grilla_fuentes.get("clave") == clave_grilla:
@@ -1016,8 +1190,11 @@ def _reubicar_fuentes(forzar=False):
     except Exception:
         pass
     # Posiciones DENSAS: los nombres sin tarjeta no consumen celda (si
-    # no, quedaban huecos vacíos en la grilla).
-    for nombre, fila, col in _posiciones_grilla(orden, columnas):
+    # no, quedaban huecos vacíos en la grilla). Con corte hay una fila
+    # de divisor entre el grupo de filtros y el resto.
+    posiciones, fila_divisor = _posiciones_grilla(orden, columnas)
+    _acomodar_divisor_filtros(fila_divisor, columnas)
+    for nombre, fila, col in posiciones:
         try:
             if not E.fuentes[nombre]["tarjeta_sombra"].winfo_exists():
                 continue
@@ -2303,6 +2480,13 @@ def _renombrar_fuente_localmente(nombre_viejo, nombre_nuevo):
         E.orden_fuentes[E.orden_fuentes.index(nombre_viejo)] = nombre_nuevo
 
     try:
+        if nombre_viejo in (getattr(E, "filtros_activos", None) or set()):
+            E.filtros_activos.discard(nombre_viejo)
+            E.filtros_activos.add(nombre_nuevo)
+    except Exception:
+        pass
+
+    try:
         ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
         if nombre_viejo in ocultas:
             ocultas.discard(nombre_viejo)
@@ -2915,11 +3099,17 @@ def _actualizar_en_hilo_cuerpo():
                 print(f"No se pudo leer el monitoreo de '{nombre}': {e}")
                 tipo_monitor = "OBS_MONITORING_TYPE_NONE"
 
+            try:
+                con_filtros = mod_obs_cliente._tiene_filtros_activos(nombre)
+            except Exception:
+                con_filtros = False
+
             datos_fuentes.append({
                 "nombre": nombre,
                 "vol_db": vol_db,
                 "muted": muted,
-                "tipo_monitor": tipo_monitor
+                "tipo_monitor": tipo_monitor,
+                "con_filtros": con_filtros,
             })
 
         except Exception as e:
@@ -3010,6 +3200,12 @@ def _aplicar_actualizacion(datos_fuentes, error, nombres_en_escena=None, escena_
             pass
 
     nombres_activos = [d["nombre"] for d in datos_fuentes]
+
+    try:
+        E.filtros_activos = set(
+            d["nombre"] for d in datos_fuentes if d.get("con_filtros"))
+    except Exception:
+        pass
 
     for nombre_existente in list(E.fuentes.keys()):
         if nombre_existente not in nombres_activos:
@@ -3152,6 +3348,11 @@ def _limpiar_referencias_fuente_borrada(nombre):
             previo_map.pop(nombre, None)
             E._estado_previo_oculta = previo_map
             cambios_interfaz["fuentes_ocultas_previo"] = dict(previo_map)
+    except Exception:
+        pass
+    try:
+        if isinstance(getattr(E, "filtros_activos", None), set):
+            E.filtros_activos.discard(nombre)
     except Exception:
         pass
     if cambios_interfaz:

@@ -158,7 +158,7 @@ def main():
     if isinstance(E._orden_guardado, list):
         E.orden_fuentes = [n for n in E._orden_guardado if isinstance(n, str)]
 
-    _validos = ("favoritos", "colores", "activas", "escena", "alfabetico")
+    _validos = ("filtros", "favoritos", "colores", "activas", "escena", "alfabetico")
     _crit = E.config_interfaz_previa.get("orden_fuentes_criterios", None)
     if isinstance(_crit, list):
         E.orden_fuentes_criterios = [c for c in _crit if c in _validos]

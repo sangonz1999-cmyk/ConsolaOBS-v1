@@ -632,6 +632,7 @@ def construir_cuerpo():
     # saltarse el reacomodo que hace falta.
     E._ultimo_ancho_celda_fuentes["valor"] = None
     E._ultima_grilla_fuentes["clave"] = None
+    E.separador_filtros = None
     E._ultimas_columnas_pads["valor"] = None
 
     E.cuerpo = tk.PanedWindow(E.ventana, orient=E.orientacion_paneles, bg="#0b0e13", sashwidth=8, sashrelief="flat")
