@@ -404,6 +404,18 @@ def _cargar_y_disparar(indice, accion, token):
         return
 
     try:
+        from consola_obs.obs import cliente as mod_obs_cliente
+        programa_protegido = mod_obs_cliente.programa_actual_protegido()
+    except Exception:
+        programa_protegido = False
+    if programa_protegido:
+        # Escena al aire protegida (cámaras, capturas): el efecto sale
+        # sólo por los parlantes (hilo local ya lanzado, el pad se apaga
+        # solo al terminar) y OBS no se toca en absoluto.
+        print("Escena al aire protegida: efecto sólo local, sin tocar OBS.")
+        return
+
+    try:
         # Robo de voz: serializa el envío a la fuente compartida. Si el
         # candado está ocupado (otra sesión mandando), se sigue igual
         # tras el timeout: cada escritura re-chequea el token, así que

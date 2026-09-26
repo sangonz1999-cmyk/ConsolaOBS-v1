@@ -1830,6 +1830,8 @@ def _abrir_menu_contextual_panel_fuentes(event):
         menu.add_separator()
         menu.add_command(label="🧹  Quitar Efectos/Música de otras escenas…",
                          command=_quitar_internas_de_otras_escenas)
+        menu.add_command(label="🛡  Escenas protegidas…",
+                         command=_abrir_protegidas)
 
     try:
         menu.tk_popup(event.x_root, event.y_root)
@@ -2474,6 +2476,94 @@ def _quitar_internas_en_hilo():
                 "Efectos/Música ya estaban sólo en la escena al aire.")
 
     E.ventana.after(0, _avisar)
+
+
+def _guardar_protegidas():
+    try:
+        mod_configuracion.guardar_config_interfaz(
+            {"escenas_protegidas": sorted(getattr(E, "escenas_protegidas", set()) or set())})
+    except Exception:
+        pass
+
+
+def _abrir_protegidas():
+    """Abre el diálogo de escenas protegidas (las que el programa no
+    toca nunca, ni siquiera al aire). Lee la lista de OBS en hilo."""
+    if not E.conectado:
+        messagebox.showwarning("Sin conexión", "Conectate a OBS para ver las escenas.")
+        return
+    threading.Thread(target=_cargar_protegidas_en_hilo, daemon=True).start()
+
+
+def _cargar_protegidas_en_hilo():
+    try:
+        escenas = [mod_obs_eventos._valor(e, "scene_name", "sceneName")
+                   for e in E.cliente_obs.get_scene_list().scenes]
+        escenas = sorted(s for s in escenas if s)
+    except Exception as e:
+        E.ventana.after(0, lambda e=e: messagebox.showerror(
+            "Error", f"No se pudieron listar las escenas.\n\n{e}"))
+        return
+    E.ventana.after(0, lambda: _mostrar_dialogo_protegidas(escenas))
+
+
+def _alternar_protegida(nombre, var):
+    try:
+        if not isinstance(getattr(E, "escenas_protegidas", None), set):
+            E.escenas_protegidas = set()
+        if var.get():
+            E.escenas_protegidas.add(nombre)
+        else:
+            E.escenas_protegidas.discard(nombre)
+        _guardar_protegidas()
+    except Exception:
+        pass
+
+
+def _mostrar_dialogo_protegidas(escenas):
+    """Checklist de escenas: las tildadas no se tocan nunca (ni
+    Efectos ni Música, ni siquiera al aire: ahí el efecto sale sólo
+    por parlantes y la música no se inyecta). Si renombrás una escena,
+    volvé a marcarla."""
+    try:
+        win = tk.Toplevel(E.ventana)
+    except Exception:
+        return
+    win.title("Escenas protegidas")
+    win.configure(bg=C.COLOR_MENU_FONDO)
+    try:
+        win.attributes("-topmost", True)
+    except Exception:
+        pass
+    tk.Label(
+        win, text="El programa NO crea nada en estas escenas,\nni siquiera al aire:",
+        bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
+        font=(E.FUENTE_UI, 9), justify="left",
+    ).pack(anchor="w", padx=14, pady=(12, 6))
+    marco = tk.Frame(win, bg=C.COLOR_MENU_FONDO)
+    marco.pack(fill="both", expand=True, padx=14, pady=4)
+    if not escenas:
+        tk.Label(marco, text="(No hay escenas en OBS)",
+                 bg=C.COLOR_MENU_FONDO, fg="#8fa0bd",
+                 font=(E.FUENTE_UI, 9)).pack(anchor="w")
+    for escena in escenas:
+        try:
+            var = tk.BooleanVar(value=escena in (getattr(E, "escenas_protegidas", None) or set()))
+            cb = tk.Checkbutton(
+                marco, text=escena, variable=var, anchor="w",
+                bg=C.COLOR_MENU_FONDO, fg="white", selectcolor="#242d3d",
+                activebackground=C.COLOR_MENU_FONDO, activeforeground="white",
+                font=(E.FUENTE_UI, 10),
+                command=lambda n=escena, v=var: _alternar_protegida(n, v))
+            cb.pack(anchor="w", fill="x")
+        except Exception:
+            continue
+    tk.Button(
+        win, text="CERRAR", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+        activebackground="#2f3a4d", activeforeground="white",
+        relief="flat", bd=0, pady=6, font=(E.FUENTE_UI, 9, "bold"),
+        cursor="hand2", command=win.destroy,
+    ).pack(fill="x", padx=14, pady=(8, 12))
 
 
 

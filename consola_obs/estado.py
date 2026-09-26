@@ -174,6 +174,9 @@ _kinds_con_audio = set()
 fuentes_ocultas = set()
 orden_fuentes_criterios = []
 mostrar_ocultas = True
+# Escenas que el programa NO toca nunca (ni Efectos ni Música, ni
+# siquiera al aire): cámaras, capturas y demás escenas especiales.
+escenas_protegidas = set()
 # Estado previo al ocultar (Fase 3): por fuente oculta, {"muted": bool,
 # "monitor": str} tal como estaba antes de ocultarla. Vive en memoria y
 # se persiste en config_interfaz.json ("fuentes_ocultas_previo") para
