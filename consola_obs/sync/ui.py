@@ -441,16 +441,85 @@ def vincular_ahora():
 
 
 def mostrar_clave():
-    """Muestra la API key para copiarla a la otra PC (las 2 tienen que
-    usar la misma)."""
+    """Diálogo de clave: la muestra para copiarla, y deja PEGAR la de
+    la otra PC (caso mini-server, que no puede aprobar vinculación).
+    Al guardar rige para sincronizar; para recibir con la nueva hay que
+    reiniciar el programa (el server la tomó al arrancar)."""
     try:
-        key = cfg_sync.obtener_api_key()
-        messagebox.showinfo(
-            "Clave de sincronización",
-            f"Tu clave es:\n\n{key}\n\nPoné LA MISMA en la otra PC "
-            "(variable CONSOLAOBS_SYNC_KEY o este mismo campo).")
+        actual = cfg_sync.obtener_api_key()
     except Exception as e:
-        messagebox.showerror("Sync", f"No se pudo leer la clave: {e}")
+        try:
+            messagebox.showerror("Sync", f"No se pudo leer la clave: {e}")
+        except Exception:
+            pass
+        return
+    try:
+        win = tk.Toplevel(E.ventana)
+    except Exception:
+        return
+    win.title("Clave de sincronización")
+    win.configure(bg=C.COLOR_MENU_FONDO)
+    try:
+        win.attributes("-topmost", True)
+    except Exception:
+        pass
+    tk.Label(
+        win, text="Las 2 PCs usan LA MISMA clave.\nPegá acá la de la otra PC "
+                  "(mini: la de sync.key) y guardá.",
+        bg=C.COLOR_MENU_FONDO, fg=C.COLOR_MENU_TEXTO,
+        font=(E.FUENTE_UI, 9), justify="left",
+    ).pack(anchor="w", padx=14, pady=(12, 4))
+    entrada = tk.Entry(win, bg="#0e1219", fg="white", insertbackground="white",
+                       relief="flat", highlightthickness=1,
+                       highlightbackground="#2b3548", font=(E.FUENTE_UI, 10))
+    entrada.pack(fill="x", padx=14, pady=4, ipady=5)
+    try:
+        entrada.insert(0, actual)
+    except Exception:
+        pass
+    fila = tk.Frame(win, bg=C.COLOR_MENU_FONDO)
+    fila.pack(fill="x", padx=14, pady=(4, 12))
+
+    def _copiar():
+        try:
+            E.ventana.clipboard_clear()
+            E.ventana.clipboard_append(entrada.get().strip())
+        except Exception:
+            pass
+
+    def _guardar():
+        try:
+            nueva = (entrada.get() or "").strip()
+        except Exception:
+            nueva = ""
+        if not nueva:
+            try:
+                messagebox.showwarning("Clave", "Pegá una clave primero.")
+            except Exception:
+                pass
+            return
+        try:
+            cfg_sync.guardar({"api_key": nueva})
+            E.etiqueta_sync_estado.config(
+                text="Clave actualizada ✓ (para recibir reiniciá el programa).",
+                fg="#2fd693")
+        except Exception:
+            pass
+        try:
+            win.destroy()
+        except Exception:
+            pass
+
+    tk.Button(fila, text="📋 COPIAR", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+              activebackground="#2f3a4d", activeforeground="white",
+              relief="flat", bd=0, pady=6, font=(E.FUENTE_UI, 9, "bold"),
+              cursor="hand2", command=_copiar).pack(
+                  side="left", fill="x", expand=True, padx=(0, 4))
+    tk.Button(fila, text="💾 GUARDAR", bg="#242d3d", fg=C.COLOR_MENU_TEXTO,
+              activebackground="#2f3a4d", activeforeground="white",
+              relief="flat", bd=0, pady=6, font=(E.FUENTE_UI, 9, "bold"),
+              cursor="hand2", command=_guardar).pack(
+                  side="left", fill="x", expand=True, padx=(4, 0))
 
 
 def construir_seccion_sync(padre=None):
