@@ -77,6 +77,18 @@ class Cliente:
         estado, _h, cuerpo = self._pedir("GET", "/ping")
         return json.loads(cuerpo.decode("utf-8")).get("ok") is True
 
+    def info(self):
+        """{"root":..., "archivos":...} del otro lado (None si su versión
+        no lo trae). Nunca lanza nada útil: devuelve None si falla."""
+        try:
+            _e, _h, cuerpo = self._pedir("GET", "/info")
+            datos = json.loads(cuerpo.decode("utf-8"))
+            if isinstance(datos, dict):
+                return datos
+            return None
+        except Exception:
+            return None
+
     def lista_remota(self):
         _e, _h, cuerpo = self._pedir("GET", "/files")
         datos = json.loads(cuerpo.decode("utf-8"))
@@ -209,6 +221,13 @@ def sincronizar(config=None, log=None):
         for rel in omitidos:
             _log(f"Sync: no se pudo leer {rel} (bloqueado o sin permiso): "
                  "no entra al sync hasta poder leerse.")
+        try:
+            info_remota = cli.info()
+            if info_remota:
+                _log(f"Sync: raíz remota {info_remota.get('root', '?')} "
+                     f"({info_remota.get('archivos', '?')} archivos).")
+        except Exception:
+            pass
         remoto = cli.lista_remota()
         previo = cfg_sync.cargar_ultimo_indice()
         plan = comparar(local, remoto, previo)
@@ -216,6 +235,20 @@ def sincronizar(config=None, log=None):
              f"Plan: {len(plan['subir'])} subir, {len(plan['bajar'])} bajar, "
              f"{len(plan['borrar_local'])} borrar acá, {len(plan['borrar_remoto'])} borrar allá, "
              f"{len(plan['conflictos'])} conflictos.")
+
+        def _nombres(lista, titulo):
+            try:
+                if not lista:
+                    return
+                muestra = ", ".join(lista[:15])
+                extra = f" (+{len(lista) - 15} más)" if len(lista) > 15 else ""
+                _log(f"Sync: {titulo}: {muestra}{extra}")
+            except Exception:
+                pass
+        _nombres(plan["subir"], "a subir")
+        _nombres(plan["bajar"], "a bajar")
+        _nombres(plan["borrar_local"], "a borrar acá")
+        _nombres(plan["borrar_remoto"], "a borrar allá")
 
         # Fallos por operación: el índice final sólo refleja lo que quedó
         # CONFIRMADO en ambos lados. Un fallo NO se marca como hecho:

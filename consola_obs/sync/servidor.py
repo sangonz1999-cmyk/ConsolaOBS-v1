@@ -108,6 +108,17 @@ def crear_app(raiz, api_key):
         _autorizar(x_api_key)
         return {"ok": True}
 
+    @app.get("/info")
+    def info(x_api_key: str = Header(default="", alias="X-API-Key")):
+        _autorizar(x_api_key)
+        try:
+            return {"root": os.path.abspath(raiz),
+                    "archivos": len(listar_archivos(raiz)),
+                    "version": 1}
+        except Exception as e:
+            return {"root": "", "archivos": -1, "version": 1,
+                    "error": str(e)}
+
     @app.get("/files")
     def files(x_api_key: str = Header(default="", alias="X-API-Key")):
         _autorizar(x_api_key)

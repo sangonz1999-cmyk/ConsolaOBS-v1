@@ -236,6 +236,14 @@ def crear_handler(raiz, api_key):
                 return
             if ruta == "/ping":
                 self._json(200, {"ok": True})
+            elif ruta == "/info":
+                try:
+                    self._json(200, {"root": os.path.abspath(raiz),
+                                     "archivos": len(listar(raiz)),
+                                     "version": 1})
+                except Exception as e:
+                    self._json(200, {"root": "", "archivos": -1,
+                                     "version": 1, "error": str(e)})
             elif ruta == "/files":
                 self._json(200, listar(raiz))
             elif ruta == "/download":
