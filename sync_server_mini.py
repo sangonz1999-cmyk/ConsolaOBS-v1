@@ -17,6 +17,11 @@ Uso (Linux, en la carpeta de los sonidos):
   (la clave sale de CONSOLAOBS_SYNC_KEY, de --key, o de sync.key:
   se genera sola la primera vez y se muestra para copiarla en la consola)
 
+Vinculación automática: los primeros 120 segundos tras arrancar, el
+mini acepta SOLO el pedido 🔗 VINCULAR de la consola y adopta su clave
+(después sólo vale la clave a mano). Así no se escribe nada si lo
+hacés dentro de esa ventana.
+
 Viaja dentro de ConsolaOBS-OBS.zip: en la PC del OBS no se instala nada
 más (ni pip, ni el programa completo).
 """
@@ -29,6 +34,7 @@ import secrets
 import socket
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -36,9 +42,20 @@ CHUNK = 1024 * 1024
 RAIZ_SCRIPT = os.path.dirname(os.path.abspath(__file__))
 PUERTO_DISCOVERY = 4457
 APP_ID = "ConsolaOBS-sync"
+# Ventana tras arrancar en la que se acepta vinculación automática.
+VENTANA_VINCULO_SEG = 120.0
 
 
-def iniciar_discovery(puerto_sync, puerto_disc=PUERTO_DISCOVERY):
+def _guardar_key_archivo(clave):
+    try:
+        with open(os.path.join(RAIZ_SCRIPT, "sync.key"), "w", encoding="utf-8") as f:
+            f.write(clave)
+        return True
+    except Exception:
+        return False
+
+
+def iniciar_discovery(puerto_sync, puerto_disc=PUERTO_DISCOVERY, estado=None):
     """Responde el broadcast DISCOVER con HELLO (para que la consola
     encuentre esta PC con 🔍 BUSCAR PCS) y rechaza PAIR con motivo (sin
     pantalla no se puede aprobar: la clave va a mano). Hilo daemon."""
@@ -82,13 +99,14 @@ def iniciar_discovery(puerto_sync, puerto_disc=PUERTO_DISCOVERY):
                     except Exception:
                         pass
                 elif datos.get("t") == "PAIR":
+                    ok, motivo = _intentar_vinculo(datos, estado)
                     r = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     try:
-                        r.sendto(json.dumps({
-                            "t": "PAIRED", "app": APP_ID, "v": 1, "ok": False,
-                            "motivo": "Mini-server sin pantalla: poné la clave "
-                                      "a mano (es la de sync.key).",
-                        }).encode("utf-8"), (ip, pto))
+                        respuesta = {"t": "PAIRED", "app": APP_ID, "v": 1,
+                                     "ok": bool(ok)}
+                        if motivo:
+                            respuesta["motivo"] = motivo
+                        r.sendto(json.dumps(respuesta).encode("utf-8"), (ip, pto))
                     except Exception:
                         pass
                     try:
@@ -102,6 +120,37 @@ def iniciar_discovery(puerto_sync, puerto_disc=PUERTO_DISCOVERY):
         threading.Thread(target=_correr, daemon=True).start()
     except Exception:
         pass
+
+
+def _intentar_vinculo(datos, estado):
+    """Adopta la clave del pedido PAIR si estamos dentro de la ventana
+    de vinculación (120 s tras arrancar). Devuelve (ok, motivo)."""
+    try:
+        if not isinstance(estado, dict):
+            return False, ("Mini-server sin pantalla: poné la clave "
+                           "a mano (es la de sync.key).")
+        try:
+            edad = time.monotonic() - float(estado.get("inicio", 0))
+        except Exception:
+            edad = 1e9
+        if edad > VENTANA_VINCULO_SEG:
+            return False, ("Ventana de vinculación cerrada (son los primeros "
+                           "120 s tras arrancar el mini): reinicialo y probá "
+                           "🔗 VINCULAR enseguida, o poné la clave a mano "
+                           "(es la de sync.key).")
+        nueva = str((datos or {}).get("key") or "").strip()
+        if not nueva:
+            return False, "Pedido sin clave."
+        estado["key"] = nueva
+        if _guardar_key_archivo(nueva):
+            print("[sync-mini] vinculación automática: clave adoptada y guardada.",
+                  flush=True)
+        else:
+            print("[sync-mini] vinculación automática: clave adoptada "
+                  "(no se pudo guardar, vale por esta sesión).", flush=True)
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 def _sha256(ruta):
@@ -188,7 +237,9 @@ def resolver_clave(args):
     return nueva, "generada"
 
 
-def crear_handler(raiz, api_key):
+def crear_handler(raiz, estado):
+    """estado = {"key":..., "inicio":...} compartido (la clave puede
+    cambiar por vinculación automática sin reiniciar)."""
     class Manejador(BaseHTTPRequestHandler):
         server_version = "ConsolaOBS-SyncMini/1.0"
 
@@ -202,7 +253,8 @@ def crear_handler(raiz, api_key):
         def _autorizado(self):
             try:
                 dada = self.headers.get("X-API-Key") or ""
-                return bool(api_key) and hmac.compare_digest(dada, api_key)
+                vigente = (estado or {}).get("key") or ""
+                return bool(vigente) and hmac.compare_digest(dada, vigente)
             except Exception:
                 return False
 
@@ -345,14 +397,17 @@ def main(argv=None):
         print(f"No existe la carpeta a servir: {raiz}")
         return 1
     api_key, origen = resolver_clave(args)
+    estado = {"key": api_key, "inicio": time.monotonic()}
     print(f"Sirviendo {raiz} en puerto {args.port} (clave: {origen}).")
     if origen in ("generada",):
         print(f"Tu clave es:\n\n{api_key}\n\nPoné LA MISMA en la consola "
               "(Ajustes -> Sincronización).")
+    print(f"Vinculación automática ABIERTA {int(VENTANA_VINCULO_SEG)} s: "
+          "apretá 🔗 VINCULAR en la consola ya (después sólo vale la clave).")
     print("Ctrl+C para detener.")
-    iniciar_discovery(int(args.port))
+    iniciar_discovery(int(args.port), estado=estado)
     servidor = ThreadingHTTPServer(("0.0.0.0", int(args.port)),
-                                   crear_handler(raiz, api_key))
+                                   crear_handler(raiz, estado))
     servidor.daemon_threads = True
     try:
         servidor.serve_forever()
