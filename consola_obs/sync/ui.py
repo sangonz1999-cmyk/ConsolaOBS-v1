@@ -213,7 +213,57 @@ def sincronizar_ahora():
             except Exception:
                 pass
         try:
-            ok, resumen = motor_sync.sincronizar(log=_log)
+            plan, ctx = motor_sync.planificar(log=_log)
+        except Exception as e:
+            plan, ctx = None, str(e)
+        if plan is None:
+            try:
+                E.ventana.after(0, lambda: _terminar_con_error(ctx))
+            except Exception:
+                pass
+            return
+
+        def _terminar_con_error(mensaje):
+            try:
+                E.boton_sync.config(state="normal", text="🔄 SINCRONIZAR CON LA OTRA PC")
+                E.etiqueta_sync_estado.config(text="No se pudo.", fg="#ff5d6c")
+                messagebox.showwarning("Sincronización", mensaje)
+            except Exception:
+                pass
+
+        # Los borrados se confirman SIEMPRE (nada se borra solo): Sí =
+        # todo, No = sólo copiar lo nuevo.
+        incluir_borrados = True
+        n_borrar = len(plan["borrar_local"]) + len(plan["borrar_remoto"])
+        if n_borrar:
+            import threading as _th
+            hecho, resp = _th.Event(), {"si": False}
+
+            def _preguntar():
+                try:
+                    r = messagebox.askyesno(
+                        "Confirmar borrados",
+                        f"El sync va a BORRAR {n_borrar} archivo(s) que faltan "
+                        f"del otro lado ({len(plan['borrar_local'])} acá, "
+                        f"{len(plan['borrar_remoto'])} allá).\n\n"
+                        "¿Borrar también?\n"
+                        "Sí = todo / No = sólo copiar lo nuevo.")
+                    resp["si"] = bool(r)
+                except Exception:
+                    resp["si"] = False
+                hecho.set()
+            try:
+                E.ventana.after(0, _preguntar)
+                hecho.wait()
+            except Exception:
+                resp["si"] = False
+            incluir_borrados = resp["si"]
+            if incluir_borrados:
+                _log(f"Sync: borrados confirmados ({n_borrar}).")
+            else:
+                _log(f"Sync: se saltean {n_borrar} borrados (sólo copiar).")
+        try:
+            ok, resumen = motor_sync.ejecutar(plan, ctx, incluir_borrados, log=_log)
         except Exception as e:
             ok, resumen = False, {"errores": [str(e)]}
         # Si bajaron audios nuevos, se convierten en pads solos (igual
@@ -573,8 +623,9 @@ def construir_seccion_sync(padre=None):
     )
     E.boton_sync.pack(fill="x", padx=16, pady=(6, 2))
     mod_ui_cabecera._ayuda_menu(
-        base, "Sincroniza en ambas direcciones: lo nuevo viaja, lo borrado se "
-              "propaga y en conflictos gana el archivo más nuevo.")
+        base, "Sólo Sondidos_pad + Imagenes_pad + Musica (lo demás no se toca). "
+              "Lo nuevo viaja, lo borrado se confirma antes, y en conflictos "
+              "gana esta PC.")
 
     fila = tk.Frame(base, bg=C.COLOR_MENU_FONDO)
     fila.pack(fill="x", padx=16, pady=(4, 2))
