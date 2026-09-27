@@ -104,5 +104,16 @@ if __name__ == "__main__":
     if not _ok:
         _mostrar_error_arranque(_errores)
         sys.exit(1)
+    try:
+        import atexit as _atexit
+        from consola_obs import instancia as _instancia
+        _atexit.register(_instancia.liberar)
+        if _instancia.marcar_en_ejecucion():
+            if not _instancia.preguntar_otra_instancia():
+                sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        pass
     from consola_obs.app import main
     main()
