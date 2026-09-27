@@ -651,6 +651,33 @@ def _nombre_programa_actual():
         return ""
 
 
+def _lista_blanca_activa():
+    """True si hay ALGÚN tilde en ALGUNA colección. Si nadie tildó nada
+    todavía, no hay nada que proteger: la escena al aire vale (si no,
+    con una colección nueva nada suena ni se crea y parece todo roto).
+    En cuanto se tilda la primera, rige estricto."""
+    try:
+        mapa = getattr(E, "escenas_permitidas", None) or {}
+        return bool(isinstance(mapa, dict)
+                    and any(mapa.get(col) for col in mapa))
+    except Exception:
+        return False
+
+
+def _avisar_fallback_permitidas():
+    """Avisa una vez por sesión que, sin tildes, vale la escena al aire."""
+    try:
+        if getattr(E, "_aviso_permitidas_vacias", False):
+            return
+        E._aviso_permitidas_vacias = True
+        mod_red.log_conexion(
+            "FUENTES",
+            "sin escenas tildadas en permitidas: vale la del aire "
+            "(tildá en ✅ Escenas permitidas para proteger)")
+    except Exception:
+        pass
+
+
 def _permitidas_actuales():
     """Set permitido para la colección al aire (vacío si no se sabe).
     Clave por colección porque los nombres se repiten entre colecciones
@@ -677,8 +704,12 @@ def _escena_permitida(nombre_escena):
 
 def programa_actual_permitido():
     """True si la escena que está al aire AHORA está permitida (lectura
-    en vivo: sólo para hilos, nunca desde el hilo de UI)."""
+    en vivo: sólo para hilos, nunca desde el hilo de UI). Sin ningún
+    tilde en ningún lado, la del aire vale (ver _lista_blanca_activa)."""
     try:
+        if not _lista_blanca_activa():
+            _avisar_fallback_permitidas()
+            return bool(_nombre_programa_actual())
         return _escena_permitida(_nombre_programa_actual())
     except Exception:
         return False
@@ -689,13 +720,15 @@ def _asegurar_item_en_escena(nombre_fuente, escena):
     escena puntual: si falta se agrega activado; si está deshabilitado
     ('ojito' apagado) se habilita. No crea inputs ni toca ninguna otra
     escena. Sólo en escenas permitidas (en las demás devuelve False sin
-    tocar nada). Serializada con _lock_sincronizar_escenas para no
-    duplicar el ítem si dos hilos la piden a la vez. Devuelve True si
-    quedó bien."""
+    tocar nada); sin ningún tilde, la del aire vale. Serializada con
+    _lock_sincronizar_escenas para no duplicar el ítem si dos hilos la
+    piden a la vez. Devuelve True si quedó bien."""
     if not E.conectado or not escena or not nombre_fuente:
         return False
-    if not _escena_permitida(escena):
+    if not _escena_permitida(escena) and _lista_blanca_activa():
         return False
+    if not _lista_blanca_activa():
+        _avisar_fallback_permitidas()
     with E._lock_sincronizar_escenas:
         try:
             items = _lista_de(E.cliente_obs.get_scene_item_list(escena),
@@ -729,13 +762,17 @@ def asegurar_interna_en_escena_actual(nombre_fuente, kind, ajustes):
     al aire AHORA: si el input no existe se crea ahí; si existe pero le
     falta el ítem, se agrega activado. NUNCA toca otras escenas, y sólo
     si la del aire está permitida (si no, no se hace nada y devuelve
-    False: lo no tildado no se toca por más que esté al aire). Devuelve
-    True si quedó bien."""
+    False: lo no tildado no se toca por más que esté al aire). Sin ningún
+    tilde, la del aire vale. Devuelve True si quedó bien."""
     if not E.conectado:
         return False
     escena = _nombre_programa_actual()
-    if not escena or not _escena_permitida(escena):
+    if not escena:
         return False
+    if not _escena_permitida(escena) and _lista_blanca_activa():
+        return False
+    if not _lista_blanca_activa():
+        _avisar_fallback_permitidas()
     with E._lock_sincronizar_escenas:
         try:
             entradas = [mod_obs_eventos._valor(i, "input_name", "inputName")

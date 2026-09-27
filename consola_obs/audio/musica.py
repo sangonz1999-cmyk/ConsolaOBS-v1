@@ -473,10 +473,23 @@ def _hacer_reproducir(rel, token):
     # Escena al aire NO permitida: la música (sólo-stream por diseño,
     # sin salida local) no se inyecta ahí. No es un error: es la lista
     # blanca (tildá la escena en Escenas permitidas si tiene que sonar).
+    # Se avisa una vez por sesión para que no parezca que "no anda".
     try:
         from consola_obs.obs import cliente as mod_obs_cliente
         if not mod_obs_cliente.programa_actual_permitido():
             print("Escena al aire no permitida: la música no se inyecta ahí.")
+            try:
+                if not getattr(E, "_aviso_musica_protegida", False):
+                    E._aviso_musica_protegida = True
+                    from tkinter import messagebox as _mb
+                    E.ventana.after(0, lambda: _mb.showinfo(
+                        "Escena no permitida",
+                        "La escena al aire no está tildada en ✅ Escenas "
+                        "permitidas, así que la música no se inyecta ahí.\n\n"
+                        "Tildala si tiene que sonar (o destildá todo para "
+                        "que valga la del aire)."))
+            except Exception:
+                pass
             return False
     except Exception:
         pass
