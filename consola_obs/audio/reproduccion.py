@@ -34,6 +34,17 @@ def _sesion_vigente(token):
         return False
 
 
+def _local_sigue_sonando(token):
+    """True si el audio LOCAL (parlantes) sigue sonando con ese token.
+    Sirve para no matar la sesión visual cuando OBS informa ENDED pero
+    acá se sigue escuchando (fuente inactiva: el trigger no suena allá
+    pero sí acá; lo visual lo manda el reloj local)."""
+    try:
+        return token is not None and _reproduccion_local.get("token") == token
+    except Exception:
+        return False
+
+
 def _esperar_fade_o_aborto(token, tope=1.5):
     """Espera a que no haya fundido en curso, pero aborta enseguida si
     esta sesión ya fue superada (para no demorar un sonido nuevo)."""
@@ -895,6 +906,12 @@ def _consultar_estado_reproduccion():
         # recién mandado todavía no aplicado en OBS): recién a la
         # TERCERA seguida se da por terminado de verdad. Sin esto la
         # luz (y la barra) se cortaban solas con el audio sonando.
+        # Igual que en el evento: si lo local sigue sonando, no se mata
+        # nada (fuente inactiva en OBS).
+        if _local_sigue_sonando(token):
+            _fin_confirmado["token"] = None
+            _fin_confirmado["rachas"] = 0
+            return
         if E._sesion_reproduccion.get("token") == token:
             if _fin_confirmado.get("token") == token:
                 _fin_confirmado["rachas"] += 1

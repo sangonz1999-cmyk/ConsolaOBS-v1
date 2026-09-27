@@ -436,10 +436,32 @@ def alternar_repetir():
         return True
 
 
+def _musica_en_escena():
+    """True si la fuente Música está en la escena al aire (o no se sabe:
+    sin dato no se castiga). La vista lo usa para congelar o interpolar."""
+    try:
+        w = (E.fuentes or {}).get(C.NOMBRE_FUENTE_MUSICA)
+        if not w:
+            return True
+        return bool(w.get("en_escena", True))
+    except Exception:
+        return True
+
+
+def _anclar_cursor(valor):
+    """Fija cursor + base del reloj local (para interpolar entre sondeos)."""
+    try:
+        _sesion["cursor_ms"] = float(valor)
+        _sesion["cursor_base_ms"] = float(valor)
+        _sesion["cursor_base_t"] = time.monotonic()
+    except Exception:
+        pass
+
+
 def estado_actual():
     """Foto para la UI (Fase 3/4). Nunca lanza."""
     try:
-        return {
+        snap = {
             "rel": _sesion["rel"],
             "titulo": os.path.splitext(os.path.basename(_sesion["rel"]))[0] if _sesion["rel"] else None,
             "estado": _sesion["estado"],
@@ -449,6 +471,23 @@ def estado_actual():
                 "mezclar": mezclar(),
                 "modo": modo(),
             }
+        # Reloj local: entre sondeos de OBS (500 ms) la barra avanzaría
+        # a saltos; interpolada se mueve fluida. Sólo sonando Y a la
+        # vista: fuera de escena se congela donde quedó (al volver, el
+        # sondeo re-ancla con lo real de OBS).
+        try:
+            if snap["estado"] == "SONANDO" and _musica_en_escena():
+                base_t = float(_sesion.get("cursor_base_t") or 0.0)
+                if base_t > 0:
+                    cur = float(_sesion.get("cursor_base_ms") or 0.0)
+                    cur += (time.monotonic() - base_t) * 1000.0
+                    dur = float(_sesion.get("duracion_ms") or 0.0)
+                    if dur > 0:
+                        cur = min(cur, dur)
+                    snap["cursor_ms"] = max(0.0, cur)
+        except Exception:
+            pass
+        return snap
     except Exception:
         return {"rel": None, "titulo": None, "estado": "DETENIDA",
                 "cursor_ms": 0.0, "duracion_ms": 0.0, "repetir": True,
@@ -542,7 +581,7 @@ def _hacer_reproducir(rel, token):
     _sesion["archivo"] = ruta_abs
     _sesion["estado"] = "SONANDO"
     _sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
-    _sesion["cursor_ms"] = 0.0
+    _anclar_cursor(0.0)
     _sesion["seek_pendiente"] = None
     if not es_absoluta:
         _tocar_reciente(rel)
@@ -704,7 +743,7 @@ def _retroceder_si_hay_cola():
     except Exception:
         cursor = 0.0
     if cursor > 3000.0 and _sesion.get("rel"):
-        _sesion["cursor_ms"] = 0.0
+        _anclar_cursor(0.0)
         _hacer_accion("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
         return
     base = _indice_sano()
@@ -765,7 +804,7 @@ def seek_ms(milisegundos):
             destino = min(destino, float(_sesion["duracion_ms"]))
     except Exception:
         return
-    _sesion["cursor_ms"] = destino
+    _anclar_cursor(destino)
     _sesion["seek_pendiente"] = {"destino": destino, "t": time.monotonic()}
     _en_hilo(_hacer_seek, destino)
 
@@ -801,6 +840,10 @@ def _sondear_una_vez():
         _sesion["duracion_ms"] = duracion
     elif not _sesion.get("duracion_ms"):
         _sesion["duracion_ms"] = 0.0
+    # Fuera de escena: se congela todo (ni cursor, ni estados, ni
+    # auto-avance por ENDED). Al volver, el sondeo re-ancla con OBS.
+    if not _musica_en_escena():
+        return
     # Cursor: ventana de confirmación post-seek (2 s). Ahí solo vale
     # lo que confirme el destino; el resto se ignora para que la
     # barra no se borre al buscar en pausa. Vencida, se confía en OBS.
@@ -813,10 +856,10 @@ def _sondear_una_vez():
         pass
     elif pend is not None:
         if abs(cursor - pend["destino"]) < 2000.0:
-            _sesion["cursor_ms"] = cursor
+            _anclar_cursor(cursor)
             _sesion["seek_pendiente"] = None
     else:
-        _sesion["cursor_ms"] = cursor
+        _anclar_cursor(cursor)
     if not crudo:
         return
     _sesion["crudo"] = crudo
@@ -859,7 +902,7 @@ def detener_y_vaciar_musica():
     _sesion["indice_cola"] = None
     _sesion["estado"] = "DETENIDA"
     _sesion["crudo"] = None
-    _sesion["cursor_ms"] = 0.0
+    _anclar_cursor(0.0)
     _sesion["duracion_ms"] = 0.0
     _sesion["seek_pendiente"] = None
     if not E.conectado:

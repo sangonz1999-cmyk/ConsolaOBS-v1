@@ -508,6 +508,15 @@ def on_media_input_playback_ended(datos):
 
         def _hacer():
             try:
+                # Si el audio LOCAL sigue sonando con ese token, la sesión
+                # visual sigue viva aunque OBS diga ENDED (fuente inactiva:
+                # allá no suena pero acá sí; la apaga el reloj local).
+                try:
+                    from consola_obs.audio import reproduccion as mod_audio_reproduccion
+                    if mod_audio_reproduccion._local_sigue_sonando(token):
+                        return
+                except Exception:
+                    pass
                 from consola_obs.ui import soundboard as mod_ui_soundboard
                 mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token)
             except Exception:
