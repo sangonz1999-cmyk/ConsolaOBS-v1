@@ -189,6 +189,16 @@ def sincronizar(config=None, log=None):
         key = cfg_sync.obtener_api_key(config)
         if not ip:
             return False, {**resumen, "errores": ["Falta la IP remota (Ajustes → Sincronización)."]}
+        try:
+            from consola_obs import red as mod_red
+            propias = set(mod_red.obtener_todas_ips_locales())
+        except Exception:
+            propias = set()
+        if ip in propias or ip.lower() in ("localhost", "127.0.0.1", "::1"):
+            return False, {**resumen, "errores": [
+                f"Esa IP ({ip}) es ESTA misma PC: sincronizar con uno mismo "
+                "siempre da 0 cambios. Poné la IP de LA OTRA PC "
+                "(en ella: hostname -I en Linux o ipconfig en Windows)."]}
         if not os.path.isdir(raiz):
             return False, {**resumen, "errores": [f"No existe la carpeta local: {raiz}"]}
 

@@ -19,6 +19,8 @@ import socket
 import threading
 import time
 
+from consola_obs import red as mod_red
+
 PUERTO_DISCOVERY = 4457
 APP_ID = "ConsolaOBS-sync"
 VERSION_PROTO = 1
@@ -81,6 +83,12 @@ def buscar_pcs(puerto_sync, timeout=3.0, puerto_disc=PUERTO_DISCOVERY):
     Devuelve [{"ip":..., "host":..., "port":..., "mini":...}] sin
     duplicados (por ip). Nunca lanza."""
     halladas = {}
+    # La PC propia se excluye: sincronizar con uno mismo da 0/0 siempre
+    # y confunde (ya pasó: misma carpeta, nada que mover).
+    try:
+        propias = set(mod_red.obtener_todas_ips_locales())
+    except Exception:
+        propias = set()
     # Un solo socket para enviar Y recibir: las respuestas vuelven al
     # puerto origen del broadcast, que es este.
     s = _socket_envio()
@@ -112,6 +120,8 @@ def buscar_pcs(puerto_sync, timeout=3.0, puerto_disc=PUERTO_DISCOVERY):
                 continue
             try:
                 ip = origen[0]
+                if ip in propias:
+                    continue
                 if ip not in halladas:
                     halladas[ip] = {
                         "ip": ip,

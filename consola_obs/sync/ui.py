@@ -391,6 +391,15 @@ def vincular_ahora():
                 "Eso parece la CLAVE, no la IP. Buscá la PC con 🔍 BUSCAR PCS.")
             return
         try:
+            if ip in set(mod_red.obtener_todas_ips_locales()):
+                messagebox.showwarning(
+                    "Es tu propia IP",
+                    "Esa IP es ESTA misma PC: vincularte con vos misma no sirve. "
+                    "Buscá la otra con 🔍 BUSCAR PCS.")
+                return
+        except Exception:
+            pass
+        try:
             E.etiqueta_sync_estado.config(
                 text=f"Pidiendo vinculación a {ip}… (aceptá allá)", fg="#ffb84d")
         except Exception:
