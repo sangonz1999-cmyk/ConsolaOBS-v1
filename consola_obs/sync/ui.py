@@ -452,6 +452,21 @@ def construir_seccion_sync(padre=None):
     base = padre if padre is not None else E.barra
     cfg = cfg_sync.cargar()
 
+    # Raíz que se sincroniza en ESTA pc (siempre la carpeta assets de
+    # donde corre este programa: el .exe y el .py usan carpetas
+    # distintas si están en lugares distintos, cada uno con sus propios
+    # archivos y su propia config).
+    try:
+        E.etiqueta_sync_raiz = tk.Label(
+            base,
+            text=f"Carpeta local: {cfg.get('carpeta_local', '')}",
+            bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
+            wraplength=420, justify="left",
+        )
+        E.etiqueta_sync_raiz.pack(fill="x", padx=16, pady=(0, 2))
+    except Exception:
+        pass
+
     E.entrada_sync_ip = mod_ui_cabecera._entrada_menu(
         mod_ui_cabecera._fila_menu("PC remota", padre=base))
     E.entrada_sync_ip.insert(0, cfg.get("ip_remota", ""))
