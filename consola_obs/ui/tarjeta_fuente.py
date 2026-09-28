@@ -302,24 +302,36 @@ def _corte_grupo(orden):
     la línea es SIEMPRE la suya: tras la ÚLTIMA fuente al aire (debajo
     no hay ninguna al aire), sin importar los demás criterios, que sólo
     ordenan. Si no, corta tras el grupo de arriba del primer criterio.
-    Nunca lanza."""
+    Las ocultas van siempre al fondo y NO cuentan para el corte: si no,
+    al ocultar una fuente de arriba la oculta quedaba última pero seguía
+    contando como 'en escena', el corte llegaba al final y el divisor
+    desaparecía. Nunca lanza."""
     try:
         ctx = _contexto_orden()
         criterios = ctx.get("criterios") or []
         lista = list(orden or [])
         if not criterios or not lista:
             return 0
+        try:
+            ocultas = set(getattr(E, "fuentes_ocultas", None) or set())
+        except Exception:
+            ocultas = set()
+        # Sólo las visibles deciden el corte; las ocultas quedan debajo
+        # del divisor (van al fondo por orden_visible_fuentes).
+        visibles = [n for n in lista if n not in ocultas]
+        if not visibles:
+            return 0
         if "escena" in criterios:
             ultimo = -1
-            for i, nombre in enumerate(lista):
+            for i, nombre in enumerate(visibles):
                 if nombre in ctx.get("pos_escena", {}):
                     ultimo = i
             corte = ultimo + 1
         else:
-            if _grupo_primero(lista[0], ctx) != 0:
+            if _grupo_primero(visibles[0], ctx) != 0:
                 return 0
             corte = 0
-            for nombre in lista:
+            for nombre in visibles:
                 if _grupo_primero(nombre, ctx) == 0:
                     corte += 1
                 else:
