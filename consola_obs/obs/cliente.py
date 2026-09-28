@@ -92,6 +92,153 @@ def _leer_fuentes_globales_obs():
     return nombres
 
 
+def _nombres_escenas_conocidas():
+    """Set con los nombres de todas las escenas (para detectar una escena
+    anidada como fuente: OBS la lista como ítem cuyo sourceName es otra
+    escena). Nunca lanza: set() si falla."""
+    try:
+        escenas = _lista_de(E.cliente_obs.get_scene_list(), "scenes", "scenes")
+    except Exception:
+        return set()
+    nombres = set()
+    for e in escenas or []:
+        try:
+            nm = mod_obs_eventos._valor(e, "scene_name", "sceneName")
+        except Exception:
+            continue
+        if nm:
+            nombres.add(nm)
+    return nombres
+
+
+def _es_item_grupo(item):
+    """True si el ítem es un grupo (hay que expandirlo con
+    get_group_scene_item_list). Tolerante a dict/objeto y a ambos
+    nombres de campo."""
+    try:
+        val = mod_obs_eventos._valor(item, "is_group", "isGroup")
+        if val is True:
+            return True
+        if isinstance(val, (int, float)) and int(val) == 1:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _es_item_escena(item, escenas_conocidas):
+    """True si el ítem es una escena anidada (Agregado como fuente con
+    Agregar > Escena). Se detecta por sourceType que contenga SCENE o,
+    como respaldo, porque el nombre existe en la lista de escenas."""
+    try:
+        tipo = mod_obs_eventos._valor(item, "source_type", "sourceType")
+        if isinstance(tipo, str) and "SCENE" in tipo.upper():
+            return True
+    except Exception:
+        pass
+    try:
+        nm = mod_obs_eventos._valor(item, "source_name", "sourceName")
+        if nm and escenas_conocidas and nm in escenas_conocidas:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _listar_items_contenedor(nombre):
+    """Lista los ítems de una escena o grupo, probando primero como
+    escena y después como grupo (en OBS un grupo también responde a
+    get_group_scene_item_list). Devuelve [] si falla. Nunca lanza."""
+    try:
+        return _lista_de(E.cliente_obs.get_scene_item_list(nombre),
+                         "scene_items", "sceneItems")
+    except Exception:
+        pass
+    try:
+        return _lista_de(E.cliente_obs.get_group_scene_item_list(nombre),
+                         "scene_items", "sceneItems")
+    except Exception:
+        return []
+
+
+def expandir_escena_a_fuentes(nombre_raiz, escenas_conocidas=None):
+    """Expande una escena al aire a (activos, orden) incluyendo fuentes
+    anidadas: escenas agregadas como fuente (Agregar > Escena) y grupos.
+
+    Antes sólo se miraba el primer nivel de get_scene_item_list(), así
+    que un audio de navegador/Brave metido dentro de una escena anidada
+    o de un grupo nunca aparecía en escena_actual_nombres y la tarjeta
+    quedaba en gris aunque sonara al aire.
+
+    - activos: set de sourceName con cadena de 'ojitos' prendida hasta
+      la raíz (si el padre está apagado, el hijo no cuenta aunque él
+      esté prendido).
+    - orden: lista en orden de aparición (padres antes que hijos),
+      incluye también los apagados (igual que antes, para el borde
+      blanco / criterio de escena).
+    Nunca lanza."""
+    activos = set()
+    orden = []
+    if not nombre_raiz:
+        return activos, orden
+    try:
+        if escenas_conocidas is None:
+            escenas_conocidas = _nombres_escenas_conocidas()
+    except Exception:
+        escenas_conocidas = set()
+    visitados = set()
+    # Pila DFS: (nombre_contenedor, padre_habilitado). Se marca visitado
+    # al desapilar para evitar ciclos (A contiene B, B contiene A).
+    pila = [(nombre_raiz, True)]
+    try:
+        visitados.add(nombre_raiz)
+    except Exception:
+        pass
+    while pila:
+        try:
+            contenedor, padre_on = pila.pop()
+        except Exception:
+            break
+        try:
+            items = _listar_items_contenedor(contenedor)
+        except Exception:
+            items = []
+        for it in items or []:
+            try:
+                nm = mod_obs_eventos._valor(it, "source_name", "sourceName")
+                hab = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
+            except Exception:
+                continue
+            if not nm:
+                continue
+            try:
+                if nm not in orden:
+                    orden.append(nm)
+            except Exception:
+                pass
+            cadena_on = bool(padre_on and hab)
+            if cadena_on:
+                try:
+                    activos.add(nm)
+                except Exception:
+                    pass
+            # ¿Contenedor anidable? Grupo o escena anidada.
+            try:
+                es_cont = _es_item_grupo(it) or _es_item_escena(it, escenas_conocidas)
+            except Exception:
+                es_cont = False
+            if es_cont and nm not in visitados:
+                try:
+                    visitados.add(nm)
+                except Exception:
+                    pass
+                # Aunque el padre esté apagado se expande igual para el
+                # orden, pero los hijos no contarán como activos porque
+                # la cadena ya viene apagada.
+                pila.append((nm, cadena_on))
+    return activos, orden
+
+
 def _leer_coleccion_actual():
     """(lista, actual) de colecciones de escenas de OBS. La respuesta
     trae el nombre de la actual junto a la lista (currentScene-
@@ -162,25 +309,19 @@ def _refrescar_membresia_escena():
         pass
     nombres_en_escena = set()
     orden_escena = []
+    try:
+        escenas_conocidas = _nombres_escenas_conocidas()
+    except Exception:
+        escenas_conocidas = set()
     if escena_actual:
         try:
-            respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
-            items = mod_obs_eventos._valor(respuesta_items, "scene_items", "sceneItems") or []
+            activos, orden = expandir_escena_a_fuentes(escena_actual, escenas_conocidas)
+            nombres_en_escena |= activos
+            for nm in orden:
+                if nm not in orden_escena:
+                    orden_escena.append(nm)
         except Exception as e:
             print(f"No se pudieron listar los ítems de '{escena_actual}': {e}")
-            items = []
-        for it in items or []:
-            try:
-                nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
-                habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
-            except Exception:
-                continue
-            if not nombre_item:
-                continue
-            if nombre_item not in orden_escena:
-                orden_escena.append(nombre_item)
-            if habilitado:
-                nombres_en_escena.add(nombre_item)
     try:
         globales = _leer_fuentes_globales_obs()
     except Exception:
@@ -213,22 +354,14 @@ def _refrescar_membresia_escena():
                 escena_previa = None
             if escena_previa and escena_previa != escena_actual:
                 try:
-                    resp_items = E.cliente_obs.get_scene_item_list(escena_previa)
-                    items_prev = mod_obs_eventos._valor(resp_items, "scene_items", "sceneItems") or []
-                except Exception:
-                    items_prev = []
-                for it in items_prev or []:
-                    try:
-                        nm = mod_obs_eventos._valor(it, "source_name", "sourceName")
-                        hab = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
-                    except Exception:
-                        continue
-                    if not nm:
-                        continue
-                    if nm not in orden_escena:
-                        orden_escena.append(nm)
-                    if hab:
-                        nombres_en_escena.add(nm)
+                    activos_prev, orden_prev = expandir_escena_a_fuentes(
+                        escena_previa, escenas_conocidas)
+                    nombres_en_escena |= activos_prev
+                    for nm in orden_prev:
+                        if nm not in orden_escena:
+                            orden_escena.append(nm)
+                except Exception as e:
+                    print(f"No se pudieron listar los ítems de preview '{escena_previa}': {e}")
     except Exception:
         pass
     try:

@@ -3248,20 +3248,30 @@ def _actualizar_en_hilo_cuerpo():
             except Exception:
                 pass
             try:
-                respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
-                items = mod_obs_cliente._lista_de(
-                    respuesta_items, "scene_items", "sceneItems")
+                # Igual que _refrescar_membresia_escena: expandir escenas
+                # anidadas (Agregar > Escena) y grupos, si no los audios
+                # de adentro quedan en gris aunque suenen al aire.
+                activos, orden = mod_obs_cliente.expandir_escena_a_fuentes(escena_actual)
+                for nm in orden:
+                    if nm not in orden_escena:
+                        orden_escena.append(nm)
+                nombres_en_escena |= activos
             except Exception:
-                items = []
-            for it in items or []:
-                nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
-                habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
-                if not nombre_item:
-                    continue
-                if nombre_item not in orden_escena:
-                    orden_escena.append(nombre_item)
-                if habilitado:
-                    nombres_en_escena.add(nombre_item)
+                try:
+                    respuesta_items = E.cliente_obs.get_scene_item_list(escena_actual)
+                    items = mod_obs_cliente._lista_de(
+                        respuesta_items, "scene_items", "sceneItems")
+                except Exception:
+                    items = []
+                for it in items or []:
+                    nombre_item = mod_obs_eventos._valor(it, "source_name", "sourceName")
+                    habilitado = mod_obs_eventos._valor(it, "scene_item_enabled", "sceneItemEnabled")
+                    if not nombre_item:
+                        continue
+                    if nombre_item not in orden_escena:
+                        orden_escena.append(nombre_item)
+                    if habilitado:
+                        nombres_en_escena.add(nombre_item)
             escena_leida_ok = True
     except Exception as e:
         print(f"No se pudo leer la escena activa: {e}")
