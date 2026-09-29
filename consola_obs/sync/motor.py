@@ -264,7 +264,11 @@ def planificar(config=None, log=None):
             _log(f"Sync: raíz remota {info_remota.get('root', '?')} "
                  f"({info_remota.get('archivos', '?')} archivos).")
     except Exception:
-        pass
+        info_remota = None
+    try:
+        raiz_remota = ((info_remota or {}).get("root") or "").strip()
+    except Exception:
+        raiz_remota = ""
     remoto = {n: v for n, v in cli.lista_remota().items()
               if _en_alcance(n)}
     previo = cfg_sync.cargar_ultimo_indice()
@@ -288,6 +292,7 @@ def planificar(config=None, log=None):
     _nombres(plan["borrar_local"], "a borrar acá")
     _nombres(plan["borrar_remoto"], "a borrar allá")
     ctx = {"raiz": raiz, "cli": cli, "local": local, "previo": previo,
+           "raiz_remota": raiz_remota,
            "resumen": {"subidos": 0, "bajados": 0, "borrados_local": 0,
                        "borrados_remoto": 0, "conflictos": [], "errores": []}}
     return plan, ctx
@@ -365,6 +370,19 @@ def ejecutar(plan, ctx, incluir_borrados=True, log=None):
     _log(f"Sync: listo. Subidos {resumen['subidos']}, bajados {resumen['bajados']}, "
          f"borrados acá {resumen['borrados_local']}, borrados allá {resumen['borrados_remoto']}"
          + (f", ERRORES: {len(resumen['errores'])}" if resumen["errores"] else "."))
+    # Ruta automática: la otra PC ya dijo dónde sirve sus assets (/info
+    # -> root): se adopta como Carpeta OBS para que el enrutamiento
+    # salga solo, sin escribir rutas a mano (vale para .exe, .py, mini
+    # y cualquier sistema). Sólo si el sync salió limpio.
+    if ok:
+        try:
+            from consola_obs.audio import rutas_obs as mod_rutas_obs
+            raiz_remota = (ctx or {}).get("raiz_remota") or ""
+            if raiz_remota and mod_rutas_obs.adoptar_base_desde_sync(raiz_remota):
+                _log(f"Sync: Carpeta OBS detectada sola: {raiz_remota.strip()} "
+                     "(el OBS buscará los sonidos ahí).")
+        except Exception:
+            pass
     return ok, resumen
 
 

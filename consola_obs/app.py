@@ -529,7 +529,8 @@ def main():
                 # Sin alarma falsa: con ruta manual adoptada el stream
                 # anda igual; el texto es condicional, no sentencia.
                 etiqueta.config(
-                    text="Si el OBS remoto queda mudo, poné acá la ruta de "
+                    text="Si el OBS está en otra PC, sincronizá una vez "
+                         "(se completa sola) o poné acá la ruta de "
                          "assets de esa PC (se guarda sola).",
                     fg="#8fa0bd",
                 )
@@ -547,7 +548,7 @@ def main():
                 )
             else:
                 etiqueta.config(
-                    text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se guarda sola.",
+                    text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se detecta sola al sincronizar; si no, se escribe a mano y se guarda sola.",
                     fg="#8fa0bd",
                 )
         except Exception:
@@ -596,7 +597,7 @@ def main():
     E.entrada_base_obs.bind("<Return>", _guardar_base_obs_sola)
     E._etiqueta_base_obs = tk.Label(
         E.barra,
-        text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se guarda sola.",
+        text="Ruta de assets\\ en la PC del OBS (solo si el OBS está en otra PC). Se detecta sola al sincronizar; si no, se escribe a mano y se guarda sola.",
         bg=C.COLOR_MENU_FONDO, fg="#8fa0bd", font=(E.FUENTE_UI, 8),
         wraplength=300, justify="left",
     )

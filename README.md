@@ -73,7 +73,7 @@ Cómo funciona el programa: la consola **manda órdenes y rutas**, y el **OBS re
   1. Copiá la carpeta `assets` (o el zip de OBS) a la PC del OBS.
   2. En esa PC: OBS Studio abierto, WebSocket activado (puerto `4455`, con contraseña) y puerto permitido (`sudo ufw allow 4455/tcp` en Linux).
   3. En la consola, menú CONEXIÓN: Host = IP de la PC del OBS, Puerto `4455`, Contraseña.
-  4. En el mismo menú, **Carpeta OBS** = la ruta de la carpeta `assets` **tal como se ve EN LA PC DEL OBS** (se guarda sola al salir del campo).
+  4. Sincronizá una vez (Ajustes → SINCRONIZACIÓN): la **Carpeta OBS** (ruta de `assets` **tal como se ve EN LA PC DEL OBS**) se completa sola. Si no sincronizás, escribila a mano en el mismo menú (se guarda sola al salir del campo).
 
 Qué ruta poner según el sistema del OBS (solo hasta `assets`, sin el nombre del archivo):
 

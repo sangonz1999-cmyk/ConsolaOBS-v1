@@ -224,21 +224,156 @@ def intentar_aprender_base():
         return False
 
 
+def _canonica_base(base):
+    """/assets con un solo formato para comparar (dobles barras y
+    trailing sobrantes colapsados). Protege raíz '/' , 'D:/' y UNC
+    '//equipo'. Nunca lanza."""
+    try:
+        b = (base or "").strip().replace("\\", "/")
+    except Exception:
+        return ""
+    if not b:
+        return ""
+    try:
+        pref = ""
+        resto = b
+        if resto.startswith("//"):
+            pref, resto = "//", resto[2:]
+        while "//" in resto:
+            resto = resto.replace("//", "/")
+        b = pref + resto
+        while (len(b) > 1 and b.endswith("/")
+               and b != "/" and not re.match(r"^[A-Za-z]:/$", b)
+               and not re.match(r"^//[^/]+$", b)):
+            b = b[:-1]
+        return b
+    except Exception:
+        return b
+
+
+def _igual_base(a, b):
+    """True si son la misma carpeta (tolerando \\ vs /, dobles barras
+    y mayúsculas en rutas Windows). Nunca lanza."""
+    try:
+        ca, cb = _canonica_base(a), _canonica_base(b)
+        if ca == cb:
+            return True
+        if re.match(r"^[A-Za-z]:", ca) and re.match(r"^[A-Za-z]:", cb):
+            return ca.lower() == cb.lower()
+        return False
+    except Exception:
+        return False
+
+
+def _normalizar_base(base):
+    """Quita espacios y barras finales (sin tocar la raíz '/' o 'D:/').
+    Nunca lanza."""
+    try:
+        return _canonica_base(base)
+    except Exception:
+        try:
+            return (base or "").strip()
+        except Exception:
+            return ""
+
+
+def adoptar_base_desde_sync(raiz_remota):
+    """Adopta la carpeta assets del otro lado (la que reporta el sync
+    por /info: el abspath de donde sirve, sea .exe, .py o mini) como
+    Carpeta OBS, y la guarda. Es lo que hace que con solo sincronizar
+    la ruta se detecte sola, sin importar dónde se descomprimió el
+    .zip ni el sistema (Windows/Linux/macOS).
+
+    Sólo adopta si la raíz es absoluta, con pinta de carpeta assets y
+    compatible con la plataforma del OBS (si se conoce). Si el OBS está
+    en esta misma PC no hace nada (la base no se usa). Si ya era la
+    misma, tampoco toca nada. Actualiza el campo de Conexión y el hint.
+    Devuelve True si la cambió. Nunca lanza."""
+    try:
+        base = _normalizar_base(raiz_remota)
+    except Exception:
+        return False
+    if not base:
+        return False
+    if not _es_ruta_absoluta_obs(base):
+        return False
+    try:
+        cola = base.replace("\\", "/").rstrip("/").split("/")[-1].lower()
+    except Exception:
+        cola = ""
+    if cola != "assets":
+        try:
+            mod_red.log_conexion("BASE_OBS",
+                                 f"sync reportó raíz sin pinta de assets ({base}): no se adopta")
+        except Exception:
+            pass
+        return False
+    try:
+        plataforma = _plataforma_obs()
+    except Exception:
+        plataforma = ""
+    if plataforma and _base_valida_para_obs(base, plataforma) is not None:
+        try:
+            mod_red.log_conexion("BASE_OBS",
+                                 f"sync reportó {base} pero no vale para ese OBS ({plataforma}): no se adopta")
+        except Exception:
+            pass
+        return False
+    try:
+        if getattr(E, "conectado", False) and not obs_en_otra_pc():
+            return False
+    except Exception:
+        pass
+    try:
+        actual = _normalizar_base(base_obs())
+    except Exception:
+        actual = ""
+    if _igual_base(actual, base):
+        return False
+    try:
+        mod_configuracion.guardar_config_interfaz({"carpeta_base_obs": base})
+    except Exception:
+        return False
+    try:
+        E._base_obs_dudosa = False
+    except Exception:
+        pass
+    try:
+        campo = getattr(E, "entrada_base_obs", None)
+        if campo is not None:
+            campo.delete(0, "end")
+            campo.insert(0, base)
+    except Exception:
+        pass
+    try:
+        mod_red.log_conexion("BASE_OBS", f"detectada sola por sync: {base}")
+    except Exception:
+        pass
+    try:
+        refrescar = getattr(E, "refrescar_hint_base_obs", None)
+        if refrescar:
+            refrescar()
+    except Exception:
+        pass
+    return True
+
+
 def resolver_para_obs(ruta_local):
     """Ruta tal como hay que mandársela a OBS en set_input_settings:
     directa si misma PC (o sin base configurada), traducida
     (base_obs + relativa) si el OBS está en otra PC. Siempre con
     barras '/' (las acepta OBS en Windows y son obligatorias en
-    Linux). Nunca lanza."""
+    Linux; por eso se normalizan AMBOS separadores: la base remota
+    puede venir con el estilo del otro sistema). Nunca lanza."""
     try:
         if not ruta_local:
             return ruta_local
         if not obs_en_otra_pc():
-            return str(ruta_local).replace(os.sep, "/")
+            return str(ruta_local).replace("\\", "/")
         base = base_obs()
         if not base:
-            return str(ruta_local).replace(os.sep, "/")
-        return os.path.join(base, relativizar(ruta_local)).replace(os.sep, "/")
+            return str(ruta_local).replace("\\", "/")
+        return os.path.join(base, relativizar(ruta_local)).replace("\\", "/")
     except Exception:
         return ruta_local
 

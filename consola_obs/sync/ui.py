@@ -283,6 +283,18 @@ def sincronizar_ahora():
                 E.boton_sync.config(state="normal", text="🔄 SINCRONIZAR CON LA OTRA PC")
             except Exception:
                 pass
+            # La Carpeta OBS pudo detectarse sola con la raíz remota:
+            # se refresca el campo de Conexión para que se vea.
+            try:
+                from consola_obs.audio import rutas_obs as mod_rutas_obs
+                campo = getattr(E, "entrada_base_obs", None)
+                if campo is not None:
+                    base = mod_rutas_obs.base_obs()
+                    campo.delete(0, "end")
+                    if base:
+                        campo.insert(0, base)
+            except Exception:
+                pass
             try:
                 if ok:
                     E.etiqueta_sync_estado.config(text="Sincronizado ✓", fg="#2fd693")
@@ -625,7 +637,8 @@ def construir_seccion_sync(padre=None):
     mod_ui_cabecera._ayuda_menu(
         base, "Sólo Sondidos_pad + Imagenes_pad + Musica (lo demás no se toca). "
               "Lo nuevo viaja, lo borrado se confirma antes, y en conflictos "
-              "gana esta PC.")
+              "gana esta PC. Al terminar, la Carpeta OBS (Conexión) se completa "
+              "sola con la ruta de assets de la otra PC: ya no hay que escribirla a mano.")
 
     fila = tk.Frame(base, bg=C.COLOR_MENU_FONDO)
     fila.pack(fill="x", padx=16, pady=(4, 2))
