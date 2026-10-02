@@ -686,7 +686,8 @@ def construir_cuerpo():
 
     E.canvas = tk.Canvas(E.marco_canvas, bg=E.color_fondo_panel(), highlightthickness=0)
     E.scrollbar_v = ttk.Scrollbar(
-        E.marco_canvas, orient="vertical", command=E.canvas.yview, style="Discreta.Vertical.TScrollbar"
+        E.marco_canvas, orient="vertical", command=_scroll_fuentes_por_muescas,
+        style="Discreta.Vertical.TScrollbar"
     )
     E.scrollbar_h = ttk.Scrollbar(
         E.marco_canvas, orient="horizontal", command=E.canvas.xview, style="Discreta.Horizontal.TScrollbar"
@@ -709,9 +710,11 @@ def construir_cuerpo():
                            window=E.panel_fuentes, anchor="nw")
 
     E.panel_fuentes.bind("<Configure>", actualizar_scroll)
+    # La rueda se ata una vez por cada reconstrucción de la interfaz.
+    _atar_rueda()
+    # La rueda no se ata acá: se ata una sola vez a la ventana en
+    # _atar_rueda(), que decide por posición del puntero (ver _ruta_rueda).
     E.canvas.bind("<Configure>", lambda e: (actualizar_scroll(e), mod_ui_tarjeta._al_redimensionar_fuentes(e)))
-    E.canvas.bind("<Enter>", _activar_rueda_fuentes)
-    E.canvas.bind("<Leave>", _desactivar_rueda_fuentes)
 
     # Clic derecho sobre el fondo del panel de fuentes (no sobre una
     # tarjeta) -> menú "Agregar fuente", igual que el clic derecho en la
@@ -763,8 +766,6 @@ def construir_cuerpo():
 
     E.panel_soundboard.bind("<Configure>", actualizar_scroll_soundboard)
     E.canvas_sb.bind("<Configure>", mod_ui_soundboard._al_redimensionar_soundboard)
-    E.canvas_sb.bind("<Enter>", _activar_rueda_soundboard)
-    E.canvas_sb.bind("<Leave>", _desactivar_rueda_soundboard)
 
 
     zonas = {"fuentes": E.marco_fuentes, "soundboard": E.marco_derecho}
@@ -895,6 +896,100 @@ def actualizar_scroll(event=None):
         E.scrollbar_h.grid_remove()
 
 
+def _muesca_scroll_fuentes():
+    """Alto de un salto del scrollbar de fuentes.
+
+    Sin -yscrollincrement, yview_scroll(1, "units") avanza 1/10 del alto de
+    la ventana, así que ese mismo número es la muesca de la rueda. Se usa
+    el mismo valor para el escalonado del scrollbar: por eso arrastrar y
+    rueda dan exactamente el mismo paso y no dos Biomass distintos."""
+    return max(12, int(round((E.canvas.winfo_height() or 360) / 10.0)))
+
+
+def _scroll_fuentes_por_muescas(*args):
+    """Comando del scrollbar vertical de fuentes, en lugar de E.canvas.yview.
+
+    yview es el modo continuo: el pulgar se pega al mouse y el contenido
+    avanza píxel a píxel, tan rápido como el mouse. Con muchas tarjetas
+    eso obliga a repintar el panel entero decenas de veces por segundo, y
+    el arrastre se ve roto (tarjetas desfasadas o duplicadas) además de ir
+    a tirones.
+
+    Acá la fracción que manda el scrollbar se traduce a píxeles, se redondea
+    a la muesca más cercana -la misma que avanza la rueda- y sólo entonces se
+    mueve el canvas. El scrollbar queda de escalones y no continuo, y de y
+    paso cada movimiento del mouse que cae dentro de la misma muesca no
+    repinta nada."""
+    try:
+        accion = args[0]
+    except Exception:
+        return
+    if accion != "moveto":
+        # Flechitas del scrollbar y 'scroll n units': ya llegan en saltos
+        # enteros, y con el canvas sin -yscrollincrement cada unidad es
+        # justo una muesca de rueda.
+        try:
+            E.canvas.yview(*args)
+        except Exception:
+            pass
+        return
+    try:
+        fraccion = float(args[1])
+    except Exception:
+        return
+
+    try:
+        region = E.canvas.cget("scrollregion").split()
+        alto_contenido = float(region[3]) - float(region[1])
+        alto_ventana = float(E.canvas.winfo_height())
+    except Exception:
+        E.canvas.yview(*args)
+        return
+    if alto_contenido <= 0 or alto_ventana <= 0:
+        return
+
+    # El mapeo es el mismo que Tk hace por dentro (fracción sobre todo el
+    # scrollregion) y después el tope: la vista no puede pasar de
+    # alto_contenido - alto_ventana.
+    tope = alto_contenido - alto_ventana
+    objetivo = max(0.0, min(fraccion * alto_contenido, tope))
+
+    muesca = _muesca_scroll_fuentes()
+    objetivo = max(0.0, min(float(int(round(objetivo / muesca)) * muesca), tope))
+
+    # Si el mouse se movió dentro de la misma muesca no hay nada que
+    # cambiar: no se llama a yview_moveto y no se repinta nada.
+    try:
+        actual = E.canvas.canvasy(0)
+    except Exception:
+        actual = -1
+    if abs(objetivo - actual) >= 1:
+        E.canvas.yview_moveto(objetivo / alto_contenido)
+
+    # ttk::scrollbar no tiene -yscrollincrement, así que el pulgar sigue
+    # pegado al mouse entre muescas. Se lo acomoda a la posición real para
+    # que también avance a saltos. Va por after_idle y no en el acto: el
+    # .set() del scrollbar llamado desde adentro del propio comando del
+    # scrollbar es reentrante, y durante un arrastre continuo eso deja el
+    # estado interno de Tk a medias.
+    if not getattr(E, "_scroll_sincronizando", False):
+        E._scroll_sincronizando = True
+        try:
+            E.canvas.after_idle(_sincronizar_pulgar_fuentes)
+        except Exception:
+            E._scroll_sincronizando = False
+
+
+def _sincronizar_pulgar_fuentes():
+    """Pone el pulgar del scrollbar en la posición real del canvas, que
+    con el arrastre escalonado puede haber quedado donde soltó el mouse."""
+    E._scroll_sincronizando = False
+    try:
+        E.scrollbar_v.set(*E.canvas.yview())
+    except Exception:
+        pass
+
+
 def _rueda_fuentes_vertical(event):
     E.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
@@ -908,22 +1003,90 @@ class _Delta:
     (Botón-4/5 no trae delta como MouseWheel de Windows)."""
 
 
-def _activar_rueda_fuentes(event):
-    E.canvas.bind_all("<MouseWheel>", _rueda_fuentes_vertical)
-    E.canvas.bind_all("<Shift-MouseWheel>", _rueda_fuentes_horizontal)
-    E.canvas.bind_all("<Button-4>", lambda e: _rueda_fuentes_vertical(_Delta(120)))
-    E.canvas.bind_all("<Button-5>", lambda e: _rueda_fuentes_vertical(_Delta(-120)))
-    E.canvas.bind_all("<Shift-Button-4>", lambda e: _rueda_fuentes_horizontal(_Delta(120)))
-    E.canvas.bind_all("<Shift-Button-5>", lambda e: _rueda_fuentes_horizontal(_Delta(-120)))
+def _sobre(widget, event):
+    """¿El puntero del evento está dentro de este widget?
+
+    Se comparan coordenadas de pantalla porque con bind_all el evento
+    puede venir de cualquier widget: un <Leave>/<Enter> ya no sirve para
+    saber sobre qué está el mouse."""
+    try:
+        x = event.x_root - widget.winfo_rootx()
+        y = event.y_root - widget.winfo_rooty()
+        return 0 <= x < widget.winfo_width() and 0 <= y < widget.winfo_height()
+    except Exception:
+        return False
 
 
-def _desactivar_rueda_fuentes(event):
-    E.canvas.unbind_all("<MouseWheel>")
-    E.canvas.unbind_all("<Shift-MouseWheel>")
-    E.canvas.unbind_all("<Button-4>")
-    E.canvas.unbind_all("<Button-5>")
-    E.canvas.unbind_all("<Shift-Button-4>")
-    E.canvas.unbind_all("<Shift-Button-5>")
+def _ruta_rueda(event):
+    """Rueda del mouse de la ventana principal: scrollea el panel que esté
+    de verdad bajo el puntero, y devuelve "break" para que no siga de largo.
+
+    Antes cada panel se ataba con bind_all en su <Enter> y se des-ataba con
+    unbind_all en su <Leave>, lo que estaba roto por partida doble:
+
+      - unbind_all borra los bindings de TODA la app para esa secuencia, así
+        que desatar el de fuentes mataba el del soundboard y al revés;
+      - las tarjetas y los pads son widgets embebidos dentro de sus canvas,
+        así que al pasar el puntero sobre una tarjeta el canvas recibía
+        <Leave> y la rueda se deadaba en el medio de la lista. Con el
+        puntero sobre el scrollbar pasaba lo mismo.
+
+    Ahora hay un solo binding, permanente, que decide por posición."""
+    try:
+        pasos = int(-1 * (event.delta / 120))
+    except Exception:
+        return
+    if not pasos:
+        return
+    try:
+        con_shift = bool(int(event.state) & 0x0001)
+    except Exception:
+        con_shift = False
+
+    # El puntero se mide contra el marco que contiene al canvas y sus
+    # scrollbars, así que la rueda también funciona apoyada en la barra.
+    try:
+        en_fuentes = _sobre(E.marco_canvas, event)
+    except Exception:
+        en_fuentes = False
+
+    if en_fuentes:
+        if con_shift:
+            _rueda_fuentes_horizontal(event)
+        else:
+            _rueda_fuentes_vertical(event)
+        return "break"
+
+    try:
+        en_soundboard = _sobre(E.marco_soundboard_scroll, event)
+    except Exception:
+        en_soundboard = False
+    if en_soundboard and not con_shift:
+        _rueda_soundboard(event)
+        return "break"
+
+
+def _atar_rueda():
+    """Ata la rueda una sola vez a la ventana principal. Se llama en cada
+    reconstrucción de la interfaz (tema, redimensión), porque el binding
+    es a la ventana y no a los canvas."""
+    ventana = getattr(E, "ventana", None)
+    if ventana is None:
+        return
+    for secuencia in ("<MouseWheel>", "<Shift-MouseWheel>",
+                      "<Button-4>", "<Button-5>",
+                      "<Shift-Button-4>", "<Shift-Button-5>"):
+        try:
+            ventana.unbind(secuencia)
+        except Exception:
+            pass
+    ventana.bind("<MouseWheel>", _ruta_rueda)
+    ventana.bind("<Shift-MouseWheel>", _ruta_rueda)
+    # Linux/X11 no trae delta: Botón-4/5 con un evento falso.
+    ventana.bind("<Button-4>", lambda e: _ruta_rueda(_Delta(120)))
+    ventana.bind("<Button-5>", lambda e: _ruta_rueda(_Delta(-120)))
+    ventana.bind("<Shift-Button-4>", lambda e: _ruta_rueda(_Delta(120)))
+    ventana.bind("<Shift-Button-5>", lambda e: _ruta_rueda(_Delta(-120)))
 
 
 def actualizar_scroll_soundboard(event=None):
@@ -945,18 +1108,6 @@ def actualizar_scroll_soundboard(event=None):
 
 def _rueda_soundboard(event):
     E.canvas_sb.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-
-def _activar_rueda_soundboard(event):
-    E.canvas_sb.bind_all("<MouseWheel>", _rueda_soundboard)
-    E.canvas_sb.bind_all("<Button-4>", lambda e: _rueda_soundboard(_Delta(120)))
-    E.canvas_sb.bind_all("<Button-5>", lambda e: _rueda_soundboard(_Delta(-120)))
-
-
-def _desactivar_rueda_soundboard(event):
-    E.canvas_sb.unbind_all("<MouseWheel>")
-    E.canvas_sb.unbind_all("<Button-4>")
-    E.canvas_sb.unbind_all("<Button-5>")
 
 
 def _nombre_diseno_actual():

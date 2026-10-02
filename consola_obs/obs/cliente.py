@@ -644,6 +644,47 @@ def _desconectar_solo_red():
         pass
 
 
+def _reconectar_con_lo_guardado():
+    """Clic sobre el cartel de estado: reconecta con el host/puerto/
+    contraseña que quedaron guardados de la última conexión exitosa.
+
+    No es un atajo a conectar_obs() sin más, porque conectar_obs() es un
+    interruptor: si ya hay conexión desconecta. Y el cartel se usa
+    justamente para reconectar, así que acá se decide:
+
+    - ya conectado -> no hace nada (cortar la conexión sigue siendo el
+      botón explícito de Ajustes);
+    - sin configuración guardada -> no hay nada con qué reconectar, así
+      que abre Ajustes en Conexión en vez de adivinar un host;
+    - si falla, el error lo muestra conectar_obs() como siempre."""
+    if getattr(E, "conectado", False):
+        return
+    if not mod_configuracion.hay_config_conexion_guardada():
+        try:
+            from consola_obs.ui import cabecera as mod_ui_cabecera
+            mod_ui_cabecera.abrir_ajustes("Conexión")
+        except Exception:
+            pass
+        return
+    datos = mod_configuracion.cargar_config_conexion() or {}
+    host = str(datos.get("host") or "localhost").strip() or "localhost"
+    puerto = str(datos.get("puerto") or "4455").strip() or "4455"
+    password = datos.get("password") or ""
+    # conectar_obs() lee de los campos de Ajustes: se rellenan para que
+    # conecte con lo guardado y para que el usuario vea de dónde salió.
+    try:
+        E.entrada_host.delete(0, "end")
+        E.entrada_host.insert(0, host)
+        E.entrada_puerto.delete(0, "end")
+        E.entrada_puerto.insert(0, puerto)
+        E.entrada_password.delete(0, "end")
+        if password:
+            E.entrada_password.insert(0, password)
+    except Exception:
+        pass
+    conectar_obs()
+
+
 def desconectar_obs():
 
     try:

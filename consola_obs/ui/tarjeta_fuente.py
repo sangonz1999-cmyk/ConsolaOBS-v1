@@ -1453,6 +1453,8 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
     if nombre_visible is None:
         nombre_visible = nombre
 
+    tipo_monitor = mod_obs_eventos._tipo_monitor_normalizado(tipo_monitor)
+
     medida_icono = mod_utilidades.medida_actual()
     alto_canal = medida_icono["fuente_alto_canal"]
     ancho_barra_vu = medida_icono["fuente_ancho_vu"]
@@ -2396,11 +2398,11 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
         color_nuevo=mod_ui_dibujo._color_mute(muted)
     )
 
-    widgets["tipo_monitor"] = tipo_monitor
+    widgets["tipo_monitor"] = mod_obs_eventos._tipo_monitor_normalizado(tipo_monitor)
     mod_ui_dibujo._actualizar_boton_circular(
         widgets["monitor"],
-        color_nuevo=(mod_ui_dibujo._cuadrado_monitor(tipo_monitor) if E.es_moderna()
-                     else C.COLORES_MONITOREO.get(tipo_monitor, "#394151"))
+        color_nuevo=(mod_ui_dibujo._cuadrado_monitor(widgets["tipo_monitor"]) if E.es_moderna()
+                     else C.COLORES_MONITOREO.get(widgets["tipo_monitor"], "#394151"))
     )
 
     _actualizar_estado_gris(nombre)
@@ -2438,11 +2440,11 @@ def _fijar_monitor(nombre, tipo):
         E.cliente_obs.set_input_audio_monitor_type(nombre, tipo)
 
         widgets = E.fuentes[nombre]
-        widgets["tipo_monitor"] = tipo
+        widgets["tipo_monitor"] = mod_obs_eventos._tipo_monitor_normalizado(tipo)
         mod_ui_dibujo._actualizar_boton_circular(
             widgets["monitor"], color_nuevo=(
-                mod_ui_dibujo._cuadrado_monitor(tipo) if E.es_moderna()
-                else C.COLORES_MONITOREO.get(tipo, "#394151")))
+                mod_ui_dibujo._cuadrado_monitor(widgets["tipo_monitor"]) if E.es_moderna()
+                else C.COLORES_MONITOREO.get(widgets["tipo_monitor"], "#394151")))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
 
@@ -2458,6 +2460,7 @@ def cambiar_monitor(nombre):
         actual = E.cliente_obs.get_input_audio_monitor_type(nombre).monitor_type
     except Exception:
         actual = E.fuentes.get(nombre, {}).get("tipo_monitor", "OBS_MONITORING_TYPE_NONE")
+    actual = mod_obs_eventos._tipo_monitor_normalizado(actual)
     if actual == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT":
         _fijar_monitor(nombre, "OBS_MONITORING_TYPE_NONE")
     else:
@@ -3223,6 +3226,7 @@ def _actualizar_en_hilo_cuerpo():
                 tipo_monitor = mod_obs_eventos._valor(respuesta_monitor, "monitor_type", "monitorType")
                 if not tipo_monitor:
                     tipo_monitor = "OBS_MONITORING_TYPE_NONE"
+                tipo_monitor = mod_obs_eventos._tipo_monitor_normalizado(tipo_monitor)
             except Exception as e:
                 print(f"No se pudo leer el monitoreo de '{nombre}': {e}")
                 tipo_monitor = "OBS_MONITORING_TYPE_NONE"

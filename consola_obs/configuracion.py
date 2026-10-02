@@ -15,6 +15,19 @@ def cargar_config_conexion():
     return {"host": "localhost", "puerto": "4455", "password": ""}
 
 
+def hay_config_conexion_guardada():
+    """¿Existe un host/puerto guardados de una conexión anterior? Si no hay
+    archivo (o está vacío/viene con los valores por defecto sin host), no
+    hay nada con qué reconectar y conviene abrir Ajustes en vez de
+    intentar adivinar."""
+    if not os.path.exists(R.ARCHIVO_CONEXION):
+        return False
+    datos = cargar_config_conexion()
+    if not isinstance(datos, dict):
+        return False
+    return bool(str(datos.get("host") or "").strip())
+
+
 def guardar_config_conexion(host, puerto, password):
     try:
         with open(R.ARCHIVO_CONEXION, "w", encoding="utf-8") as f:

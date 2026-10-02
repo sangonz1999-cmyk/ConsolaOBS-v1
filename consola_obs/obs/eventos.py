@@ -307,10 +307,42 @@ def _sincronizar_volumen_remoto(nombre, vol_db):
         widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
 
 
+MONITOREO_POR_NUMERO = {
+    0: "OBS_MONITORING_TYPE_NONE",
+    1: "OBS_MONITORING_TYPE_MONITOR_ONLY",
+    2: "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT",
+}
+
+
+def _tipo_monitor_normalizado(valor):
+    """El tipo de monitoreo de OBS llega de dos formas y esta app usa una
+    sola: el NOMBRE ('OBS_MONITORING_TYPE_...'). Pero el WebSocket lo manda
+    como ENTERO (0=apagado, 1=solo monitores, 2=monitores+stream) tanto en
+    el evento como en GetInputAudioMonitorType, y comparar un 2 contra el
+    string '...MONITOR_AND_OUTPUT' nunca da igual: el auricular queda
+    siempre en apagado y nunca muestra el color correcto.
+
+    Traduce el número al nombre. Un valor desconocido (ya sea número o
+    texto que no es de monitoreo) se devuelve tal cual para no pisar lo
+    que hubiera."""
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, int):
+        return MONITOREO_POR_NUMERO.get(valor, valor)
+    texto = str(valor or "").strip()
+    if texto.isdigit():
+        numero = int(texto)
+        return MONITOREO_POR_NUMERO.get(numero, texto)
+    return texto
+
+
 def on_input_audio_monitor_type_changed(datos):
     """Ídem para el tipo de monitoreo (auriculares)."""
     nombre = _valor(datos, "input_name", "inputName")
-    tipo = _valor(datos, "monitor_type", "monitorType")
+    # Normalizar ANTES de mirar si viene vacío:OBS manda 0 para 'monitoreo
+    # apagado' y 0 es falsy en Python, así que con el orden viejo el
+    # evento de apagar los auriculares se descartaba sin hacer nada.
+    tipo = _tipo_monitor_normalizado(_valor(datos, "monitor_type", "monitorType"))
     if nombre is None or not tipo:
         return
     E.ventana.after(0, lambda: _sincronizar_monitor_remoto(nombre, tipo))

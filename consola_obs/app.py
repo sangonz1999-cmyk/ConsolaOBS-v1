@@ -431,9 +431,17 @@ def main():
 
     E.estado = tk.Label(
         E.estado_chip, text="● DESCONECTADO", bg="#141a26", fg="#ff5d6c",
-        font=(E.FUENTE_UI, 10, "bold"), padx=14, pady=6
+        font=(E.FUENTE_UI, 10, "bold"), padx=14, pady=6, cursor="hand2"
     )
     E.estado.pack()
+
+    # El cartel de estado es un botón: con un clic reconecta usando el
+    # host/puerto/contraseña de la última conexión exitosa (ver
+    # cliente._reconectar_con_lo_guardado). Estando conectado no hace
+    # nada, porque cortar la conexión sigue siendo el botón explícito de
+    # Ajustes.
+    E.estado.bind("<Button-1>", lambda e: mod_obs_cliente._reconectar_con_lo_guardado())
+    E.estado_chip.bind("<Button-1>", lambda e: mod_obs_cliente._reconectar_con_lo_guardado())
 
 
 
