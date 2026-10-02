@@ -1,0 +1,9 @@
+# Finales de línea por tipo: los .sh SIEMPRE LF (si no, Linux no
+# los ejecuta), los .bat SIEMPRE CRLF, el resto lo decide git.
+*.sh text eol=lf
+*.bat text eol=crlf
+*.py text auto
+*.txt text auto
+*.md text auto
+*.json text auto
+*.svg text auto

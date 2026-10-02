@@ -1,0 +1,13 @@
+MÚSICA DE FONDO DEL STREAM
+============================
+Creá acá adentro una subcarpeta por categoría (por ejemplo
+"Rock", "Electrónica", "Lofi") y poné los archivos de audio
+(.mp3, .wav, .ogg, .flac, .m4a) dentro de cada una.
+
+La ventana de música del programa las muestra separadas por
+carpeta, igual que un Spotify.
+
+IMPORTANTE: quien reproduce los archivos es OBS, no el programa.
+Si el OBS está en OTRA pc, estos mismos archivos tienen que estar
+también en esa pc (misma estructura de carpetas) y hay que decirle
+al programa dónde están con el ajuste de carpeta base.

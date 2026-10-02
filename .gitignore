@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+dist/
+build/
+_build_tmp/
+_build_upd_tmp/
+*.spec
+*.log
+# El .exe se genera localmente con compilar.bat, no se versiona
+*.exe
+# Los ZIP de la Release pesan ~1 GB cada uno: se arman localmente con
+# armar_release.bat y se suben a mano a GitHub, no se commitean
+ConsolaOBS-*.zip
+# Clave de sync generada por el mini-server: secreto local, nunca a git
+sync.key
+# Configuracion local (config_conexion.json contiene la contrasena de OBS)
+config_*.json
+config/*.json
+.DS_Store
+Thumbs.db
+# Musica nueva: viaja en los zips del release, no en git (~1 GB)
+assets/Musica/Electronica/
+assets/Musica/Tranquila/
+assets/Musica/Variado/
+assets/Musica/Musica de fondo/

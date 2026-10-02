@@ -1,0 +1,11 @@
+TIPOGRAFÍA DE LA INTERFAZ
+==========================
+Poné acá cualquier archivo .ttf u .otf para personalizar la
+tipografía del programa. Por defecto se usa una tipografía moderna
+del sistema (Segoe UI / Helvetica Neue / Ubuntu, etc.), igual que
+cualquier programa de audio profesional; si querés que TODO el
+texto use la tuya en vez de la del sistema, se tiene en cuenta
+como alternativa. Si hay más de un archivo, se usa el primero (por
+orden alfabético) que el sistema operativo logre registrar; si no
+hay ninguno o falla el registro, el programa vuelve solo a elegir
+la mejor fuente instalada, sin romperse.

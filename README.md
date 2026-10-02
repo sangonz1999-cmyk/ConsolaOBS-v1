@@ -1,0 +1,836 @@
+# ConsolaOBS v1
+
+Panel de control de audio para **OBS Studio** (Tkinter): mixer con VU meters LED, editor de filtros en vivo y soundboard de efectos. El código está separado en el paquete `consola_obs/` (configuración, OBS, audio e interfaz cada uno en su módulo).
+
+## Características
+
+- **Mixer en tiempo real**: faders en dB, medidores VU LED, mute, monitoreo, renombrado, colores, favoritas (★) y drag & drop.
+- **Orden de fuentes** (botón ☰): criterios combinables (favoritos, colores, activas, escena actual, alfabético) + orden manual con drag & drop, todo persistido.
+- **Ocultar fuente** (clic derecho): la mutea y apaga el monitoreo, va al fondo en casi negro con el medidor apagado e insignia 👁‍🗨; al mostrarla restaura todo.
+- **Escenas permitidas** (lista blanca): Efectos, Música y favoritas sólo existen en las escenas tildadas; las de cámaras/capturas no se tocan nunca. Con 🧹 se limpian las ya contaminadas.
+- **Sincronización entre PCs**: copia efectos, imágenes y música en ambas direcciones (ver abajo).
+- **Actualización automática**: avisa y descarga la release nueva desde GitHub, preservando tu config (ver abajo).
+- **Ajustes por pestañas**: Conexión, Apariencia, Audio, Sincronización y Actualización, cada una con su ayuda.
+- **Soundboard**: pads con sonido e imagen; clic reproduce, clic de nuevo detiene con fundido; menú contextual y drag & drop.
+- **Detección de carpetas**: los audios nuevos de `assets/Sondidos_pad/` se convierten solos en pads (entran primeros en la fila) con su imagen gemela de `assets/Imagenes_pad/`.
+- **Audio local**: cada efecto suena en OBS y a la vez en los parlantes de la PC (miniaudio), con on/off en Ajustes → Audio.
+- **Nivelación de efectos**: todos los pads suenan al mismo volumen (se mide el pico una vez y se compensa por pad, en parlantes y en OBS vía filtro Gain propio), con on/off en Ajustes → Audio.
+- **Tipografías**: selector en Ajustes → Apariencia ("Tipografia de obs" = Open Sans por defecto, Predeterminada + las de `assets/fuentes/`), se aplica a toda la interfaz.
+- **Editor de filtros** de audio de OBS en vivo (compresor, EQ, etc.).
+- **Ventana de Propiedades** por fuente (clic derecho > Propiedades), calcada de la de OBS por tipo de entrada.
+- **Agregar fuente** desde la consola (clic derecho en el panel de fuentes), con los tipos de audio de OBS, sus iconos SVG originales y sincronización con fuentes creadas/borradas desde OBS.
+- **Eliminar fuente** desde la consola (clic derecho > Eliminar fuente…), borra la fuente de OBS con confirmación y protección de fuentes globales e internas.
+- **Quitar de todas las escenas** (clic derecho), saca la fuente de todas las escenas sin borrarla de OBS.
+- **Vaciar vs Eliminar pad**: el soundboard distingue entre vaciar el sonido (deja el botón vacío) y eliminar el pad de la grilla (corre los siguientes para cerrar el hueco).
+- **Barra de progreso en pads**: mientras suena, una barra semitransparente del color de la etiqueta barre la cara al ritmo real del audio.
+- **Iconos SVG originales de OBS** (vía pymupdf): parlante/mute/auriculares y tipos de fuente; tipografía Open Sans ("Tipografia de obs").
+- **Alto de tarjeta regulable** (Compacto/Normal/Alto/Muy alto) que se combina con el tamaño de íconos.
+- **Música en el stream**: mini player al pie de fuentes (play/pausa/stop/reinicio/anterior/siguiente/repetir, progreso clickeable con seek exacto) + panel biblioteca expandible estilo Spotify (playlist actual a la izquierda, carpetas/tabs + buscador a la derecha, drag & drop y clic derecho para armar la playlist, duraciones y resaltado del tema sonando). La música sale solo al stream, nunca por parlantes. Archivos en `assets/Musica/<carpeta>/`.
+
+## Descarga (sin programar nada)
+
+En [Releases](https://github.com/sangonz1999-cmyk/ConsolaOBS-v1/releases) hay dos `.zip`. Hacen falta **los dos**, uno por PC:
+
+- **PC del sonidista (consola/laptop) → `ConsolaOBS-Consola.zip`**: el programa (`ConsolaOBS.exe` + `updater.exe`) + sonidos, imágenes, iconos y fuentes. Se descomprime y se abre el `.exe` con doble clic. Las versiones nuevas llegan solas con la actualización automática.
+- **PC principal (la del OBS) → `ConsolaOBS-OBS.zip`**: solo los sonidos (`.mp3` de efectos y de música). Acá no se instala nada: solo OBS + esta carpeta.
+
+**Por qué los dos (regla de oro)**: cuando disparás un efecto, la consola le dice al OBS "reproducí `C:\...\X.mp3`" y el OBS lo busca **en su propio disco**. Si el archivo no está ahí, el stream queda en silencio (vos igual lo escuchás por los parlantes de la consola, pero eso es audio local y no va al stream). Por eso los sonidos tienen que quedar en la **misma ruta** en ambas PCs (ej: las dos en `C:\ConsolaOBS`).
+
+Notas: Windows SmartScreen avisa por ser un `.exe` sin firma (Más información → Ejecutar de todos modos). En OBS: Herramientas → WebSocket → habilitar, puerto 4455. El OBS tiene que ser **28 o más nuevo** (el WebSocket 5.x viene integrado; con versiones viejas la lista de fuentes llega vacía y el programa avisa). Alternativa para programadores: clonar el repo en ambas PCs (misma ruta) y usar `instalar.bat` + `compilar.bat` (ver abajo).
+
+## Requisitos
+
+- Python 3.x y `pip install -r requirements.txt` (`obsws-python`, `Pillow`, `miniaudio`, `pymupdf`, `fastapi`, `uvicorn`).
+- OBS Studio con el servidor WebSocket v5 activado (puerto 4455).
+
+## Uso
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py
+```
+
+Con doble clic en `compilar.bat` se generan `ConsolaOBS.exe` y `updater.exe` en la misma carpeta (con el icono de `assets/iconos/`).
+
+## Linux (y macOS)
+
+El programa anda: todo lo específico de Windows tiene respaldo en otros sistemas. Diferencias:
+
+- `tkinter` no viene con pip: `sudo apt install python3-tk` (Debian/Ubuntu) o equivalente.
+- Instalación: `bash instalar.sh` (después `python3 main.py`). El `.exe` es solo Windows; en Linux se usa desde código (opcional: generar binario con `pip install pyinstaller`).
+- OBS Studio con WebSocket v5 igual que en Windows; si no conecta, abrí el puerto: `sudo ufw allow 4455/tcp`.
+- Audio local necesita servidor de sonido (PulseAudio/PipeWire); sin eso los efectos igual salen al stream pero no por parlantes.
+- La regla automática de firewall y el `.exe` son solo Windows; la ruedita del mouse anda en los tres sistemas.
+
+## Guía de conexión (OBS en otra PC)
+
+Cómo funciona el programa: la consola **manda órdenes y rutas**, y el **OBS reproduce el audio desde SU propio disco**. Los archivos de sonido nunca viajan por la red: por eso tienen que existir en las dos PCs.
+
+- **Misma PC:** no hay que configurar nada.
+- **Otra PC:** 4 pasos, una sola vez:
+  1. Copiá la carpeta `assets` (o el zip de OBS) a la PC del OBS.
+  2. En esa PC: OBS Studio abierto, WebSocket activado (puerto `4455`, con contraseña) y puerto permitido (`sudo ufw allow 4455/tcp` en Linux).
+  3. En la consola, menú CONEXIÓN: Host = IP de la PC del OBS, Puerto `4455`, Contraseña.
+  4. Sincronizá una vez (Ajustes → SINCRONIZACIÓN): la **Carpeta OBS** (ruta de `assets` **tal como se ve EN LA PC DEL OBS**) se completa sola. Si no sincronizás, escribila a mano en el mismo menú (se guarda sola al salir del campo).
+
+Qué ruta poner según el sistema del OBS (solo hasta `assets`, sin el nombre del archivo):
+
+| OBS en... | Ejemplo válido | Cómo obtenerla |
+|---|---|---|
+| Windows | `D:\ConsolaOBS\assets` | Barra del Explorador, parado en la carpeta assets |
+| Linux | `/home/usuario/.../assets` | Terminal parado en assets: `pwd` (siempre empieza con `/`; jamás `D:` ni `C:`, Linux no tiene discos con letra) |
+| macOS | `/Users/usuario/.../assets` | Terminal parado en assets: `pwd` |
+
+Reglas:
+
+- Si la ruta no corresponde al sistema del OBS (ej `D:\...` en un OBS Linux), el pad se ilumina y suena local pero el stream queda mudo.
+- No renombres archivos ni carpetas del lado del OBS: en Linux las mayúsculas importan (`Documents` no es `documentos`).
+- Atajo: si en el OBS ponés un archivo bien a mano (Propiedades → Examinar), el programa lo detecta, lo usa y aprende la carpeta solo.
+- Diagnóstico rápido: pad que se ilumina + suena acá pero no en el stream = la Carpeta OBS está mal o vacía.
+
+## Música en el stream
+
+Música de fondo para el directo, controlada toda desde el programa (OBS solo ejecuta con la fuente `Música`).
+
+- Poné `.mp3` (o wav/ogg/flac/m4a) en `assets\Musica\<categoría>\`: cada subcarpeta es una pestaña. Las duraciones se detectan solas en segundo plano.
+- Mini player al pie de fuentes: play/pausa, stop, reiniciar, anterior (con más de 3 s reinicia el tema), siguiente, modo (repetir/aleatorio/apagado), título, tiempos y barra clickeable (salta al momento exacto).
+- Botón Biblioteca (▲/▼): panel con la playlist actual a la izquierda y la biblioteca a la derecha (pestañas, buscador en toda la biblioteca, ordenar por columnas). Drag & drop o clic derecho para armarla; clic en un tema lo reproduce; doble clic en una pestaña suena la carpeta sin tocar la playlist; botón ⇄ intercambia entre playlist y carpeta retomando cada una donde iba.
+- El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
+- Si el OBS está en otra PC: ver "Guía de conexión" más arriba (copiar los mp3 allá + Carpeta OBS una vez).
+
+## Orden, ocultas y escenas permitidas
+
+- **Botón ☰** (barra de Fuentes): ordena por Favoritos, Con colores, Activas, Escena actual y/o Alfabético (combinables), o vuelve a ↩ Orden manual. El drag & drop sigue valiendo dentro de cada grupo. Hay toggle para mostrar/ocultar las ocultas. Todo se guarda solo.
+- **Ocultar fuente** (clic derecho > Ocultar): la mutea, le apaga los auriculares y la manda al fondo en casi negro con el ojo 👁‍🗨, los dB escondidos y el medidor apagado. Si la tocan desde OBS, la consola la vuelve a mutear. Al mostrarla, restaura mute/monitoreo previos (incluso tras reiniciar).
+- **Favoritas (★)**: borde resaltado + van primeras con su criterio. Se crean/activan en tus escenas permitidas (y en ninguna otra).
+- **Escenas permitidas** (clic derecho en el fondo de Fuentes > ✅): lista blanca de dónde pueden estar Efectos, Música y favoritas. Lo no tildado no se toca nunca, ni siquiera al aire (ahí el efecto sale solo por parlantes). Clave para escenas de cámaras o capturas. Con 🧹 limpiás las ya contaminadas dejando solo la del aire.
+
+## Sincronización de assets entre las 2 PCs (sin USB ni releases)
+
+En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el programa trae un sync bidireccional (módulo `consola_obs/sync/`): compara por nombre + tamaño + mtime + sha256, copia lo faltante en ambas direcciones y en conflictos gana la PC que ejecuta. Alcance: sólo `Sondidos_pad` + `Imagenes_pad` + `Musica` (iconos, fuentes y fondos no se tocan nunca). Los borrados SIEMPRE se confirman antes (Sí = todo, No = sólo copiar lo nuevo).
+
+- Una sola vez por PC (con las 2 abiertas): en Ajustes → SINCRONIZACIÓN apretá 🔍 BUSCAR PCS, elegí la otra y después 🔗 VINCULAR (la otra acepta una vez y la clave viaja sola, queda guardada). O a mano: IP de la **otra** PC (puerto `4456`) + la **misma** API key en las dos (🔑 VER CLAVE; o variable `CONSOLAOBS_SYNC_KEY`). Ojo: en "PC remota" va la IP, no la clave. Botón 🛡 FIREWALL (como admin) para abrir el puerto.
+- Uso: botón 🔄 SINCRONIZAR (abre el registro de lo copiado/borrado). El servidor de cada PC arranca solo con el programa.
+- Requiere `pip install -r requirements.txt` (agrega `fastapi` + `uvicorn`) y estar en la misma red.
+- **PC del OBS sin programa completo**: el `ConsolaOBS-OBS.zip` trae `sync_server_mini.py` (un solo archivo, solo stdlib, sin pip ni nada): `python3 sync_server_mini.py --dir assets --port 4456` y la consola sincroniza contra esa PC igual. La clave sale de `CONSOLAOBS_SYNC_KEY`, `--key` o `sync.key` (se genera sola).
+
+## Actualización automática (desde v1.1.3)
+
+El programa consulta solo las Releases de GitHub al arrancar (y con Ajustes → ACTUALIZACIÓN → 🔍 BUSCAR ACTUALIZACIONES). Si hay versión más nueva, pregunta [Actualizar][Más tarde]: descarga el `ConsolaOBS-Consola.zip` a `%TEMP%`, cierra el programa y `updater.exe` (actualizador separado) reemplaza los archivos preservando `config/` (contraseña, ajustes, pads, clave de sync), verifica la instalación y reabre la nueva versión. Si algo falla (sin Internet, ZIP corrupto, versión inesperada), la instalación actual no se toca.
+
+Para publicar una actualización: 1) cambiá `VERSION` en `consola_obs/update/version.py` y en `version_info.txt` (más `updater_version.txt` si tocaste el updater), 2) doble clic en `compilar.bat` (genera `ConsolaOBS.exe` + `updater.exe`), 3) creá la Release `vX.Y.Z` y subí los dos ZIP.
+
+## Instalar Git y clonar el repo (Windows)
+
+1. Descargá Git de https://git-scm.com/download/win e instalalo con las opciones por defecto.
+2. Verificá en PowerShell: `git --version` (debe mostrar la versión).
+3. Cloná el proyecto donde quieras:
+```powershell
+git clone https://github.com/sangonz1999-cmyk/ConsolaOBS-v1.git
+```
+4. Entrá a la carpeta y seguí los pasos de [Uso](#uso) (venv, requirements, `python main.py`).
+
+Con eso ya podés traer cambios con `git pull` y ver el historial con `git log --oneline`.
+
+Git no pide cuenta para nada de esto: clonar y descargar un repo público es anónimo
+(solo haría falta iniciar sesión para *subir* cambios propios a GitHub).
+
+En una compu ajena (colegio, trabajo) conviene el **Git portable**, que no se
+instala ni pide permisos de administrador:
+1. Descargá `PortableGit-*.7z.exe` de https://git-scm.com/download/win.
+2. Ejecutalo y extraelo en una carpeta tuya (o un pendrive), por ejemplo `GitPortable/`.
+3. Abrí `GitPortable/git-bash.exe` y cloná desde ahí:
+```bash
+git clone https://github.com/sangonz1999-cmyk/ConsolaOBS-v1.git
+```
+Al terminar borrás la carpeta y no queda nada instalado.
+
+## Estructura
+
+```text
+main.py
+updater.py           # actualizador separado (reemplaza archivos con el programa cerrado)
+compilar.bat         # genera ConsolaOBS.exe + updater.exe (PyInstaller, Windows)
+armar_release.bat    # arma ConsolaOBS-Consola.zip + ConsolaOBS-OBS.zip para la Release
+version_info.txt     # nombre/versión/autor que lleva el .exe adentro
+updater_version.txt  # ídem para updater.exe
+consola_obs/
+├── app.py            # arranque (ventana + ajustes por pestañas)
+├── estado.py         # estado compartido
+├── constantes.py     # colores, medidas, esquemas
+├── rutas.py          # carpetas y archivos
+├── compat.py         # Pillow opcional
+├── plataforma.py     # Windows/DPI/fuentes del sistema
+├── configuracion.py  # JSONs de configuración
+├── utilidades.py     # medida actual (tamaño + alto de tarjeta)
+├── sync/             # sincronización bidireccional entre PCs
+│   ├── configuracion.py  # sync_config.json + último índice
+│   ├── servidor.py       # FastAPI: files/download/upload/delete
+│   ├── motor.py          # comparar + copiar + borrados + conflictos
+│   └── ui.py             # pestaña Sincronización + arranque del server
+├── update/           # actualización automática desde GitHub
+│   ├── version.py    # VERSION (única fuente, igual que version_info.txt)
+│   ├── checker.py    # releases/latest + comparación + descarga a %TEMP%
+│   └── ui.py         # pestaña Actualización + prompt + progreso
+├── obs/
+│   ├── cliente.py    # comandos: volumen, filtros, fuentes, escenas, efectos
+│   └── eventos.py    # callbacks push de OBS-WebSocket
+├── audio/
+│   ├── filtros.py       # editor de filtros en vivo
+│   ├── propiedades.py   # ventana de Propiedades por fuente
+│   ├── fuentes.py       # agregar fuente
+│   └── reproduccion.py  # soundboard (OBS + audio local en PC)
+└── ui/
+    ├── ventana.py         # cuerpo, divisor, tipografía, cierre
+    ├── cabecera.py        # cabecera + menú desplegable de ajustes
+    ├── tarjeta_fuente.py  # tarjetas/faders (Profesional y Moderna)
+    ├── soundboard.py      # pads, grilla, detección de carpetas
+    ├── medidores.py       # VU LED + barra continua OBS
+    └── dibujo.py          # primitivas, placas, iconos SVG
+```
+
+## Documentación técnica
+
+Funcionamiento, mecánicas y arquitectura en detalle:
+
+## Índice
+[🔗](#sec-0) **0. ¿Qué es?**
+
+---
+
+[🔗](#sec-1) **1. Requisitos y dependencias**
+
+---
+
+[🔗](#sec-2) **2. Arquitectura general (ventana Tk, dos clientes OBS, hilos)**
+
+---
+
+[🔗](#sec-3) **3. Conexión a OBS (config, estado, formato de datos)**
+
+---
+
+[🔗](#sec-4) **4. Modelo de datos / estado global**
+
+---
+
+[🔗](#sec-5) **5. Eventos de OBS en tiempo real (bidireccional)**
+
+---
+
+[🔗](#sec-6) **6. Medidores VU tipo LED + medidores de niveles (VU meters)**
+
+---
+
+[🔗](#sec-7) **7. Saturación / "rojo" en el medidor**
+
+---
+
+[🔗](#sec-8) **8. Fader/fuentes (tarjetas, mute, monitoreo, arrastre, menú)**
+
+---
+
+[🔗](#sec-8b) **8b. Eliminar fuente (clic derecho > Eliminar fuente…)**
+
+---
+
+[🔗](#sec-8c) **8c. Quitar de todas las escenas (clic derecho)**
+
+---
+
+[🔗](#sec-9) **9. Fuentes "principales" (favoritas: sólo en permitidas)**
+
+---
+
+[🔗](#sec-9b) **9b. Escenas permitidas (lista blanca) + ocultar fuente**
+
+---
+
+---
+
+[🔗](#sec-10) **10. Filtros de audio (crear, editar, ajustes en tiempo real)**
+
+---
+
+[🔗](#sec-10b) **10b. Propiedades de fuente (clic derecho > Propiedades)**
+
+---
+
+[🔗](#sec-11) **11. Soundboard (pads de sonido, arrastre, miniaturas, configuración)**
+
+---
+
+[🔗](#sec-11b) **11b. Agregar fuente (clic derecho en el panel > Agregar fuente)**
+
+---
+
+[🔗](#sec-11c) **11c. Vaciar pad vs Eliminar pad**
+
+---
+
+[🔗](#sec-12) **12. Cabecera, panel de fuentes, paneles drag con arrastre reordenable**
+
+---
+
+[🔗](#sec-13) **13. Redimensionado responsive (factor de escala, velo, supersampling)**
+
+---
+
+[🔗](#sec-14) **14. Persistencia (config JSON)**
+
+---
+
+[🔗](#sec-15) **15. Estética y dibujo a mano (sombra, gradiente, engranaje, iconos)**
+
+---
+
+[🔗](#sec-16) **16. Windows: anti-parpadeo nativo (WM_SETREDRAW, pincel de fondo)**
+
+---
+
+[🔗](#sec-17) **17. Flux de arranque / cierre**
+
+---
+
+[🔗](#sec-18) **18. Consideraciones de hilos y concurrencia**
+
+---
+
+[🔗](#sec-19) **19. Cómo compilar el .exe**
+
+<a id="sec-0"></a>
+## 0. ¿QUÉ ES?
+Programa de escritorio (Tkinter) que
+actúa como "consola de sonido" remota para OBS Studio, conectándose al
+plugin OBS WebSocket v5. Reemplaza el flujo incómodo de "ir al mixer
+de OBS → buscar la fuente → mover fader" por un panel estilizado tipo
+mesa de mezcla, con:
+
+- Un fader (deslizador de volumen en dB) por cada fuente de audio.
+- Medidores de nivel con saturación en rojo (LED en Profesional, barra continua en Moderna).
+- Botones de mute y de monitoreo por auriculares (iconos SVG originales de OBS).
+- Filtros de audio reales de OBS editables en vivo (compresor, EQ...).
+- Un soundboard con pads que reproducen sonidos/efectos bajo demanda, con barra de progreso.
+- Fuentes marcadas como "principales" (★): borde resaltado, primeras en el orden y viven en las escenas permitidas.
+- Reordenamiento por arrastre tanto de tarjetas de fuente como de pads.
+- Todo sincronizado en tiempo real con OBS, en ambas direcciones.
+
+La interfaz combina iconos SVG originales (assets/iconos/, vía pymupdf) con
+dibujo a mano sobre Canvas de Tk, con estética oscura profesional y
+fuentes tipográficas propias opcionales (assets/fuentes/*.ttf|*.otf).
+
+
+<a id="sec-1"></a>
+## 1. REQUISITOS Y DEPENDENCIAS
+Python 3.x (se usa solo biblioteca estándar de Tk, más):
+
+- obsws-python  → cliente de OBS WebSocket v5 (IMPORTANTE: es la base de toda la integración). Instalar:  pip install obsws-python
+- Pillow (opcional) → mejora de calidad:
+  - Miniaturas de pads redondeadas/antialias (LANCZOS).
+  - Círculos/bordes con supersampling para evitar el pixelado.
+  - Captura de imagen de la ventana para el "velo" de redimensionado.
+  - Carga de logo/fondos de cabecera. Si Pillow falta, el programa intenta instalarlo solo con pip en el primer arranque; si no se puede, funciona igual con bordes lisos.
+- miniaudio → audio local por los parlantes de la PC + lectura de duración de los efectos.
+- pymupdf (opcional) → render de los iconos SVG originales; sin él se cae al emoji de texto.
+
+Importaciones dinámicas y tolerantes:
+- PIL (Image, ImageDraw, ImageOps, ImageTk, ImageFile).
+- PIL.ImageGrab (se importa por separado; si falta, no rompe).
+- En Windows: ctypes/usuario32/gdi32 (solo para trucos nativos de anti-parpadeo y registro de fuentes).
+
+OBS: debe estar corriendo un servidor OBS-WebSocket v5 (puerto por
+defecto 4455). La contraseña/host/puerto se guardan en
+config_conexion.json.
+
+
+<a id="sec-2"></a>
+## 2. ARQUITECTURA GENERAL
+Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el estado compartido en `estado.py` y las constantes en `constantes.py`):
+
+(a) Dos clientes OBS separados (`obs/cliente.py` + `obs/eventos.py`):
+  - cliente_obs  → cliente SÍNCRONO (con lock) para ejecutar comandos (pedidos) contra OBS. Todos los comandos se serializan con un threading.Lock para no mandar dos pedidos sobre el mismo socket a la vez.
+  - cliente_eventos → cliente asíncrono de EVENTOS (OBS-WebSocket push de eventos), que se registra con callbacks para recibir actualizaciones en tiempo real.
+
+(b) Arquitectura de hilos:
+  - La UI corre en el hilo principal de Tk (ventana.mainloop()).
+  - La conexión, los pedidos de volumen, la lectura de niveles VU y los refrescos de ganancia corren en hilos daemon.
+  - NUNCA se llama a la red desde el hilo de Tk directamente: las operaciones de red van a hilos secundarios y los resultados se entregan a la UI con ventana.after(0, ...) o se guardan en diccionarios globales que el bucle VU lee cada 33 ms.
+  - `_lock_pedidos_obs` protege el socket síncrono (see clase _ClienteOBSSincronizado, que envuelve cada método con threading.Lock vía __getattr__).
+  - `_lock_sincronizar_escenas` serializa las operaciones de crear/mover fuentes entre escenas (evita duplicarla dos veces si dos hilos corren a la vez).
+
+(c) Ciclos de refresco (ventana.after):
+  - Medidores VU: cada INTERVALO_VU_MS (33 ms ≈ 30 fps).
+  - Ganancia de filtros: cada INTERVALO_REFRESCO_GANANCIA_MS (1000 ms).
+  - Sondeo de cambios externos de filtros mientras un editor está abierto: cada ~500 ms.
+  - Estado de reproducción del soundboard: cada INTERVALO_REFRESCO_REPRODUCCION_MS (150 ms); barra de progreso del pad: cada ~40 ms.
+  - Redibujado de la cabecera (degradado): con throttle tras 120 ms.
+  - Reajuste de columnas de fuentes y soundboard: con throttle tras 30 ms (solo reubica, nunca reconstruye).
+
+
+<a id="sec-3"></a>
+## 3. CONEXIÓN A OBS
+CS: Se guarda en config_conexion.json {host, puerto, password}.
+Defaults: host "localhost", puerto 4455.
+
+### Flujo:
+- al arrancar se carga la config previa y la conexión es manual con el botón CONECTAR del menú de ajustes (Host, Puerto, Contraseña).
+- conectarse obs() → comprueba conectado y conecta con obsws-python: ClienteWebSocket(host, puerto, password). Si hay error de conexión lo muestra en un messagebox.
+- tras conectar: lista fuentes (get_input_list), escenas (get_scene_list), y dispara el refresco de estados.
+
+Formato de datos: OBS-WebSocket devuelve tanto nombres snake_case como
+camelCase según la versión del cliente. Se usa `_valor(datos, clave_obs,
+clave_obs_camel)` para leer un campo tolerando ambos nombres, y
+`_valor_obs_o_defecto` para los ajustes de filtros.
+
+### Cambios de estado que se afectan al conectar/desconectar:
+- estados globales conectado (bool).
+- el medidor se pone en gris/atenuado cuando la fuente NO está en la escena activa (ver abajo).
+
+
+<a id="sec-4"></a>
+## 4. ESTADO GLOBAL / MODELO DE DATOS
+Globals relevantes:
+- conectado: bool de estado.
+- cliente_obs, cliente_eventos: los dos clientes.
+- fuentes: dict nombre → dict de widgets de la tarjeta de la fuente ({"contenedor", "cabecera", "fader", "mute", "monitor", "vu_canvas", "db", "color", "muted", "atenuado", ...}).
+- niveles_actuales / niveles_crudos: último nivel por fuente (multiplicadores lineales, crudos y ya procesados).
+- ultima_vez_saturado: timestamps por fuente para el "clipping" sostenido.
+- fuentes_principales: set() de nombres marcados como principal.
+- orden_fuentes: lista (orden visible de las tarjetas).
+- colores_fuentes: dict nombre → color de etiqueta de tarjeta.
+- escena_actual_nombres / escena_actual_obtenida: fuente activa en la escena en vivo.
+- config_soundboard: dict índice→{nombre, archivo, imagen, color} de los pads.
+- _sesion_reproduccion: {indice, token, inicio, deteniendo, duracion, archivo} del efecto que suena (o None).
+- _canvas_pads: por pad (canvas, caja de la cara, radio) para la barra de progreso; _overlay_progreso: overlay vigente.
+- config_conexion, config_interfaz, cargadas al inicio y guardadas al cerrar.
+
+
+<a id="sec-5"></a>
+## 5. EVENTOS DE OBS EN TIEMPO REAL (OBS → UI, bidireccional)
+El programa se suscribe a los callbacks de eventos de OBS-WebSocket y
+los refleja en la UI al instante:
+
+Inputs / auditorio:
+- on_input_audio_monitor_type_changed → actualiza botón 🎧 monitor.
+- on_input_mute_state_changed → actualiza botón 🔊/🔇.
+- on_input_name_changed / on_input_removed → renombra/elimina tarjeta (al eliminar también limpia `fuentes_principales`, `colores_fuentes` y cierra Filtros/Propiedades de esa fuente, sección 8b).
+- on_input_volume_meters → NUEVO: llega en un hilo; se guarda en niveles_actuales/niveles_crudos y se marca saturación.
+- on_input_audio_* (monitor type, volume, ...) en general.
+
+Escena / showing:
+- on_current_program_scene_changed
+- on_scene_item_* (created/removed/enable state changes) Se usa para saber qué fuentes están al aire en la escena activa y atenuar (poner en gris) las que no están.
+- on_current_scene_collection_changed → cambia `E.coleccion_actual` (visible en el título como 📁) y dispara el refresco completo de la lista, porque otra colección = otras escenas y otras fuentes. Lo mismo chequea `_refrescar_membresia_escena` por si el evento se pierde.
+
+Filtros:
+- on_source_filter_created / removed / enable_state_changed / list_reindexed / name_changed → refrescan el editor de filtros.
+
+Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
+(_sondear_ganancia_db) y se muestra en la tarjeta.
+
+### REFRESCO DEL Volumen en % del fader:
+- Cuando el usuario mueve el fader se ejecuta set_input_volume con el valor en dB (cambiar_volumen). Si el valor es muy bajo (< UMBRAL), set_input_volume con vol_mul=0.
+
+### UI → OBS (cambios de la consola aplicados a OBS):
+- Al mover el fader: set_input_volume.
+- Al mutear: set_input_muted.
+- Al monitorear: set_input_audio_monitor_type.
+- Al editar/cambiar filtros: set_source_filter_settings, create_source_filter, set_source_filter_enabled, remove_source_filter, set_source_filter_index.
+- Al reproducir/detener un pad: set_input_settings + trigger_media_input_action (RESTART/STOP) sobre la fuente de efectos.
+- Al crear/asegurar fuentes principales: create_scene_item.
+- Al crear una fuente: create_input (sección 11b).
+- Al quitar de escenas: remove_scene_item por ítem (sección 8c).
+- Al eliminar una fuente: remove_input (sección 8b). Todo esta sincronización es EN AMBAS DIRECCIONES y en tiempo real.
+
+
+<a id="sec-6"></a>
+## 6. MEDIDORES VU TIPO LED
+Cada tarjeta de fuente tiene un medidor de dos canales (barra LED
+vertical, NUM_SEGMENTOS_VU=24 segmentos) que imita el medidor de OBS.
+En Moderna es barra continua de dos canales con divisora fina del color del fondo
+(`_dibujar_barra_obs`): mismo largo que el fader, cortes duros de color sin difuminado,
+marcas perpendiculares de escala dB pegadas a la barra y línea de pico.
+
+### Mecánica:
+- Los niveles vienen de on_input_volume_meters (datos de OBS en tiempo real, no reconstruidos a mano excepto en el caso mute, ver abajo).
+- `_y_para_db`: convierte dB (0..-60) en coordenada Y del canvas.
+- LED (Profesional): MARCAS_DB = [0,-10,-20,-30,-40,-50,-60] dibujadas a la derecha. Moderna: MARCAS_DB_OBS = [0,-6,-12,-18,-24,-30,-36,-48,-60] con marcas perpendiculares pegadas a la barra.
+- El medidor se actualiza en el bucle actualizar_vu_meters_ui cada INTERVALO_VU_MS (33 ms).
+- `CAIDA_POR_CUADRO`: el nivel VISUAL cae suavemente (decaimiento animado parecido a un pico de consola real) mientras el nivel real sube de golpe: `db_visual = max(db_objetivo, db_visual - caida)`. Conserva el pico hasta que decae.
+- Escala: el medidor va de -60 dB (abajo) a 0 dB (arriba).
+
+### Lógica del nivel cuando está muteado (importante):
+- Mientras la fuente está MUTEADA, OBS deja de reportar 'niveles_actuales' (los corta a 0), así que el medidor se reconstruye a mano: nivel_mul = niveles_crudos * ganancia_fader * ganancia_calibracion. Según el caso (ver CALIBRACION_VU_MUTEADO_DB, UMBRAL_NIVEL_MUTEADO_DIRECTO).
+- A este nivel reconstruido se le aplica la atenuación por color gris si la fuente está atenuada.
+
+### Silencio:
+- UMBRAL_SILENCIO = -60 dB: por debajo se considera silencio (la etiqueta muestra "SILENCIO").
+
+### Debug opcional:
+- DEBUG_VU_FUENTE: si se le asigna un nombre de fuente, imprime en consola cada INTERVALO_DEBUG_VU_SEG (0,25 s) el nivel crudo y en dB, para calibrar el medidor. (Función `_log_debug_vu`, marca de tiempo en `E._ultimo_debug_vu`).
+
+### Sincronía con los filtros:
+- La ganancia de los filtros se suma al nivel mostrado (se refleja en el medidor) leyendo la ganancia real de cada filtro de audio (sección CALIBRACIÓN al inicio): así el medidor muestra el "post fader + filtros".
+
+
+<a id="sec-7"></a>
+## 7. SATURACIÓN / "ROJO"
+Cuando una fuente pasa de 0 dB(UMBRAL_SATURACION_MUL = 0.999, es decir
+≈ 0 dB), el medidor LED se pone TODO EN ROJO (todos los segmentos
+encendidos del color de saturación).
+
+### Mecánica:
+- Se detecta en el bucle de VU: si el nivel crudo >= UMBRAL, se registra el timestamp (ultima_vez_saturado[nombre] = time.monotonic()).
+- El rojo se sostiene DURACION_SATURACION_SEG (1,0 s) después del pico: así el LED queda "pegado" en rojo aunque el pico haya sido un instante (igual que el indicador de clipping de OBS).
+- Si la fuente está atenuada (gris) también hay rojo equivalente en gris (COLOR_LED_SATURADO_GRIS) para el modo gris.
+- Los segmentos prendidos se pintan con color de saturación mientras `saturado` está activo; el resto queda apagado.
+- Al desconectar se limpia ultima_vez_saturado.clear().
+
+Medidor de clip "verdadero" también se marca desde
+on_input_volume_meters (niveles >= 0 dB) y el bucle VU maneja el
+decaimiento suave.
+
+### Colores LED (degradado) por dB:
+- Verde  (abajo)  → Amarillo (medio, -20..-9) → Rojo (arriba, -9..0).
+- En modo gris: la misma escala pero en gris (COLOR_LED_*_GRIS).
+- Segmento saturado: todo rojo (o gris claro si atenuado).
+
+
+<a id="sec-8"></a>
+## 8. TARJETAS DE FUENTE (el fader)
+Por cada fuente de audio de OBS se crea una tarjeta con:
+
+Cabecera de la tarjeta:
+- Nombre (doble clic = renombrar), en cabecera de alto fijo: los títulos largos se achican (hasta 5) y, si ni así entran en 2 renglones, se recortan con '…' para no desalinear el resto.
+- Botón de mute (Profesional: circular; Moderna: SVG plano 🔊/🔇 con X en mute).
+- Botón de monitoreo (Profesional: circular; en Moderna, SVG originales de OBS: auricular sobre cuadrado de estado verde con borde en salida, azul en solo-yo, headphones-off apagado; mute con X).
+- Toda la tarjeta se atenúa en gris si está muteada o fuera de la escena al aire (sin LED puntual).
+- Menú contextual (clic derecho) con: renombrar, "marcar como principal/quitar de principales", "Ocultar/Mostrar fuente", "Filtros…", "Propiedades…", color de etiqueta, "Quitar de todas las escenas…" y "Eliminar fuente…" (iconos `menu_*.svg` a 16 px, alineados con placeholder transparente).
+- Arrastre: clic sostenido sobre la cabecera + arrastre para REORDENAR las tarjetas (intercambio de posición).
+
+Cuerpo de la tarjeta:
+- Línea divisoria de acento bajo la cabecera (solo Moderna).
+- Alto regulable en Ajustes → Apariencia → "Alto" (Compacto/Normal/Alto/Muy alto): el canal se estira y el alto total lo acompaña; combina con Chico/Mediano/Grande.
+- Fader vertical (tk.Scale de -60..0 dB, resolución 0,5) que llama cambiar_volumen. Al arrastrar se congela/descongela el repintado para no parpadear y se espera a soltar.
+- En Moderna el fader es estilo OBS (`_FaderOBS`): pista negra angosta prerenderizada con extremos redondos suaves del mismo largo que el medidor, relleno azul opaco hasta el final, pastilla contenida entre los extremos sin sobrepasarlos y marcas perpendiculares cada 10 dB (0 a -50).
+- Etiqueta de dB (solo cuando > UMBRAL).
+- Medidor VU (ver sección 6).
+- Alto con ajuste anti-recorte: si las métricas de fuente de la PC superan el alto fijo, la tarjeta crece lo justo (parejo en todas) para no cortar los iconos de abajo.
+
+Atributo clave: `fuentes[nombre]` guarda entrada con la referencia del
+algo "muted", "monitor", "principal", "atenuado", "vu_canvas", etc.
+
+### diseños responsive:
+- _ancho_preferido_fuente: calcula el ancho de catálogo de las tarjetas según el tamaño de ícono (Chico/Mediano/Grande).
+- _reubicar_fuentes(): reposiciona las tarjetas en la grilla según las columnas disponibles, SIN recrearlas, para no perder el estado del fader mientras se redimensiona.
+- _columna_disponible_fuentes: cuántas tarjetas entran por fila (histéresis de 40 px).
+
+
+<a id="sec-8b"></a>
+## 8b. ELIMINAR FUENTE (clic derecho > Eliminar fuente…)
+`_eliminar_fuente` en `ui/tarjeta_fuente.py`: a diferencia del resto del menú, esto borra la fuente de OBS de verdad (no sólo la tarjeta), vía `remove_input` en un hilo daemon:
+- Pide conexión activa; bloquea la fuente interna del soundboard (`Soundboard_Efectos`).
+- Chequea en un hilo si es fuente global (Mic/Aux, Audio de escritorio de Configuración > Audio, vía `_leer_fuentes_globales_obs`): si lo es, no permite borrarla desde la consola para no dejar ese canal roto en OBS.
+- Pide confirmación ("no se puede deshacer"); la tarjeta se quita sola al llegar `on_input_removed`, igual que si se hubiera borrado desde OBS.
+- Limpieza centralizada (`_limpiar_referencias_fuente_borrada`): al desaparecer una fuente —desde la consola o desde OBS— se la saca de `fuentes_principales` y `colores_fuentes` (con guardado de config) y se cierran sus ventanas de Filtros/Propiedades si estaban abiertas.
+
+
+<a id="sec-8c"></a>
+## 8c. QUITAR DE TODAS LAS ESCENAS (clic derecho)
+`_quitar_fuente_de_escenas` en `ui/tarjeta_fuente.py` + `quitar_fuente_de_todas_las_escenas` en `obs/cliente.py`: recorre todas las escenas y borra con `remove_scene_item` cada ítem de primer nivel que referencie a la fuente, SIN borrar el input (sigue existiendo y se puede reagregar desde OBS). Corre en hilo daemon, serializado con `_lock_sincronizar_escenas`, pide confirmación, bloquea la fuente interna del soundboard y las marcadas como principales (esas se mantienen en escena por definición), y al terminar refresca la lista e informa en cuántas escenas estaba. La tarjeta queda atenuada hasta que la fuente vuelva a alguna escena.
+
+
+<a id="sec-9"></a>
+## 9. FUENTES "PRINCIPALES" (favoritas: sólo en permitidas)
+Una fuente marcada como "principal" (★ en el menú contextual de la
+tarjeta) se comporta distinto al resto:
+
+- Se guarda en fuentes_principales (set) y se persiste en config_interfaz.json ("fuentes_principales": [..]).
+- `asegurar_principales_en_permitidas(solo_nombre=None)`: crea/activa esas fuentes SÓLO en las escenas permitidas (lista blanca, ver sec. 9b): si el input no existe en OBS se poda de favoritas con aviso; si existe pero falta el ítem en una permitida → create_scene_item, y si está deshabilitado → set_scene_item_enabled. Serializado con _lock_sincronizar_escenas.
+- Se ejecuta al conectar/refrescar, al marcar una principal y al tildar una escena (`asegurar_todo_en_escena`). Las escenas no permitidas no se tocan nunca.
+- Visualmente la tarjeta principal tiene borde resaltado naranja (COLOR_BORDE_PRINCIPAL, borde más grueso).
+- Renombrar: si se renombra una fuente principal, se actualiza el nombre en fuentes_principales también (ver `_renombrar_fuente()`).
+
+DIFERENCIA CLAVE con el resto: el resto de las fuentes SOLO se muestran
+tal como estén (grises si no están en la escena activa); las principales
+además van primeras con su criterio de orden y viven en las permitidas.
+
+
+<a id="sec-9b"></a>
+## 9b. ESCENAS PERMITIDAS (lista blanca) + OCULTAR FUENTE
+`escenas_permitidas` (dict `{coleccion: [escenas]}`, persistido en `config_interfaz.json`): sólo ahí pueden existir Efectos/Música/favoritas. Es POR COLECCIÓN porque los nombres se repiten entre colecciones y entre PCs (un set global tildaría homónimas sin configurar). Si no hay ningún tilde en ningún lado, vale la escena al aire (si no, con una colección nueva nada sonaría y parecería roto); en cuanto se tilda la primera, rige estricto. El formato viejo (lista plana) se migra solo a la colección al aire en el primer refresco.
+
+- Internas: `asegurar_interna_en_escena_actual` (input + ítem sólo en la escena al aire si está permitida) se llama al conectar/refrescar, al cambiar de escena (hilo aparte en `_refrescar_membresia_escena`) y justo antes de disparar un efecto (`reproduccion.py`) o un tema (`musica.py`). Con escena no permitida al aire: el efecto sale sólo por parlantes, la música no se inyecta (no es error).
+- Diálogo ✅ (checklist desde `get_scene_list`, casilleros propios con `menu_check_on/off.svg`): al tildar se arma todo ahí (`asegurar_todo_en_escena`); al destildar no se borra nada. 🧹 (`quitar_internas_de_otras_escenas`) limpia las demás dejando sólo la del aire.
+- Ocultar (`ocultar_fuente`/`mostrar_fuente`): guarda previo {muted, monitor}, aplica mute + `MONITORING_TYPE_NONE` en OBS (hilo), manda al fondo (`orden_visible_fuentes`), pinta casi negro con insignia 👁‍🗨 (`menu_mostrar.svg`, dB escondidos) y apaga el VU (`medidores.py`: nivel 0 + pico -60 + sin clip). `_reforzar_oculta_en_obs` re-mutea cambios venidos de OBS (converge, sin bucle). Mostrar restaura el previo (persistido en `fuentes_ocultas_previo`).
+- Orden (botón ☰): `orden_visible_fuentes` = manual estable + criterios combinables (`favoritos > colores > activas > escena > abc`) + ocultas siempre al fondo (o excluidas con el toggle). Menú con `menu_check_on/off.svg` a 16 px.
+
+
+<a id="sec-10"></a>
+## 10. FILTROS DE AUDIO (tiempo real, bidireccional)
+Ventana "Filtros" por fuente (desde el menú contextual):
+- Lista los filtros de audio reales de la fuente (get_source_filter_list).
+- Cada filtro tiene: nombre + tipo + checkbox "habilitado" y botón de eliminar (✕) y botón Ajustes.
+- Botón "➕ Agregar filtro": selector de nuevo filtro con los tipos de filtros de SONIDO permitidos (FILTROS_DE_SONIDO_PERMITIDOS), ícono y nombre amigable, cruzado contra la lista de kinds que OBS realmente ofrece (get_source_filter_kind_list).
+- Al crear: se llama al editor de ajustes del filtro en el acto.
+
+### Editor de ajustes de filtro (_abrir_editor_ajustes_filtro):
+- Se dibujan CONTROLES según el tipo de filtro (no un editor genérico):
+  - Slider (tk.Scale) para valores numéricos.
+  - Checkbox para valores booleanos.
+  - Combobox para listas (por ejemplo sidechain del compresor).
+  - Entry de texto para el resto.
+- Se usa ESQUEMA_FILTROS_CONOCIDOS: para limitador, compresor, ecualizador de 3 bandas y ecualizador básico se definen los campos REALES con nombre, rango, paso, sufijo y valor por defecto. Para otros tipos se usa un esquema genérico (RANGOS_CAMPOS_FILTRO) que adivina rango por el nombre del campo.
+- SINCRONIZACIÓN BIDIRECCIONAL EN VIVO:
+  - Al mover un slider → set_source_filter_settings(..., nombre, datos, True) se aplica al INSTANTE a OBS (y por tanto el sonido cambia a oído en vivo).
+  - Mientras el editor está abierto se sondea cada ~500 ms get_source_filter_settings para traer cambios que vengan de OBS (o de otra instancia) y actualiza los controles, PERO sin pisar el slider que el usuario está arrastrando en ese instante. Usa _valores_equivalentes para no "temblar" por redondeos de dB.
+  - También se suscribe a eventos de filtros de OBS para refrescar la lista en vivo (on_source_filter_*).
+- Ganancia se refleja en el VU: _refrescar_ganancia_fuente, en un hilo, suma la ganancia de todos los filtros habilitados que aportan dB (gain_filter.db, compressor output_gain, etc.) y el medidor la muestra (sin reconstruir el nivel a mano: usa el nivel crudo).
+
+
+<a id="sec-10b"></a>
+## 10b. PROPIEDADES DE FUENTE (clic derecho > Propiedades)
+Ventana "Propiedades" por fuente (`consola_obs/audio/propiedades.py`), agregada al menú contextual junto a Filtros:
+- Arma los controles según el `inputKind` real de la fuente (get_input_settings), con el mismo criterio de esquema fijo que los filtros: ESQUEMA_PROPIEDADES_ENTRADA en estado.py cubre Mic/Aux y Audio de escritorio (WASAPI/CoreAudio/Pulse), Captura de audio de aplicación, Fuente de medios y Captura de ventana — calcados campo por campo, mismo orden y mismas opciones que la ventana real de OBS.
+- Campos "lista_dinamica" (dispositivo de audio, ventana a capturar) se piden en vivo con get_input_properties_list_property_items, porque dependen de la PC de cada uno.
+- Campos condicionales (`visible_si`) muestran/ocultan filas según el valor de otro campo — por ejemplo "Compatibilidad multiadaptador" sólo con método BitBlt en Captura de ventana — y se re-empaquetan en su ORDEN original al reaparecer, no al final de la lista.
+- Cualquier tipo de fuente sin esquema fijo cae en un editor genérico (una fila por ajuste, adivinando el control por tipo de dato), igual criterio que un filtro sin esquema.
+- Botonera igual a la de OBS: "Por defecto" (get_input_default_settings), "Cancelar" (restaura los ajustes que tenía la fuente al abrir la ventana, incluida la "X") y "Aceptar".
+- Columna de etiquetas al ancho real de cada ventana (no fija); scrollbar vertical flotante oscuro que se auto-oculta y sangría lateral de 20px.
+- SINCRONIZACIÓN BIDIRECCIONAL EN VIVO: los cambios se mandan con set_input_settings al instante, y se sondea cada ~500 ms para traer cambios hechos desde OBS, salteando el control que el usuario tiene agarrado — mismo mecanismo que el editor de filtros, porque OBS-WebSocket tampoco emite un evento de "ajustes de fuente cambiados".
+- Fuente de medios (ffmpeg_source) calcada exacto a la ventana de OBS: mismo orden y etiquetas (incluidos decodificación por hardware y velocidad), con el Buffer visible sólo en modo red como en OBS.
+
+
+<a id="sec-11"></a>
+## 11. SOUNDBOARD (pads con efectos)
+El soundboard es una grilla de "pads" (botones) que reproducen sonidos
+via una fuente de efectos de OBS (NOMBRE_FUENTE_EFECTOS, por defecto
+"Soundboard_Efectos" — una fuente de extensión de medios "media_source").
+
+### Estado y configuración:
+- num_pads_soundboard (crece con "＋ AGREGAR PAD").
+- config_soundboard.json guarda por índice: nombre (texto), archivo (ruta de audio), imagen (ruta de la miniatura), color (de etiqueta).
+- Si no hay archivo asignado, el pad se dibuja vacío (gris, sin pulso).
+- Detección de carpetas (`detectar_sonidos_carpeta`, al arrancar y con el botón 🔍): cada audio nuevo de `assets/Sondidos_pad/` entra primero (posición 0, corriendo a los demás) con su imagen gemela de `assets/Imagenes_pad/`; también completa imágenes faltantes en pads existentes. Sólo agrega pads nuevos al final si no hay ningún hueco.
+
+### Dibujo de cada pad (en construir_soundboard):
+- Placa con bordes redondeados (vidrio en Profesional, plana estilo OBS en Moderna), con el color de etiqueta en el marco si tiene.
+- Imagen de fondo (miniatura con Pillow) o triángulo ▶ dibujado a mano si está vacío (o "— VACÍO —" como nombre).
+- Al sonar, la placa se ilumina; la barra de progreso la barre con el color de la etiqueta.
+- Hover: aclara la tarjeta.
+
+### Acciones del pad:
+- Clic = REPRODUCIR. La fuente de efectos se configura con el archivo (set_input_settings {local_file, ...}) y se lanza con trigger_media_input_action(RESTART) en un hilo. En paralelo, el mismo efecto sale por los parlantes de la PC (miniaudio, `audio/reproduccion.py`), con on/off en Ajustes → Audio.
+- Clic de nuevo sobre el pad que suena = DETENER con fundido de 2 s (igual con o sin OBS: sin conexión el fundido lo hace el audio local). Mientras se apaga se ignoran más clics hasta que termina, para que el spam no buguee el sonido; la luz se apaga sola al terminar el audio.
+- Barra de progreso: mientras suena, una barra semitransparente del color de la etiqueta barre la cara del pad de izquierda a derecha al ritmo real del audio (duración por decode local, con respaldo de OBS), con las esquinas redondeadas de la cara. Sin OBS, pasada la duración la luz se apaga sola por reloj.
+- Botón de mute/escuchar ya cubierto por el fader de la fuente.
+- Doble clic o menú contextual (clic derecho) del pad: reproducir, detener, reiniciar, asignar/cambiar sonido, asignar imagen, color de etiqueta, renombrar, vaciar o eliminar (sección 11c).
+- Fuente en reposo siempre vacía: al terminar un sonido (fin natural, STOP, fundido o cierre de la app) se limpia `local_file` de `Soundboard_Efectos` (`_vaciar_fuente_efectos`), así al abrir OBS no se reproduce solo el último sonido aunque la consola esté cerrada.
+
+### Arrastre de pads (reordenar):
+- Se puede arrastrar un pad para reordenarlos (mismo mecanismo que las tarjetas de fuente: _iniciar_arrastre_pad, _mover_arrastre_pad, _soltar_arrastre_pad). Al soltar sobre otro pad se intercambian.
+- Indices se persisten (orden en config + configuración de interfaz).
+
+Colores de etiqueta de pads: paleta PALETA_ETIQUETAS (con color del
+pad de borde y del LED).
+
+### Miniaturas (Pillow):
+- `_obtener_imagen_decodificada`/`_cargar_miniatura`: carga y cachea la imagen decodificada por ruta, y genera miniaturas por (indice, ruta, tamaño). La ruta va en la clave a propósito: si los pads se corren (detectar mete nuevos al principio), el índice solo mostraría la imagen vieja. Redimensiona la imagen para que entre completa en el pad sin recortarla (contain) o la escala con LANCZOS.
+- Cache `_imagenes_decodificadas` y `_miniaturas_cargadas` por (ruta, tamaño), para no reabrir/redecodificar archivos pesados al reconstruir el soundboard (muy importante para no tildar).
+
+### Grilla responsive del soundboard (_columnas_disponibles):
+- Calcula cuántas columnas entran según el ancho del canvas y la medida real del pad (pad_ancho + 12 de padx, con tolerancia 25% para la última columna).
+- El panel copia el ancho del canvas (sin esto quedaba angosto con un hueco a la derecha) y el sobrante se reparte parejo entre columnas con las celdas centradas (`_repartir_columnas_grilla`), así la grilla usa todo el ancho.
+- Al cambiar el ancho sólo se reubica (`_reubicar_pads`); nunca se reconstruye por resize.
+
+### Config de medidas (TAMANOS_ICONO):
+- "Chico", "Mediano" (default), "Grande": cambian diámetro del botón, fuente de botón, ancho/alto del pad, íconos, fuente del nombre, etc.
+
+
+<a id="sec-11b"></a>
+## 11b. AGREGAR FUENTE (clic derecho en el panel > Agregar fuente)
+Módulo nuevo `consola_obs/audio/fuentes.py`. Clic derecho sobre una zona VACÍA del panel de fuentes (no sobre una tarjeta: esa tiene su propio menú) abre `_abrir_menu_contextual_panel_fuentes` (en `ui/tarjeta_fuente.py`), atado tanto al canvas como al frame interno para cubrir cualquier hueco vacío.
+- El menú tiene un submenú "➕ Agregar fuente" con los tipos de entrada de AUDIO (ENTRADAS_DE_AUDIO_PERMITIDAS en estado.py: Captura de audio de aplicación, Captura de entrada audio, Captura de salida de audio, Multimedia), cada uno con su icono SVG original, cruzados en el momento contra get_input_kind_list para no ofrecer un tipo que esa instancia/plataforma de OBS no tenga — mismo criterio que FILTROS_DE_SONIDO_PERMITIDOS. Nombres y orden calcados del menú "Agregar fuente" real de OBS.
+- "⋯ Otros tipos de fuente…" abre el selector completo (`abrir_selector_nueva_fuente`), con checkbox "Mostrar todos los tipos que informa OBS" para los tipos que no son de audio (captura de ventana, navegador, etc., cada uno con su icono SVG vía SVG_POR_INPUT_KIND, `default.svg` para lo desconocido).
+- Al elegir un tipo desde el submenú (`agregar_fuente_de_tipo`): pide el nombre (sugerido = nombre del tipo), lo numera si ya existe (los nombres de fuente son únicos en todo OBS, no por escena), crea la fuente en la escena AL AIRE con create_input(..., None, True) (nace con los ajustes de fábrica del tipo) y abre automáticamente su ventana de Propiedades (sección 10b) a los 400 ms.
+- SINCRONIZACIÓN: on_input_created/on_input_removed (obs/eventos.py) refrescan la lista sola cuando una fuente se crea o se borra desde DENTRO de OBS (antes sólo se enteraba si el cambio tocaba la escena activa, así que una fuente global de audio —Mic/Aux, Audio de escritorio— no se detectaba hasta apretar "Actualizar fuentes"). Los refrescos se agrupan con ~400 ms de espera para no relanzar una actualización completa por cada evento si OBS manda varios juntos, y esperan a que termine un refresco en curso en vez de superponerse.
+- El botón "AGREGAR FUENTE" del menú de Ajustes sigue existiendo como atajo al selector completo.
+
+
+<a id="sec-11c"></a>
+## 11c. VACIAR PAD vs ELIMINAR PAD
+Menú contextual del pad en `ui/soundboard.py` (100% local: los pads no son objetos de OBS, todos comparten la única fuente `Soundboard_Efectos`):
+- **Vaciar pad** (`_quitar_pad`, sólo si tiene sonido): borra nombre/archivo/imagen pero deja el botón vacío en su lugar (conserva el color de etiqueta). Invalida su miniatura cacheada.
+- **Eliminar pad** (`_eliminar_pad`, siempre visible): saca el pad de la grilla por completo, corre todos los posteriores una posición hacia atrás para cerrar el hueco (inverso a `_insertar_pad_al_principio`) y decrementa `num_pads_soundboard` (guarda `config_soundboard.json` + `config_interfaz.json`). Corta la reproducción activa antes de reordenar para no dejar la sesión apuntando a otro índice, e invalida las miniaturas cacheadas desde ese índice.
+
+
+<a id="sec-12"></a>
+## 12. CABECERA Y PANELES
+Cabecera (ventana_cabecera):
+- Fondo con degradado vertical (COLOR_CABECERA_ARRIBA → COLOR_CABECERA_ABAJO) dibujado en Canvas.
+- Logo (marco_icono_cabecera): carga assets/iconos/logo_cabecera.png con Pillow (o dibuja un ecualizador a mano si no está → _dibujar_icono_ecualizador).
+- Título "CONSOLA OBS" + subtítulo.
+- Estado de conexión: etiqueta ● CONECTADO / ● DESCONECTADO (chips).
+- Botón engranaje (⚙) que abre la ventana "Ajustes" por pestañas (lista a la izquierda: Conexión —la general—, Apariencia, Audio, Sincronización, Actualización; panel a la derecha con ayudas bajo cada grupo). Se cierra con la X, Escape o el engranaje. El cambio de tipografía se aplica en el acto a todo (cuerpo reconstruido + menú/cabecera re-fuenteados, sin reabrir).
+- Al pie del panel de soundboard: botones DETECTAR SONIDOS DE LA CARPETA y AGREGAR PAD.
+
+### Orquestación de paneles (orientacion_paneles):
+- Las dos grillas (fuentes y soundboard) se ordenan según la config "orientacion_paneles" (vertical/horizontal) y "orden_paneles" (fuentes arriba/abajo o izquierda/derecha), persistidos en config_interfaz.json. La posición del divisor se guarda al cerrar.
+
+
+<a id="sec-13"></a>
+## 13. REDIMENSIONADO (estilo soundboard de Nico)
+Tamaños fijos por ajuste de íconos (Chico/Mediano/Grande), sin importar
+el tamaño de la ventana. Al mover el borde o el divisor, las grillas
+sólo se REUBICAN (grid_forget + grid, sin destruir ni crear nada, con
+un toque de calma de 30 ms): los pads y faders se mueven de fila/
+columna en vivo y nunca parpadean. Si falta espacio, aparece scroll.
+Sólo se reconstruye con acciones explícitas (tamaño de íconos, alto,
+diseño, tema, tipografía, agregar/quitar pads).
+Regla de columnas: pads con tolerancia 25% (la última columna puede
+quedar tapada hasta un cuarto); faders a piso estricto (apenas algo
+queda tapado, baja de fila).
+Render gate: al moverse algo, sólo los pads se tapan hasta asentarse
+(reacomodo + pintado forzado + destape a los 150 ms de quietud); los
+faders nunca se ocultan, y cada tarjeta tapada por el borde no se
+muestra hasta volver a verse.
+
+### Anti-parpadeo al redimensionar (win32):
+- _fijar_color_fondo_nativo: cambia el pincel de fondo de la clase de ventana (SetClassLongPtrW + CreateSolidBrush) para que el fondo sea del color oscuro correcto (evita el flash blanco).
+- Velo de redimensionado: se usa sólo en reconstrucciones explícitas, tapando con una "foto" (ImageGrab) mientras se arma todo de una sola vez.
+
+### Supersampling (antialias sin pixelado):
+- FACTOR_SUPERSAMPLING_CIRCULOS = 6: los círculos (botones, LED, pads) se dibujan en un canvas 6 veces más grande y se reducen con ImageOps.fit + LANCZOS para que los bordes salgan suaves.
+- _dibujar_rect_redondeado, _dibujar_boton_circular, _dibujar_gradiente etc. dibujan a mano, con Pillow si disponible.
+
+Al cambiar el tamaño, tanto faders (_reubicar_fuentes) como pads
+(_reubicar_pads) sólo se reposicionan en la grilla: ningún widget se
+destruye ni se recrea, así no hay nada que parpadee.
+
+
+<a id="sec-14"></a>
+## 14. PERSISTENCIA (JSON)
+Archivos (se guardan en `config/` junto al .py/.exe):
+
+- config/config_conexion.json   {host, puerto, password}
+- config/config_soundboard.json {num_pads_soundboard, pads: {indice: {nombre, archivo, imagen, color}}}
+- config/config_interfaz.json   {orientacion_paneles, orden_paneles, tamano_icono, alto_tarjeta, fuente_ui, escuchar_en_pc, nivelar_efectos, tema_interfaz, num_pads_soundboard, colores_fuentes, fuentes_principales, orden_fuentes, orden_fuentes_criterios, mostrar_ocultas, fuentes_ocultas, fuentes_ocultas_previo, escenas_permitidas, carpeta_base_obs, kinds_con_audio, kinds_sin_audio, posicion_divisor_*, geometria_ventana}
+- config/sync_config.json       {carpeta_local, ip_remota, puerto, api_key} + config/ultimo_indice.json (snapshot del último sync)
+
+Se cargan al arrancar (si existen) con try/except, y se guardan al
+cerrar (al_cerrar) junto con la posición/geometría de la ventana y la
+config del usuario. Todo cambio de fuente principal, color, orden, etc.
+se guarda de inmediato (guardar_config_interfaz / guardar_config_soundboard).
+`config_conexion.json` y `config_*.json` están ignorados por git (la contraseña de OBS nunca se versiona).
+
+### Assets (se auto-generan carpetas + LEEME.txt de ejemplo):
+- assets/iconos/   (app_icon.ico, 18 SVG originales de OBS, LEEME.txt)
+- assets/fondos/   (fondos opcionales)
+- assets/fuentes/  (.ttf/.otf libres de instalar, incluido Open Sans)
+
+### Fuentes personalizadas + alias de OBS:
+- _registrar_fuentes_personalizadas: por cada .ttf/.otf en la carpeta, lee el nombre real de la familia desde la tabla 'name' del archivo (struct) y la registra SOLO para este proceso:
+  - Windows: AddFontResourceExW (PRIVATE).
+  - macOS:   CTFontManagerRegisterFontsForURL.
+  - Linux:   copia a ~/.local/share/fonts + fc-cache. Si falla, ignora y sigue con la fuente del sistema.
+- Alias "Tipografia de obs" (primero en el selector): Open Sans con fallback a Helvetica/Arial; si no hay elección guardada se usa por defecto.
+
+
+<a id="sec-15"></a>
+## 15. ESTÉTICA / DIBUJO A MANO
+La interfaz combina iconos SVG originales con dibujo a mano sobre tk.Canvas:
+
+- Iconos SVG de OBS (assets/iconos/, vía pymupdf a 256px + LANCZOS, fondo transparente): parlante/mute/auriculares del mixer y tipos de fuente; sin ellos se cae al emoji de texto.
+- _dibujar_rect_redondeado(canvas, x0,y0,x1,y1, radio, fill, outline...): rectángulo con esquinas redondeadas (Pillow si hay, sino con arcos).
+- _dibujar_boton_circular / _crear_boton_circular: botón circular de "vidrio" con anillo teal, icono central y hover (resalta). Se usa en Profesional para mute/monitor.
+- _crear_icono_plano (solo Moderna): etiqueta clickeable sin círculo; monitor con cuadrado de estado.
+- _crear_boton_circular con gradiente y sombra difusa.
+- _dibujar_gradiente_vertical: sobre un Canvas con bandas de color.
+- _dibujar_engranaje: polígono de 10 dientes (para el botón ajustes).
+- _dibujar_icono_ecualizador: barras de EQ dibujadas con canvas.
+- _aclarar_color/_oscurecer_color/_mezclar: helpers de color.
+- Colores Profesional: fondo #10141b, tarjetas #1a202b, acento teal #2fd693, rojo #ff5d6c, texto blanco.
+- Colores Moderna (azulados estilo OBS): fondo/tarjetas/cabecera #2b3442, acento azul #2f7cf6, texto #ededed.
+- Tipografía vigente en FUENTE_UI/FUENTE_TITULO (por defecto "Tipografia de obs" = Open Sans).
+
+Paletas de color por etiqueta: PALETA_ETIQUETAS (rojo, naranja,
+amarillo, verde, teal, azul, índigo, violeta, magenta).
+
+
+<a id="sec-16"></a>
+## 16. WINDOWS: ANTI-PARPADEO NATIVO
+Solo en win32, con ctypes:
+- _congelar_pintado_ventana(): envía WM_SETREDRAW(0) al HWND real de la ventana (mediante _hwnd_ventana_real, que sube por la jerarquía hasta la ventana raíz de Windows) para que Windows deje de repintar las franjas nuevas durante el arrastre del borde.
+- _descongelar_pintado_ventana(): WM_SETREDRAW(1) y RedrawWindow con RDW_INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW para un único repintado limpio al soltar.
+- _fijar_color_fondo_nativo(hex): SetClassLongPtrW + CreateSolidBrush para que el color de FONDO nativo de la clase de ventana sea el mismo oscuro (evita el flash blanco de Windows al borrar).
+- Manejo correcto de tipos: se especifican los argumentos/retorno (c_void_p, c_uint... ) para que los HWND de 64 bits no se trunquen.
+
+Esto se invoca durante el arrastre de redimensionado, así el usuario
+ve el último cuadro completo hasta que suelta (sin parpadeos).
+
+
+<a id="sec-17"></a>
+## 17. FLUJO DE ARRANQUE / CIERRE
+Arranque:
+1. Leer config (si existe).
+2. Registrar fuentes personalizadas (incluye Open Sans).
+3. Aplicar tipografía guardada (o "Tipografia de obs" por defecto) y construir ventana + cabecera (engranaje, estado, logo).
+4. La conexión a OBS es manual (botón CONECTAR); al conectar se refrescan fuentes.
+5. Arrancar ciclos: medidores VU (after 33ms), sondeo de ganancia,
+sondeo de filtros (si editor abierto), refresco de reproducción y barra de progreso del soundboard, etc.
+6. Mostrar ventana (mainloop).
+
+### Cierre (al_cerrar):
+- STOP + vaciado de la fuente de efectos (para que OBS no reproduzca solo el último sonido al abrirse).
+- Desconectar de OBS de forma segura.
+- Guardar config de conexión, soundboard e interfaz (incluida la posición del divisor y geometría).
+- Cerrar la ventana (ventana.destroy()).
+
+
+<a id="sec-18"></a>
+## 18. CONCURRENCIA (útil para reconstruir)
+Reglas de oro implementadas:
+- La red y los medidores VU corren en hilos daemon; la UI se toca solo desde el hilo principal vía ventana.after(0,...).
+- Todos los comandos OBS pasan por un lock (un único socket síncrono compartido).
+- Las operaciones de crear la misma fuente dos veces se previenen con lock y con la comprobación "¿ya está en la lista?" ANTES de crear.
+- Las ventanas de diálogo se guardan en structs globales para no abrir dos iguales (por ej. un solo editor de filtros a la vez).
+- El redimensionado se "congela" nativamente y se reconstruye una vez al soltar (con velo), evitando trabajo en cada evento.
+- Cachés de imágenes por ruta para no redecodificar en cada reconstrucción del soundboard.
+
+### HILOS (resumen):
+- hilo principal: Tk (UI).
+- hilo de VU: recorre fuentes y pide niveles a OBS.
+- hilo de eventos OBS: recibe callbacks push.
+- hilos puntuales para: reproducir sonido del pad (daemon), decodificar su duración (daemon), asegurar internas/favoritas en permitidas, sondeo de ganancia de filtros, refresco de estados al conectar, checker de update, sync y updater.
+- loops de UI (hilo principal, vía after): barra de progreso del pad (~40 ms), refresco de reproducción (~150 ms).
+- Los valores que comparten los hilos con la UI (niveles_actuales, ultima_vez_saturado, fuentes...) viven en dicts globales y se protegen con locks cuando hay riesgo de carrera; el resto se copia por valor (inmutables) hacia la UI.
+
+
+<a id="sec-19"></a>
+## 19. CÓMO COMPILAR A .EXE (+ ARMAR LOS ZIPS)
+Doble clic en `compilar.bat` (usa PyInstaller, Windows): genera `ConsolaOBS.exe` + `updater.exe`. Después, doble clic en `armar_release.bat`: arma `ConsolaOBS-Consola.zip` (`ConsolaOBS/` = exes + código + assets completos) y `ConsolaOBS-OBS.zip` (`OBS/` = sólo `assets/` con sonidos + música, para la PC del OBS) tal cual los espera la Release, sin `config/` (cada instalación genera la suya) ni temporales. Esos dos zips se suben a mano a la Release `vX.Y.Z` (el `VERSION` de `consola_obs/update/version.py` tiene que coincidir con el tag).
+
+```
+py -m PyInstaller --onefile --windowed --name ConsolaOBS --hidden-import cffi --collect-all pymupdf --version-file "version_info.txt" --icon "assets\iconos\app_icon.ico" main.py
+```
+
+- --onefile: un solo .exe (queda en la misma carpeta, junto a `main.py`).
+- --windowed: sin consola (GUI).
+- --hidden-import cffi: miniaudio lo necesita a nivel C y PyInstaller no lo detecta solo; sin esto el .exe no tiene audio local.
+- --collect-all pymupdf: empaqueta el motor de SVG dentro del .exe.
+- --version-file: mete nombre/versión/autor en Propiedades > Detalles (ver `version_info.txt`). OJO: no es una firma digital; SmartScreen igual avisa por editor desconocido (sólo lo saca un certificado pago). Para correrlo: "Más información → Ejecutar de todas formas", o `Unblock-File -Path .\ConsolaOBS.exe` en PowerShell.
+- Los JSON de configuración y `assets/` (iconos SVG, fuentes, sonidos) viven junto al ejecutable (ver `rutas.py`: en modo congelado usa la carpeta del .exe real).
+
+Nota: al estar "congelado" (sys.frozen), CARPETA_SCRIPT apunta a la
+carpeta del ejecutable (sys.executable) y no a la temporal _MEIxxxx,
+para que los JSON de configuración y los assets persistan junto al
+.exe real.
+
+
+## Estado actual del proyecto
+- Entrada: `main.py` → paquete `consola_obs/` (ver Estructura arriba).
+- El .exe se genera con `compilar.bat` en esta misma carpeta (`ConsolaOBS.exe`, no se versiona).
+- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git); el resto de la config en `config/config_soundboard.json` y `config/config_interfaz.json`.
+
