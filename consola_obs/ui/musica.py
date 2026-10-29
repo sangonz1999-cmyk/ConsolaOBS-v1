@@ -14,8 +14,10 @@ from tkinter import messagebox, ttk
 
 from consola_obs import estado as E
 from consola_obs import constantes as C
+from consola_obs import configuracion as mod_configuracion
 from consola_obs.audio import musica as mod_musica
 from consola_obs.ui import dibujo as mod_ui_dibujo
+from consola_obs.ui import menu_moderno as mod_menu_moderno
 
 ALTURA_MINI = 82
 ALTURA_PANEL = 300
@@ -280,6 +282,222 @@ def _refrescar_mini_player():
         _loop["en_marcha"] = False
 
 
+# ------------------------------------------------------------------
+# Volumen de la música en los parlantes de la PC (independiente de OBS)
+# ------------------------------------------------------------------
+# Botón de bocina en la fila superior: al pasar el mouse se abre una
+# barra vertical (Toplevel sin bordes) arriba del botón. Todo el estado
+# vive en _w (claves "vol_*"), así se limpia solo al reconstruir la barra.
+VOL_ANCHO, VOL_ALTO, VOL_MARGEN = 34, 112, 16
+VOL_RADIO_PERILLA = 7
+VOL_COLOR_BORDE = "#3b4760"
+VOL_COLOR_BOTON, VOL_COLOR_BOTON_HOVER = "#242d3d", "#2f3a4d"
+
+
+def _vol_musica_pc_pct():
+    """Volumen guardado de la música en los parlantes (0 a 100)."""
+    try:
+        pct = float(E.config_interfaz_previa.get("volumen_musica_pc", 100.0))
+    except Exception:
+        pct = 100.0
+    return max(0.0, min(100.0, pct))
+
+
+def _guardar_vol_musica_pc(pct):
+    """Guarda en memoria (config_interfaz_previa) y en el archivo."""
+    pct = max(0.0, min(100.0, float(pct)))
+    try:
+        E.config_interfaz_previa["volumen_musica_pc"] = pct
+    except Exception:
+        pass
+    mod_configuracion.guardar_config_interfaz({"volumen_musica_pc": pct})
+
+
+def _vol_y_a_pct(y):
+    util = VOL_ALTO - 2 * VOL_MARGEN
+    return float(round(max(0.0, min(100.0, 100.0 * (VOL_ALTO - VOL_MARGEN - y) / util))))
+
+
+def _vol_pct_a_y(pct):
+    return VOL_ALTO - VOL_MARGEN - (VOL_ALTO - 2 * VOL_MARGEN) * pct / 100.0
+
+
+def _vol_dibujar(pct):
+    canvas = _w.get("vol_canvas")
+    if canvas is None:
+        return
+    x, y, r = VOL_ANCHO // 2, _vol_pct_a_y(pct), VOL_RADIO_PERILLA
+    canvas.coords("nivel", x, y, x, VOL_ALTO - VOL_MARGEN)
+    canvas.coords("perilla", x - r, y - r, x + r, y + r)
+
+
+def _vol_aplicar(pct):
+    """Aplica en vivo al motor local y deja el valor en memoria."""
+    _w["vol_pct"] = pct
+    _vol_dibujar(pct)
+    try:
+        E.config_interfaz_previa["volumen_musica_pc"] = pct
+    except Exception:
+        pass
+    mod_musica.nota_volumen_musica()  # misma curva y mismo cálculo que al cambiar de tema
+    _vol_tip_mostrar()
+
+
+def _vol_tip_ocultar(event=None):
+    if _w.get("vol_drag"):
+        return
+    tip = _w.get("vol_tip")
+    if tip is not None:
+        tip.withdraw()
+
+
+def _vol_tip_mostrar(event=None):
+    pop = _w.get("vol_pop")
+    if pop is None:
+        return
+    tip = _w.get("vol_tip")
+    if tip is None:
+        tip = tk.Toplevel(pop)
+        tip.overrideredirect(True)
+        try:
+            tip.attributes("-topmost", True)
+        except Exception:
+            pass
+        etiqueta = tk.Label(tip, bg="#101520", fg="white", padx=7, pady=2,
+                            font=(E.FUENTE_UI, 9, "bold"), highlightthickness=1,
+                            highlightbackground=VOL_COLOR_BORDE)
+        etiqueta.pack()
+        _w["vol_tip"], _w["vol_tip_lbl"] = tip, etiqueta
+    pct = _w["vol_pct"]
+    _w["vol_tip_lbl"].config(text="%.0f%%" % pct)
+    tip.geometry("+%d+%d" % (pop.winfo_rootx() + VOL_ANCHO + 8,
+                             pop.winfo_rooty() + 1 + _vol_pct_a_y(pct) - 11))
+    tip.deiconify()
+
+
+def _vol_cancelar_cierre(event=None):
+    id_cierre = _w.pop("vol_cierre", None)
+    if id_cierre is not None:
+        try:
+            _w["vol_boton"].after_cancel(id_cierre)
+        except Exception:
+            pass
+
+
+def _vol_cerrar():
+    _w.pop("vol_cierre", None)
+    if _w.get("vol_drag"):
+        return
+    for clave in ("vol_tip", "vol_pop"):
+        if _w.get(clave) is not None:
+            _w[clave].withdraw()
+    try:
+        _w["vol_etiqueta"].config(bg=VOL_COLOR_BOTON)
+    except Exception:
+        pass
+
+
+def _vol_programar_cierre(event=None):
+    """Cierra con una pequeña demora: da tiempo a pasar del botón al
+    popup sin que parpadee."""
+    _vol_cancelar_cierre()
+    try:
+        _w["vol_cierre"] = _w["vol_boton"].after(200, _vol_cerrar)
+    except Exception:
+        pass
+
+
+def _vol_mover(event):
+    if _w.get("vol_drag"):
+        _vol_aplicar(_vol_y_a_pct(event.y))
+
+
+def _vol_presionar(event):
+    _w["vol_drag"] = True
+    _vol_mover(event)
+
+
+def _vol_soltar(event):
+    _w["vol_drag"] = False
+    _guardar_vol_musica_pc(_w["vol_pct"])
+    if abs(event.y - _vol_pct_a_y(_w["vol_pct"])) > VOL_RADIO_PERILLA + 2:
+        _vol_tip_ocultar()
+    if not (0 <= event.x < VOL_ANCHO and 0 <= event.y < VOL_ALTO):
+        _vol_programar_cierre()
+
+
+def _vol_rueda(event):
+    """Rueda del mouse sobre el botón o la barra: de a 5%."""
+    paso = 5.0 if event.delta > 0 else -5.0
+    _vol_aplicar(max(0.0, min(100.0, _w["vol_pct"] + paso)))
+    _guardar_vol_musica_pc(_w["vol_pct"])
+
+
+def _vol_crear_popup():
+    pop = tk.Toplevel(_w["vol_boton"], bg=VOL_COLOR_BORDE)
+    pop.overrideredirect(True)
+    try:
+        pop.attributes("-topmost", True)
+    except Exception:
+        pass
+    canvas = tk.Canvas(pop, width=VOL_ANCHO, height=VOL_ALTO,
+                       bg=E.color_barra_titulo(), highlightthickness=0,
+                       cursor="hand2")
+    canvas.pack(padx=1, pady=1)
+    x = VOL_ANCHO // 2
+    canvas.create_line(x, VOL_MARGEN, x, VOL_ALTO - VOL_MARGEN, width=6,
+                       fill=COLOR_PISTA, capstyle="round")
+    canvas.create_line(x, 0, x, 0, width=6, fill=E.color_acento(),
+                       capstyle="round", tags="nivel")
+    canvas.create_oval(0, 0, 1, 1, fill="white", outline="#9aa7bf",
+                       tags="perilla")
+    canvas.bind("<Button-1>", _vol_presionar)
+    canvas.bind("<B1-Motion>", _vol_mover)
+    canvas.bind("<ButtonRelease-1>", _vol_soltar)
+    canvas.bind("<MouseWheel>", _vol_rueda)
+    canvas.bind("<Enter>", _vol_cancelar_cierre)
+    canvas.bind("<Leave>", _vol_programar_cierre)
+    canvas.tag_bind("perilla", "<Enter>", _vol_tip_mostrar)
+    canvas.tag_bind("perilla", "<Leave>", _vol_tip_ocultar)
+    _w["vol_pop"], _w["vol_canvas"] = pop, canvas
+
+
+def _vol_mostrar(event=None):
+    _vol_cancelar_cierre()
+    if not _vivos() or _w.get("vol_boton") is None:
+        return
+    if _w.get("vol_pop") is None:
+        _vol_crear_popup()
+    boton, pop = _w["vol_boton"], _w["vol_pop"]
+    _w["vol_etiqueta"].config(bg=VOL_COLOR_BOTON_HOVER)
+    _vol_dibujar(_w["vol_pct"])
+    pop.geometry("+%d+%d" % (
+        boton.winfo_rootx() + (boton.winfo_width() - VOL_ANCHO - 2) // 2,
+        boton.winfo_rooty() - VOL_ALTO - 2))
+    pop.deiconify()
+    pop.lift()
+
+
+def _construir_boton_volumen(fila):
+    """Bocina del mismo tamaño que los botones de transporte (34x28),
+    separada un poco de ellos. Hover = barra de volumen."""
+    marco = tk.Frame(fila, bg=VOL_COLOR_BOTON, width=34, height=28)
+    marco.pack(side="left", padx=(8, 1))
+    marco.pack_propagate(False)
+    _w["img_vol"] = mod_ui_dibujo._imagen_svg("menu/menu_pad_sonido.svg", 18)
+    etiqueta = tk.Label(marco, bg=VOL_COLOR_BOTON, fg="white", cursor="hand2",
+                        image=_w["img_vol"] or "",
+                        text="" if _w["img_vol"] else "🔊")
+    etiqueta.pack(fill="both", expand=True)
+    _w["vol_boton"], _w["vol_etiqueta"] = marco, etiqueta
+    _w["vol_pct"] = _vol_musica_pc_pct()
+    for widget in (marco, etiqueta):
+        widget.bind("<Enter>", _vol_mostrar)
+        widget.bind("<Leave>", _vol_programar_cierre)
+        widget.bind("<MouseWheel>", _vol_rueda)
+    etiqueta.bind("<Button-1>", _vol_mostrar)
+
+
 def construir_mini_player():
     """Crea la barra al pie del panel de fuentes (se llama al final de
     construir_cuerpo, así sobrevive a cambios de tema/diseño). El
@@ -326,6 +544,7 @@ def construir_mini_player():
             command=_alternar_modo,
         )
         _w["repetir"].pack(side="left", padx=1)
+    _construir_boton_volumen(fila)
 
     _w["titulo"] = tk.Label(
         fila, text="Sin música — abrí la 🎵 Biblioteca", bg=E.color_barra_titulo(),
@@ -905,16 +1124,13 @@ def _menu_biblio(event):
         tree.selection_set(iid)
     except Exception:
         pass
-    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
-                   activebackground="#323b4c", activeforeground="white")
-    menu.add_command(label="Agregar a la playlist",
-                     command=lambda: _agregar_rel(rel))
-    menu.add_command(label="Reproducir ahora",
-                     command=lambda: _reproducir_vista_biblio(idx))
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+    def _construir(m):
+        m.item(None, "Agregar a la playlist", None,
+               lambda: _agregar_rel(rel))
+        m.item(None, "Reproducir ahora", None,
+               lambda: _reproducir_vista_biblio(idx))
+
+    mod_menu_moderno.abrir(event, _construir)
 
 
 def _menu_playlist(event):
@@ -932,16 +1148,13 @@ def _menu_playlist(event):
         tree.selection_set(iid)
     except Exception:
         pass
-    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
-                   activebackground="#323b4c", activeforeground="white")
-    menu.add_command(label="Reproducir",
-                     command=lambda: _reproducir_indice_playlist(idx))
-    menu.add_command(label="Sacar de la playlist",
-                     command=lambda: (_sacar_indice_playlist(idx)))
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+    def _construir(m):
+        m.item(None, "Reproducir", None,
+               lambda: _reproducir_indice_playlist(idx))
+        m.item(None, "Sacar de la playlist", None,
+               lambda: _sacar_indice_playlist(idx))
+
+    mod_menu_moderno.abrir(event, _construir)
 
 
 def _alternar_fuente():

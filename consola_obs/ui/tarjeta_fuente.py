@@ -15,6 +15,7 @@ from consola_obs.audio import filtros as mod_audio_filtros
 from consola_obs.audio import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
+from consola_obs.ui import menu_moderno
 from consola_obs.ui import ventana as mod_ui_ventana
 
 
@@ -971,63 +972,26 @@ def _icono_check_menu(marcada):
 def _abrir_menu_orden_fuentes(event=None):
     """Menú del botón ☰: criterio de orden + toggle de ocultas, con los
     casilleros propios (cae a ☑/☐ si faltan los iconos)."""
-    try:
-        menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
-                       activebackground="#323b4c", activeforeground="white")
-        menu._imagenes = []
-    except Exception:
+    if event is None:
         return
     try:
         checks, toggle = _items_menu_orden_fuentes()
     except Exception:
         return
 
-    def _check(texto, marcada, accion):
-        real = None
-        try:
-            real = _icono_check_menu(marcada)
-        except Exception:
-            pass
-        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
-        try:
-            if foto is None:
-                menu.add_command(
-                    label=("☑ " if marcada else "☐ ") + texto, command=accion)
-            else:
-                menu._imagenes.append(foto)
-                menu.add_command(
-                    label=texto if real is not None else ("☑ " if marcada else "☐ ") + texto,
-                    image=foto, compound="left", command=accion)
-        except Exception:
-            pass
+    def _construir(m):
+        def _check(texto, marcada, accion):
+            m.item("menu/menu_check_on.svg" if marcada else "menu/menu_check_off.svg",
+                   texto, ("☑ " if marcada else "☐ ") + texto, accion)
 
-    for texto, marcada, accion in checks:
-        _check(texto, marcada, accion)
-    try:
-        foto_manual = mod_ui_dibujo._imagen_vacia(16)
-    except Exception:
-        foto_manual = None
-    try:
-        if foto_manual is None:
-            menu.add_command(label="↩ Orden manual",
-                             command=limpiar_criterios_orden_fuentes)
-        else:
-            menu._imagenes.append(foto_manual)
-            menu.add_command(label="↩ Orden manual", image=foto_manual,
-                             compound="left",
-                             command=limpiar_criterios_orden_fuentes)
-    except Exception:
-        pass
-    try:
-        menu.add_separator()
-    except Exception:
-        pass
-    _check(toggle[0], toggle[1], toggle[2])
-    try:
-        if event is not None:
-            menu.tk_popup(event.x_root, event.y_root)
-    except Exception:
-        pass
+        for texto, marcada, accion in checks:
+            _check(texto, marcada, accion)
+        m.item(None, "↩ Orden manual", "↩ Orden manual",
+               limpiar_criterios_orden_fuentes)
+        m.separador()
+        _check(toggle[0], toggle[1], toggle[2])
+
+    menu_moderno.abrir(event, _construir)
 
 
 def _reajustar_fuente_nombre_tarjeta(nombre, ancho_disponible):
@@ -1717,7 +1681,7 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             # fader se sigue aplicando, sólo no se reescribe la etiqueta.
             oculta_ahora = bool(E.fuentes.get(nombre, {}).get("oculta", False))
             if db <= E.UMBRAL_SILENCIO:
-                E.cliente_obs.set_input_volume(nombre, vol_mul=0)
+                E.cliente_obs.set_input_volume(nombre, vol_db=-100.0)
                 if not oculta_ahora:
                     etiqueta_db.config(text="SILENCIO", fg=col_db_silencio)
             else:
@@ -1730,6 +1694,14 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
                 try:
                     from consola_obs.audio import reproduccion as mod_audio_reproduccion
                     mod_audio_reproduccion.nota_volumen_usuario(db)
+                except Exception:
+                    pass
+            elif nombre == C.NOMBRE_FUENTE_MUSICA:
+                # El audio local de la música (si está activo) sigue al
+                # fader en vivo (import lazy: audio importa UI).
+                try:
+                    from consola_obs.audio import musica as mod_audio_musica
+                    mod_audio_musica.nota_volumen_musica()
                 except Exception:
                     pass
         except Exception as e:
@@ -2069,98 +2041,43 @@ def _abrir_menu_contextual_panel_fuentes(event):
     # importarlo arriba sería una dependencia circular.
     from consola_obs.audio import fuentes as mod_audio_fuentes
 
-    menu = tk.Menu(
-        E.ventana, tearoff=0, bg="#151a24", fg="white",
-        activebackground="#323b4c", activeforeground="white"
-    )
-    menu._imagenes = []
+    def _construir(m):
+        if not E.conectado:
+            m.item(None, "Conectate a OBS para agregar fuentes",
+                   deshabilitado=True)
+            return
 
-    def _cmd(svg, texto, texto_respaldo, comando):
-        # Toda fila lleva imagen (real o transparente): así el texto
-        # arranca siempre en la misma x y queda alineado verticalmente.
-        real = None
-        try:
-            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
-        except Exception:
-            pass
-        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
-        if foto is None:
-            menu.add_command(label=texto_respaldo, command=comando)
-        else:
-            menu._imagenes.append(foto)
-            menu.add_command(label=texto if real is not None else texto_respaldo,
-                             image=foto, compound="left", command=comando)
+        def _llenar_tipos(panel):
+            tipos = mod_audio_fuentes.tipos_de_audio_para_menu()
+            for nombre_amigable, icono, kind in (tipos or []):
+                try:
+                    foto = mod_ui_dibujo._imagen_svg(icono, 16)
+                except Exception:
+                    foto = None
+                panel.item(
+                    None, nombre_amigable, nombre_amigable,
+                    lambda k=kind, n=nombre_amigable: (
+                        mod_audio_fuentes.agregar_fuente_de_tipo(k, n)),
+                    foto=foto)
+            if tipos:
+                panel.separador()
+            panel.item(None, "⋯  Otros tipos de fuente…",
+                       "⋯  Otros tipos de fuente…",
+                       mod_audio_fuentes.abrir_selector_nueva_fuente)
 
-    if not E.conectado:
-        menu.add_command(label="Conectate a OBS para agregar fuentes", state="disabled")
-    else:
-        submenu_tipos = tk.Menu(
-            menu, tearoff=0, bg="#151a24", fg="white",
-            activebackground="#323b4c", activeforeground="white"
-        )
-        tipos = mod_audio_fuentes.tipos_de_audio_para_menu()
-        if tipos:
-            submenu_tipos._imagenes = []
-            for nombre_amigable, icono, kind in tipos:
-                foto = mod_ui_dibujo._imagen_svg(icono, 16)
-                if foto is None:
-                    submenu_tipos.add_command(
-                        label=nombre_amigable,
-                        command=lambda k=kind, n=nombre_amigable: (
-                            mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
-                        )
-                    )
-                else:
-                    submenu_tipos._imagenes.append(foto)
-                    submenu_tipos.add_command(
-                        label=nombre_amigable, image=foto, compound="left",
-                        command=lambda k=kind, n=nombre_amigable: (
-                            mod_audio_fuentes.agregar_fuente_de_tipo(k, n)
-                        )
-                    )
-            submenu_tipos.add_separator()
-        try:
-            foto_etc = mod_ui_dibujo._imagen_vacia(16)
-        except Exception:
-            foto_etc = None
-        if foto_etc is None:
-            submenu_tipos.add_command(
-                label="⋯  Otros tipos de fuente…",
-                command=mod_audio_fuentes.abrir_selector_nueva_fuente
-            )
-        else:
-            submenu_tipos._imagenes.append(foto_etc)
-            submenu_tipos.add_command(
-                label="⋯  Otros tipos de fuente…", image=foto_etc, compound="left",
-                command=mod_audio_fuentes.abrir_selector_nueva_fuente
-            )
-        real_agregar = None
-        try:
-            real_agregar = mod_ui_dibujo._imagen_svg_menu("menu/menu_agregar.svg", 16)
-        except Exception:
-            pass
-        foto_agregar = real_agregar if real_agregar is not None else mod_ui_dibujo._imagen_vacia(16)
-        if foto_agregar is None:
-            menu.add_cascade(label="➕  Agregar fuente", menu=submenu_tipos)
-        else:
-            menu._imagenes.append(foto_agregar)
-            menu.add_cascade(
-                label="Agregar fuente" if real_agregar is not None else "➕  Agregar fuente",
-                image=foto_agregar, compound="left", menu=submenu_tipos)
-        menu.add_separator()
-        _cmd("menu/menu_actualizar.svg", "Actualizar fuentes",
-             "↻  Actualizar fuentes", actualizar)
-        menu.add_separator()
-        _cmd("menu/menu_limpiar.svg", "Quitar Efectos/Música de otras escenas…",
-             "🧹  Quitar Efectos/Música de otras escenas…",
-             _quitar_internas_de_otras_escenas)
-        _cmd("menu/menu_permitidas.svg", "Escenas permitidas…",
-             "✅  Escenas permitidas…", _abrir_permitidas)
+        m.flyout("menu/menu_agregar.svg", "Agregar fuente", "➕  Agregar fuente",
+                 _llenar_tipos)
+        m.separador()
+        m.item("menu/menu_actualizar.svg", "Actualizar fuentes",
+               "↻  Actualizar fuentes", actualizar)
+        m.separador()
+        m.item("menu/menu_limpiar.svg", "Quitar Efectos/Música de otras escenas…",
+               "🧹  Quitar Efectos/Música de otras escenas…",
+               _quitar_internas_de_otras_escenas)
+        m.item("menu/menu_permitidas.svg", "Escenas permitidas…",
+               "✅  Escenas permitidas…", _abrir_permitidas)
 
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+    menu_moderno.abrir(event, _construir)
 
 
 def _abrir_menu_contextual_fuente(nombre, event):
@@ -2168,82 +2085,41 @@ def _abrir_menu_contextual_fuente(nombre, event):
     que antes eran botones sueltos siempre visibles en la tarjeta
     (etiqueta de color, filtros, marcar como principal, renombrar), para
     que la tarjeta se vea limpia y esas acciones aparezcan sólo cuando
-    se las pide."""
+    se las pide. Es el MISMO menú que usan los pads (ver menu_moderno)."""
     if nombre not in E.fuentes:
         return
     es_principal = nombre in E.fuentes_principales
 
-    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c", activeforeground="white")
-    menu._imagenes = []
-
-    def _item(svg, texto, texto_respaldo, comando):
-        real = None
-        try:
-            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
-        except Exception:
-            pass
-        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
-        if foto is None:
-            menu.add_command(label=texto_respaldo, command=comando)
+    def _construir(m):
+        m.item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
+               lambda: _iniciar_renombrar_fuente(nombre))
+        m.item("menu/menu_favorito_on.svg" if es_principal else "menu/menu_favorito_off.svg",
+               "Quitar de principales" if es_principal else "Marcar como principal",
+               "☆  Quitar de principales" if es_principal else "★  Marcar como principal",
+               lambda: _alternar_principal(nombre))
+        if _es_oculta(nombre):
+            m.item("menu/menu_mostrar.svg", "Mostrar fuente", "👁  Mostrar fuente",
+                   lambda: mostrar_fuente(nombre))
         else:
-            menu._imagenes.append(foto)
-            menu.add_command(label=texto if real is not None else texto_respaldo,
-                             image=foto, compound="left", command=comando)
+            m.item("menu/menu_ocultar.svg", "Ocultar fuente", "👁  Ocultar fuente",
+                   lambda: ocultar_fuente(nombre))
+        m.item("menu/menu_filtros.svg", "Filtros…", "🎚  Filtros…",
+               lambda: mod_audio_filtros.abrir_filtros(nombre))
+        m.item("menu/menu_propiedades.svg", "Propiedades…", "⚙  Propiedades…",
+               lambda: mod_audio_propiedades.abrir_propiedades(nombre))
+        m.separador()
+        m.flyout_colores("menu/menu_etiqueta.svg", "Color de etiqueta",
+                         "🏷  Color de etiqueta", E.PALETA_ETIQUETAS,
+                         E.colores_fuentes.get(nombre),
+                         lambda color: _asignar_color_fuente(nombre, color))
+        m.separador()
+        m.item("menu/menu_eliminar.svg", "Quitar de todas las escenas…",
+               "Quitar de todas las escenas…",
+               lambda: _quitar_fuente_de_escenas(nombre))
+        m.item("menu/menu_eliminar.svg", "Eliminar fuente…", "🗑  Eliminar fuente…",
+               lambda: _eliminar_fuente(nombre))
 
-    def _cascada(svg, texto, texto_respaldo, submenu):
-        real = None
-        try:
-            real = mod_ui_dibujo._imagen_svg_menu(svg, 16)
-        except Exception:
-            pass
-        foto = real if real is not None else mod_ui_dibujo._imagen_vacia(16)
-        if foto is None:
-            menu.add_cascade(label=texto_respaldo, menu=submenu)
-        else:
-            menu._imagenes.append(foto)
-            menu.add_cascade(label=texto if real is not None else texto_respaldo,
-                             image=foto, compound="left", menu=submenu)
-
-    _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
-          lambda: _iniciar_renombrar_fuente(nombre))
-    _item("menu/menu_favorito_on.svg" if es_principal else "menu/menu_favorito_off.svg",
-          ("Quitar de principales" if es_principal else "Marcar como principal"),
-          ("☆  Quitar de principales" if es_principal else "★  Marcar como principal"),
-          lambda: _alternar_principal(nombre))
-    if _es_oculta(nombre):
-        _item("menu/menu_mostrar.svg", "Mostrar fuente", "👁  Mostrar fuente",
-              lambda: mostrar_fuente(nombre))
-    else:
-        _item("menu/menu_ocultar.svg", "Ocultar fuente", "👁  Ocultar fuente",
-              lambda: ocultar_fuente(nombre))
-    _item("menu/menu_filtros.svg", "Filtros…", "🎚  Filtros…",
-          lambda: mod_audio_filtros.abrir_filtros(nombre))
-    _item("menu/menu_propiedades.svg", "Propiedades…", "⚙  Propiedades…",
-          lambda: mod_audio_propiedades.abrir_propiedades(nombre))
-    menu.add_separator()
-
-    submenu_color = tk.Menu(menu, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c")
-    submenu_color.add_command(label="Sin etiqueta", command=lambda: _asignar_color_fuente(nombre, None))
-    submenu_color.add_separator()
-    for color in E.PALETA_ETIQUETAS:
-        if color is None:
-            continue
-        submenu_color.add_command(
-            label="        ", background=color, activebackground=color,
-            command=lambda c=color: _asignar_color_fuente(nombre, c)
-        )
-    _cascada("menu/menu_etiqueta.svg", "Color de etiqueta", "🏷  Color de etiqueta", submenu_color)
-
-    menu.add_separator()
-    _item("menu/menu_eliminar.svg", "Quitar de todas las escenas…", "Quitar de todas las escenas…",
-          lambda: _quitar_fuente_de_escenas(nombre))
-    _item("menu/menu_eliminar.svg", "Eliminar fuente…", "🗑  Eliminar fuente…",
-          lambda: _eliminar_fuente(nombre))
-
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+    menu_moderno.abrir(event, _construir)
 
 
 def _fuente_bajo_puntero(x_root, y_root):
@@ -2472,17 +2348,13 @@ def _menu_monitor(nombre, event):
     estados (apagado, solo yo/azul, yo + stream/verde)."""
     if nombre not in E.fuentes:
         return
-    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white",
-                   activebackground="#323b4c", activeforeground="white")
-    for tipo in E.TIPOS_MONITOREO:
-        menu.add_command(
-            label=C.ETIQUETAS_MONITOREO.get(tipo, tipo),
-            command=lambda t=tipo: _fijar_monitor(nombre, t)
-        )
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+
+    def _construir(m):
+        for tipo in E.TIPOS_MONITOREO:
+            m.item(None, C.ETIQUETAS_MONITOREO.get(tipo, tipo), None,
+                   lambda t=tipo: _fijar_monitor(nombre, t))
+
+    menu_moderno.abrir(event, _construir)
 
 
 def _renombrar_fuente_localmente(nombre_viejo, nombre_nuevo):

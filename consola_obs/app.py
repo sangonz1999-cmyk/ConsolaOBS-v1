@@ -16,6 +16,7 @@ from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
+from consola_obs.audio import musica as mod_audio_musica
 from consola_obs.audio import rutas_obs as mod_rutas_obs
 from consola_obs.audio import fuentes as mod_audio_fuentes
 from consola_obs.ui import dibujo as mod_ui_dibujo
@@ -24,6 +25,7 @@ from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 from consola_obs.ui import soundboard as mod_ui_soundboard
 from consola_obs.ui import ventana as mod_ui_ventana
 from consola_obs.ui import cabecera as mod_ui_cabecera
+from consola_obs.ui import ajustes_audio as mod_ui_ajustes_audio
 from consola_obs.compat import HAY_PILLOW
 
 
@@ -257,6 +259,22 @@ def main():
     E.escuchar_en_pc = E.config_interfaz_previa.get("escuchar_en_pc", True)
     if not isinstance(E.escuchar_en_pc, bool):
         E.escuchar_en_pc = str(E.escuchar_en_pc).lower() in ("1", "true", "sí", "si")
+    # Música de fondo también por los parlantes de la PC (siempre sale
+    # por el stream de OBS). Apagada de fábrica.
+    E.musica_en_parlantes = E.config_interfaz_previa.get("musica_en_parlantes", False)
+    if not isinstance(E.musica_en_parlantes, bool):
+        E.musica_en_parlantes = str(E.musica_en_parlantes).lower() in ("1", "true", "sí", "si")
+    # Volumen general de los parlantes de la PC (0 a -60 dB).
+    try:
+        E.volumen_pc_db = max(-60.0, min(0.0, float(
+            E.config_interfaz_previa.get("volumen_pc_db", 0.0))))
+        # Un volumen guardado en silencio total (-60) casi siempre es un
+        # resto de un arrastre viejo, no una decisión: la app arrancaba
+        # muda por los parlantes sin que se supiera por qué.
+        if E.volumen_pc_db <= E.UMBRAL_SILENCIO:
+            E.volumen_pc_db = 0.0
+    except Exception:
+        E.volumen_pc_db = 0.0
     # Nivelación de efectos (todos los pads al mismo volumen).
     E.nivelar_efectos = E.config_interfaz_previa.get("nivelar_efectos", True)
     if not isinstance(E.nivelar_efectos, bool):
@@ -750,36 +768,12 @@ def main():
         E._marco_apariencia, "Tamaño y estilo de la interfaz. Todo se aplica en el acto.")
 
     E._marco_audio = E.pestanas_ajustes["Audio"]
-    E.variable_escuchar = tk.StringVar(value="Sí" if E.escuchar_en_pc else "No")
-    E.selector_escuchar = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Escuchar acá", padre=E._marco_audio),
-        textvariable=E.variable_escuchar,
-        values=["Sí", "No"],
-        state="readonly",
-        style="Discreta.TCombobox"
-    )
-    E.selector_escuchar.pack(side="left", fill="x", expand=True)
-    E.selector_escuchar.bind(
-        "<<ComboboxSelected>>",
-        lambda e: mod_audio_reproduccion.cambiar_escuchar_en_pc(E.variable_escuchar.get())
-    )
-
-    E.variable_nivelar = tk.StringVar(value="Sí" if E.nivelar_efectos else "No")
-    E.selector_nivelar = ttk.Combobox(
-        mod_ui_cabecera._fila_menu("Nivelar efectos", padre=E._marco_audio),
-        textvariable=E.variable_nivelar,
-        values=["Sí", "No"],
-        state="readonly",
-        style="Discreta.TCombobox"
-    )
-    E.selector_nivelar.pack(side="left", fill="x", expand=True)
-    E.selector_nivelar.bind(
-        "<<ComboboxSelected>>",
-        lambda e: mod_audio_reproduccion.cambiar_nivelar_efectos(E.variable_nivelar.get())
-    )
-    mod_ui_cabecera._ayuda_menu(
-        E._marco_audio, "Escuchar acá: los efectos suenan también por los parlantes de "
-                        "esta PC. Nivelar: iguala el volumen de todos los pads.")
+    # Pestaña Audio moderna (interruptores + barras de volumen sobre los
+    # medidores). Si algo falla acá, el resto de Ajustes se arma igual.
+    try:
+        mod_ui_ajustes_audio.construir(E._marco_audio)
+    except Exception as e:
+        print(f"No se pudo armar la pestaña Audio: {e}")
 
     # Sincronización bidireccional de assets con la otra PC (módulo
     # aislado consola_obs/sync: no toca la lógica actual). Si algo

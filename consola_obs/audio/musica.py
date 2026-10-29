@@ -2,9 +2,11 @@
 
 Arquitectura "el programa manda, OBS ejecuta": la biblioteca, la cola
 y el transporte viven acá; OBS solo tiene la fuente tonta 'Musica'
-(ffmpeg_source, sin loop) y obedece. Sin audio local (miniaudio): la
-música sale ÚNICAMENTE por el stream, nunca por los parlantes de la
-PC (a diferencia del soundboard).
+(ffmpeg_source, sin loop) y obedece. La música sale SIEMPRE por el
+stream; por los parlantes de la PC sólo si el sonidista activa "Música
+en PC" en Ajustes > Audio (motor_local, miniaudio), y entonces el
+transporte (play/pausa/stop/seek) y el fader de la fuente Musica se
+replican en el motor local.
 
 Quirks de OBS-WebSocket que este módulo esconde:
 - Después de STOP, PLAY no reanuda: hay que usar RESTART. reanudar()
@@ -23,6 +25,8 @@ from consola_obs import rutas as R
 from consola_obs import configuracion as mod_configuracion
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import rutas_obs as mod_rutas_obs
+from consola_obs.audio import motor_local as mod_motor_local
+from consola_obs.audio import volumen_salida as mod_volumen_salida
 
 # Sesión vigente. 'rel' es la ruta RELATIVA a assets/Musica (portable
 # entre PCs con la misma estructura); 'archivo' la absoluta local.
@@ -458,6 +462,89 @@ def _anclar_cursor(valor):
         pass
 
 
+def ganancia_desde_pct(pct):
+    """Curva del control de volumen de la PC: 0-100 % -> ganancia lineal.
+    Es cuadrática porque el oído no percibe el volumen en forma lineal:
+    100 % = sin cambios, 50 % = -12 dB (se oye más o menos a la mitad),
+    25 % = -24 dB, 2 % = casi silencio."""
+    try:
+        p = max(0.0, min(100.0, float(pct))) / 100.0
+    except Exception:
+        p = 1.0
+    return p * p
+
+
+def _volumen_musica_pc():
+    """Volumen propio de la música en los parlantes (barra del mini
+    player), como ganancia lineal 0.0 a 1.0. No toca OBS."""
+    try:
+        return ganancia_desde_pct(
+            E.config_interfaz_previa.get("volumen_musica_pc", 100.0))
+    except Exception:
+        return 1.0
+
+
+def _ganancia_musica_lineal():
+    """Ganancia lineal (0.0 a 1.0) del audio LOCAL (parlantes de la PC).
+    Depende SOLO de la barra de volumen del mini player (más el volumen
+    general de Ajustes > Audio, hoy fijo en 1.0): el fader y el mute de
+    la fuente Música de OBS mandan en el stream y no tocan los
+    parlantes."""
+    try:
+        return mod_volumen_salida.factor_pc() * _volumen_musica_pc()
+    except Exception:
+        return 1.0
+
+
+def _musica_en_parlantes():
+    try:
+        return bool(getattr(E, "musica_en_parlantes", False))
+    except Exception:
+        return False
+
+
+def nota_volumen_musica():
+    """El fader (o el mute) de la fuente Musica cambió, acá o en OBS:
+    el audio local lo sigue en vivo. Nunca lanza."""
+    try:
+        if mod_motor_local.hay_sesion():
+            mod_motor_local.fijar_ganancia(_ganancia_musica_lineal())
+    except Exception:
+        pass
+
+
+def _arrancar_local(ruta_abs, inicio_ms=0.0, pausado=False):
+    """Lanza la pista por los parlantes si la opción está activa."""
+    if not _musica_en_parlantes():
+        return
+    try:
+        mod_motor_local.reproducir(
+            ruta_abs, _sesion.get("token"), _ganancia_musica_lineal(),
+            inicio_ms=inicio_ms, pausado=pausado)
+    except Exception as e:
+        print(f"No se pudo lanzar la música por los parlantes: {e}")
+
+
+def cambiar_musica_en_parlantes(valor):
+    """Se llama desde el combobox 'Música en PC' del menú de ajustes.
+    Al activarla con un tema en curso, el audio local se engancha en el
+    punto donde va (y respeta la pausa); al apagarla se corta."""
+    E.musica_en_parlantes = (valor == "Sí")
+    mod_configuracion.guardar_config_interfaz(
+        {"musica_en_parlantes": E.musica_en_parlantes})
+    if not E.musica_en_parlantes:
+        mod_motor_local.detener()
+        return
+    try:
+        archivo = _sesion.get("archivo")
+        if archivo and _sesion.get("estado") in ("SONANDO", "PAUSADA", "ABRIENDO"):
+            cursor = float(estado_actual().get("cursor_ms") or 0.0)
+            _arrancar_local(archivo, inicio_ms=cursor,
+                            pausado=(_sesion.get("estado") == "PAUSADA"))
+    except Exception as e:
+        print(f"No se pudo enganchar la música a los parlantes: {e}")
+
+
 def estado_actual():
     """Foto para la UI (Fase 3/4). Nunca lanza."""
     try:
@@ -581,7 +668,9 @@ def _hacer_reproducir(rel, token):
     _sesion["archivo"] = ruta_abs
     _sesion["estado"] = "SONANDO"
     _sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
+    _sesion["inicio_t"] = time.monotonic()
     _anclar_cursor(0.0)
+    _arrancar_local(ruta_abs)
     _sesion["seek_pendiente"] = None
     if not es_absoluta:
         _tocar_reciente(rel)
@@ -745,6 +834,7 @@ def _retroceder_si_hay_cola():
     if cursor > 3000.0 and _sesion.get("rel"):
         _anclar_cursor(0.0)
         _hacer_accion("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
+        mod_motor_local.buscar_ms(0.0)
         return
     base = _indice_sano()
     if base is None:
@@ -755,6 +845,9 @@ def _retroceder_si_hay_cola():
 
 
 def pausar():
+    # El audio local se corta aunque OBS se haya caído: no queda sonando
+    # solo.
+    mod_motor_local.pausar()
     if E.conectado:
         _en_hilo(_hacer_accion, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PAUSE")
 
@@ -765,6 +858,7 @@ def reanudar():
     if not E.conectado:
         return
     if _sesion.get("crudo") == "OBS_MEDIA_STATE_PAUSED":
+        mod_motor_local.reanudar()
         _en_hilo(_hacer_accion, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY")
     elif _sesion.get("archivo"):
         _sesion["token"] += 1
@@ -773,12 +867,14 @@ def reanudar():
 
 def detener():
     """STOP manual: no avanza solo (el avance solo reacciona a ENDED)."""
+    mod_motor_local.detener()
     if not E.conectado:
         return
     _en_hilo(_hacer_detener)
 
 
 def _hacer_detener():
+    mod_motor_local.detener()
     if _hacer_accion("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP"):
         _sesion["estado"] = "DETENIDA"
         _sesion["crudo"] = "OBS_MEDIA_STATE_STOPPED"
@@ -786,6 +882,8 @@ def _hacer_detener():
 
 def reiniciar():
     if E.conectado and _sesion.get("archivo"):
+        mod_motor_local.buscar_ms(0.0)
+        mod_motor_local.reanudar()
         _en_hilo(_hacer_accion, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
 
 
@@ -806,6 +904,7 @@ def seek_ms(milisegundos):
         return
     _anclar_cursor(destino)
     _sesion["seek_pendiente"] = {"destino": destino, "t": time.monotonic()}
+    mod_motor_local.buscar_ms(destino)
     _en_hilo(_hacer_seek, destino)
 
 
@@ -821,6 +920,10 @@ def _sondear_una_vez():
     estado/cursor/duración y auto-avanza SOLO ante ENDED natural."""
     if not E.conectado or not _sesion.get("archivo"):
         return
+    # Red de contención del fader: si el volumen o el mute cambiaron por
+    # un camino que no pasó por nota_volumen_musica, el local se entera
+    # igual en el próximo ciclo.
+    nota_volumen_musica()
     try:
         respuesta = E.cliente_obs.get_media_input_status(C.NOMBRE_FUENTE_MUSICA)
     except Exception as e:
@@ -871,9 +974,24 @@ def _sondear_una_vez():
         _sesion["estado"] = "ABRIENDO"
     elif crudo == "OBS_MEDIA_STATE_ENDED":
         _sesion["estado"] = "DETENIDA"
+        _detener_local_si_corresponde()
         _avanzar(auto=True)
     elif crudo in C.ESTADOS_MEDIA_DETENIDO:
         _sesion["estado"] = "DETENIDA"
+        _detener_local_si_corresponde()
+
+
+def _detener_local_si_corresponde():
+    """OBS informó que la música terminó o se detuvo: el audio local se
+    corta también. Los primeros 1,5 s de un tema nuevo se ignoran: OBS
+    puede seguir informando el estado terminal del tema anterior hasta
+    aplicar el RESTART, y cortaría el audio local recién arrancado."""
+    try:
+        if (time.monotonic() - float(_sesion.get("inicio_t") or 0.0)) < 1.5:
+            return
+    except Exception:
+        pass
+    mod_motor_local.detener()
 
 
 def _bucle_sondeo():
@@ -895,8 +1013,9 @@ def asegurar_sondeo():
 
 def detener_y_vaciar_musica():
     """STOP + vaciado para el cierre/desconexión (Fase 5): así OBS no
-    auto-reproduce al abrirse. Sin audio local que cortar (la música
-    nunca sale por parlantes)."""
+    auto-reproduce al abrirse. También corta el audio local de los
+    parlantes, si estaba activo."""
+    mod_motor_local.detener()
     _sesion["rel"] = None
     _sesion["archivo"] = None
     _sesion["indice_cola"] = None

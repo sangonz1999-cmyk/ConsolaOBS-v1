@@ -1,3 +1,4 @@
+import math
 import os
 import time
 import tkinter as tk
@@ -13,6 +14,8 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.ui import dibujo as mod_ui_dibujo
+from consola_obs.ui import medidores as mod_ui_medidores
+from consola_obs.ui import menu_moderno as mod_menu_moderno
 from consola_obs.ui import ventana as mod_ui_ventana
 
 
@@ -48,73 +51,103 @@ def asignar_sonido(indice):
     construir_soundboard()
 
 
+def _formatear_db_pad(db):
+    if db <= E.UMBRAL_SILENCIO:
+        return "SILENCIO"
+    return f"{db:.1f} dB"
+
+
+def _db_a_pct_pad(db):
+    if db is None:
+        return 100.0
+    if db <= -60.0:
+        return 0.0
+    linear = 10.0 ** (db / 20.0)
+    pct = linear * 100.0
+    return max(0.0, min(200.0, pct))
+
+
+def _pct_a_db_pad(pct):
+    if pct <= 0:
+        return -60.0
+    linear = pct / 100.0
+    if linear < 0.001:
+        return -60.0
+    db = 20.0 * math.log10(linear)
+    return max(-60.0, min(6.0, db))
+
+
+def _bloque_volumen_pad(indice, marco):
+    """Volumen propio del pad: barra horizontal estilo OBS dentro del
+    menu de clic derecho. Se oye en el acto si el pad esta sonando; se
+    guarda al soltar."""
+    fondo = mod_menu_moderno.COLOR_FONDO
+    volumen = mod_audio_reproduccion._volumen_pad(indice)
+    pct_inicial = 100.0 if volumen is None else _db_a_pct_pad(volumen)
+
+    _inicializando = {"v": True}
+
+    def _al_cambiar_volumen(pct):
+        if _inicializando["v"]:
+            return
+        import time
+        if time.monotonic() - _tiempo_apertura_menu < 1.0:
+            return
+        db = _pct_a_db_pad(pct)
+        mod_audio_reproduccion.establecer_volumen_pad(indice, db, guardar=False)
+
+    control = mod_ui_medidores.construir_control_volumen_pad(
+        marco, _al_cambiar_volumen, pct_inicial, ancho=190, bg=fondo,
+        max_pct=200)
+    # Desactivar el guard despues de que el control este creado
+    marco.after(100, lambda: _inicializando.__setitem__("v", False))
+    control.pack(pady=(2, 0))
+    control.bind("<ButtonRelease-1>",
+                 lambda e: mod_audio_reproduccion.guardar_volumen_pad())
+
+
+_tiempo_apertura_menu = 0.0
+
+
 def _abrir_menu_contextual_pad(indice, event):
-    """Menú de clic derecho de un pad del soundboard: agrupa acá todo lo
-    que antes eran botones sueltos siempre visibles ('🔊 Sonido', '🖼
-    Imagen') más el color de etiqueta y, ahora, también renombrar y
-    quitar el sonido, para que la grilla se vea limpia."""
+    global _tiempo_apertura_menu
+    import time
+    _tiempo_apertura_menu = time.monotonic()
+    """Menú de clic derecho de un pad: agrupa acá todo lo que antes eran
+    botones sueltos (sonido, imagen, renombrar, color de etiqueta,
+    vaciar) más la barra de volumen del pad. Es el MISMO menú que usan
+    las fuentes (ver menu_moderno)."""
     datos = E.config_soundboard.get(str(indice)) or {}
     tiene_sonido = bool(datos.get("archivo"))
+    color_actual = datos.get("color")
 
-    menu = tk.Menu(E.ventana, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c", activeforeground="white")
-    menu._imagenes = []
-
-    def _item(svg, texto, texto_respaldo, comando):
-        try:
-            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
-        except Exception:
-            foto = None
-        if foto is None:
-            menu.add_command(label=texto_respaldo, command=comando)
-        else:
-            menu._imagenes.append(foto)
-            menu.add_command(label=texto, image=foto, compound="left", command=comando)
-
-    def _cascada(svg, texto, texto_respaldo, submenu):
-        try:
-            foto = mod_ui_dibujo._imagen_svg_menu(svg, 16)
-        except Exception:
-            foto = None
-        if foto is None:
-            menu.add_cascade(label=texto_respaldo, menu=submenu)
-        else:
-            menu._imagenes.append(foto)
-            menu.add_cascade(label=texto, image=foto, compound="left", menu=submenu)
-
-    _item("menu/menu_pad_sonido.svg",
-          ("Cambiar sonido…" if tiene_sonido else "Asignar sonido…"),
-          ("🔊  Cambiar sonido…" if tiene_sonido else "🔊  Asignar sonido…"),
-          lambda: asignar_sonido(indice))
-    if tiene_sonido:
-        _item("menu/menu_pad_imagen.svg", "Asignar imagen…", "🖼  Asignar imagen…",
-              lambda: asignar_imagen(indice))
-        _item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
-              lambda: _iniciar_renombrar_pad(indice))
-    menu.add_separator()
-
-    submenu_color = tk.Menu(menu, tearoff=0, bg="#151a24", fg="white", activebackground="#323b4c")
-    submenu_color.add_command(label="Sin etiqueta", command=lambda: _asignar_color_pad(indice, None))
-    submenu_color.add_separator()
-    for color in E.PALETA_ETIQUETAS:
-        if color is None:
-            continue
-        submenu_color.add_command(
-            label="        ", background=color, activebackground=color,
-            command=lambda c=color: _asignar_color_pad(indice, c)
-        )
-    _cascada("menu/menu_etiqueta.svg", "Color de etiqueta", "🏷  Color de etiqueta", submenu_color)
-
-    menu.add_separator()
-    if tiene_sonido:
-        _item("menu/menu_eliminar.svg", "Vaciar pad", "🗑  Vaciar pad",
-              lambda: _quitar_pad(indice))
-    _item("menu/menu_eliminar.svg", "Eliminar pad", "🗑  Eliminar pad",
-          lambda: _eliminar_pad(indice))
-
-    try:
-        menu.tk_popup(event.x_root, event.y_root)
-    finally:
-        menu.grab_release()
+    def _construir(m):
+        m.item("menu/menu_pad_sonido.svg",
+               "Cambiar sonido…" if tiene_sonido else "Asignar sonido…",
+               "🔊  Cambiar sonido…" if tiene_sonido else "🔊  Asignar sonido…",
+               lambda: asignar_sonido(indice))
+        if tiene_sonido:
+            m.item("menu/menu_pad_imagen.svg", "Asignar imagen…",
+                   "🖼  Asignar imagen…", lambda: asignar_imagen(indice))
+            m.item("menu/menu_renombrar.svg", "Renombrar…", "✏  Renombrar…",
+                   lambda: _iniciar_renombrar_pad(indice))
+            m.separador()
+            m.bloque(lambda marco: _bloque_volumen_pad(indice, marco))
+        m.separador()
+        m.flyout_colores("menu/menu_etiqueta.svg", "Color de etiqueta",
+                         "🏷  Color de etiqueta", E.PALETA_ETIQUETAS,
+                         color_actual,
+                         lambda color: _asignar_color_pad(indice, color))
+        m.separador()
+        if tiene_sonido:
+            m.item("menu/menu_eliminar.svg", "Vaciar pad", "🗑  Vaciar pad",
+                   lambda: _quitar_pad(indice))
+        m.item("menu/menu_eliminar.svg", "Eliminar pad", "🗑  Eliminar pad",
+               lambda: _eliminar_pad(indice))
+        m.separador()
+        m.item("menu/menu_limpiar.svg", "Vaciar pads vacíos", "🧹  Vaciar pads vacíos",
+                _vaciar_pads_vacios)
+    mod_menu_moderno.abrir(event, _construir)
 
 
 def _iniciar_renombrar_pad(indice):
@@ -145,6 +178,39 @@ def _quitar_pad(indice):
     for clave in [c for c in E.miniaturas_cargadas if c[0] == indice]:
         E.miniaturas_cargadas.pop(clave, None)
     mod_configuracion.guardar_config_soundboard()
+    construir_soundboard()
+
+
+def _vaciar_pads_vacios():
+    """Elimina todos los pads que no tienen sonido asignado."""
+    vacios = [i for i in range(E.num_pads_soundboard)
+              if not (E.config_soundboard.get(str(i)) or {}).get("archivo")]
+    if not vacios:
+        messagebox.showinfo("Vaciar pads vacíos", "No hay pads vacíos para eliminar.")
+        return
+    if not messagebox.askyesno(
+        "Vaciar pads vacíos",
+        "Se eliminarán %d pad(s) vacío(s). ¿Continuar?" % len(vacios)
+    ):
+        return
+    if E._sesion_reproduccion.get("indice") is not None:
+        mod_audio_reproduccion.detener_sonido(E._sesion_reproduccion["indice"])
+    for indice in sorted(vacios, reverse=True):
+        total = E.num_pads_soundboard
+        if indice >= total:
+            continue
+        for i in range(indice, total - 1):
+            siguiente = E.config_soundboard.pop(str(i + 1), None)
+            if siguiente is None:
+                E.config_soundboard.pop(str(i), None)
+            else:
+                E.config_soundboard[str(i)] = siguiente
+        E.config_soundboard.pop(str(total - 1), None)
+        E.num_pads_soundboard -= 1
+        for clave in [c for c in E.miniaturas_cargadas if c[0] >= indice]:
+            E.miniaturas_cargadas.pop(clave, None)
+    mod_configuracion.guardar_config_soundboard()
+    mod_configuracion.guardar_config_interfaz({"num_pads_soundboard": E.num_pads_soundboard})
     construir_soundboard()
 
 

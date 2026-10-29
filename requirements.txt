@@ -4,3 +4,4 @@ miniaudio>=1.71
 pymupdf>=1.23
 fastapi>=0.110
 uvicorn>=0.29
+numpy>=1.26

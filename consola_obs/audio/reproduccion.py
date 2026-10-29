@@ -10,6 +10,10 @@ from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import nivelacion as mod_nivelacion
 from consola_obs.audio import rutas_obs as mod_rutas_obs
+from consola_obs.audio import volumen_salida as mod_volumen_salida
+from consola_obs.audio import rampa_ganancia as mod_rampa_ganancia
+from consola_obs.audio import motor_mci as mod_motor_mci
+from consola_obs.audio import estado_audio_local as mod_estado_audio_local
 from consola_obs.ui import soundboard as mod_ui_soundboard
 
 _reproduccion_local = {"dispositivo": None, "token": None}
@@ -136,6 +140,7 @@ def _detener_local_cuerpo(token=None, fundido=False, db_inicial=0.0):
         return True
     _reproduccion_local.pop("fundido_inicio", None)
     _reproduccion_local.pop("fundido_db", None)
+    _reproduccion_local.pop("ganancia_viva", None)
     cancelado = _reproduccion_local.pop("cancelar", None)
     if cancelado is not None:
         try:
@@ -173,6 +178,7 @@ def _soltar_dispositivo_local(dispositivo):
             _reproduccion_local.pop("dispositivo", None)
             _reproduccion_local["token"] = None
             _reproduccion_local.pop("cancelar", None)
+            _reproduccion_local.pop("ganancia_viva", None)
             _reproduccion_local.pop("fundido_inicio", None)
             _reproduccion_local.pop("fundido_db", None)
     except Exception:
@@ -197,7 +203,7 @@ def _apagar_pad_si_desconectado(token):
         pass
 
 
-def _reproducir_local(ruta, token, ganancia_lineal=1.0):
+def _reproducir_local_miniaudio(ruta, token, ganancia_lineal=1.0):
     """Reproduce el archivo por la salida de audio de la PC (parlantes /
     auriculares) con miniaudio, en paralelo a OBS. Corre en su propio
     hilo. ganancia_lineal es la nivelación del pad (1.0 = sin tocar).
@@ -208,19 +214,8 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
     try:
         import miniaudio
     except Exception as e:
-        if not _aviso_miniaudio["mostrado"]:
-            _aviso_miniaudio["mostrado"] = True
-            print(f"miniaudio no disponible ({e}): el sonido sólo saldrá por OBS.")
-            try:
-                # Aviso visible (en el .exe no hay consola donde ver el print).
-                messagebox.showwarning(
-                    "Sin audio local",
-                    f"No se pudo cargar el motor de audio local ({e}).\n\nEl sonido sólo saldrá por OBS."
-                )
-            except Exception:
-                pass
-        _apagar_pad_si_desconectado(token)
-        return
+        mod_red.log_conexion("AUDIO", f"miniaudio no disponible: {e}")
+        return False
     # Entrega atómica: frenar el anterior, abrir, guardar y arrancar
     # el nuevo pasan como una sola operación. Sin esto, dos pads
     # rapidísimos se entrelazaban y quedaban sonidos huérfanos
@@ -230,17 +225,21 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
         try:
             flujo = miniaudio.stream_file(ruta)
         except Exception as e:
-            print(f"No se pudo abrir el audio local {ruta}: {e}")
-            _apagar_pad_si_desconectado(token)
-            return
+            mod_red.log_conexion("AUDIO", f"miniaudio no pudo abrir {ruta}: {e}")
+            return False
         try:
             dispositivo = miniaudio.PlaybackDevice()
         except Exception as e:
-            print(f"No se pudo abrir la salida de audio de la PC: {e}")
-            _apagar_pad_si_desconectado(token)
-            return
+            mod_red.log_conexion("AUDIO", f"miniaudio no pudo abrir la salida de la PC: {e}")
+            return False
         terminado = threading.Event()
         cancelado = threading.Event()
+        if ganancia_lineal <= 0.0:
+            print("Audio local: el pad suena con ganancia 0 (volumen de parlantes "
+                  "o del pad en silencio). Subí 'Volumen parlantes (PC)' en Ajustes > Audio.")
+        # Ganancia "viva": el volumen del pad (clic derecho) la cambia en
+        # pleno sonido sin reabrir nada (ver establecer_volumen_pad).
+        ganancia_viva = {"v": float(ganancia_lineal)}
 
         def _flujo_envuelto():
             # El primer yield vacío es el apretón de manos: miniaudio exige
@@ -250,32 +249,38 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
             # cada pedido del device se reenvía al decodificador tal cual,
             # para darle siempre la cantidad exacta que pidió.
             pedido = yield b""
+            rampa = mod_rampa_ganancia.RampaGanancia()
             try:
                 try:
                     trozo = next(flujo)
                 except StopIteration:
                     return
-                if ganancia_lineal != 1.0:
-                    trozo = _aplicar_ganancia(trozo, ganancia_lineal)
                 while True:
                     if cancelado.is_set():
                         break
+                    # La ganancia se calcula JUSTO antes de entregar cada
+                    # trozo: volumen del pad x volumen de los parlantes
+                    # (Ajustes > Audio) x fundido. Así cualquier cambio se
+                    # escucha en vivo, con rampa suave (analógico).
+                    g = ganancia_viva["v"]
+                    try:
+                        g *= mod_volumen_salida.factor_pc()
+                    except Exception:
+                        pass
                     inicio_fundido = _reproduccion_local.get("fundido_inicio")
                     if inicio_fundido is not None:
                         progreso = (time.time() - inicio_fundido) / DURACION_FUNDIDO_LOCAL_SEG
                         if progreso >= 1.0:
                             break
-                        trozo = _aplicar_ganancia(
-                            trozo, _ganancia_fundido(
-                                progreso, _reproduccion_local.get("fundido_db", 0.0)))
+                        g *= _ganancia_fundido(
+                            progreso, _reproduccion_local.get("fundido_db", 0.0))
+                    salida = rampa.aplicar(trozo, g)
                     try:
-                        pedido = yield trozo
+                        pedido = yield salida
                     except GeneratorExit:
                         break
                     try:
                         trozo = flujo.send(pedido) if pedido else next(flujo)
-                        if ganancia_lineal != 1.0:
-                            trozo = _aplicar_ganancia(trozo, ganancia_lineal)
                     except StopIteration:
                         break
             finally:
@@ -294,10 +299,11 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
             except Exception:
                 pass
             _apagar_pad_si_desconectado(token)
-            return
+            return True
         _reproduccion_local["dispositivo"] = dispositivo
         _reproduccion_local["token"] = token
         _reproduccion_local["cancelar"] = cancelado
+        _reproduccion_local["ganancia_viva"] = ganancia_viva
         _reproduccion_local.pop("fundido_inicio", None)
         _reproduccion_local.pop("fundido_db", None)
         if E._sesion_reproduccion.get("token") != token:
@@ -310,14 +316,13 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
                 dispositivo.close()
             except Exception:
                 pass
-            return
+            return True
         try:
             dispositivo.start(generador)
         except Exception as e:
-            print(f"Error reproduciendo en la PC: {e}")
+            mod_red.log_conexion("AUDIO", f"miniaudio no pudo arrancar: {e}")
             _soltar_dispositivo_local(dispositivo)
-            _apagar_pad_si_desconectado(token)
-            return
+            return False
     try:
         while not terminado.wait(timeout=0.1):
             if cancelado.is_set():
@@ -329,6 +334,105 @@ def _reproducir_local(ruta, token, ganancia_lineal=1.0):
         # Fin del audio local (natural, fundido o cancelado): sin OBS
         # nadie más va a apagar la luz del pad.
         _apagar_pad_si_desconectado(token)
+    return True
+
+
+def _reproducir_local_mci(ruta, token, ganancia_lineal=1.0):
+    """Mismo trabajo que _reproducir_local_miniaudio pero con el
+    reproductor de Windows (MCI). El volumen se recalcula cada ~25 ms
+    (pad x parlantes x fundido), así que se oye en vivo y de forma
+    continua."""
+    rep = mod_motor_mci.Reproductor()
+    cancelado = threading.Event()
+
+    class _Disp:
+        def stop(self):
+            cancelado.set()
+
+        def close(self):
+            pass
+
+    disp = _Disp()
+    ganancia_viva = {"v": float(ganancia_lineal)}
+    with _lock_local:
+        _detener_local()
+        if not rep.abrir(ruta):
+            mod_red.log_conexion("AUDIO", f"MCI no pudo abrir {ruta}: {rep.error}")
+            _apagar_pad_si_desconectado(token)
+            return
+        _reproduccion_local["dispositivo"] = disp
+        _reproduccion_local["token"] = token
+        _reproduccion_local["cancelar"] = cancelado
+        _reproduccion_local["ganancia_viva"] = ganancia_viva
+        _reproduccion_local.pop("fundido_inicio", None)
+        _reproduccion_local.pop("fundido_db", None)
+        if E._sesion_reproduccion.get("token") != token:
+            _reproduccion_local.pop("dispositivo", None)
+            _reproduccion_local["token"] = None
+            _reproduccion_local.pop("cancelar", None)
+            rep.cerrar()
+            return
+        try:
+            rep.volumen(ganancia_viva["v"] * mod_volumen_salida.factor_pc())
+        except Exception:
+            pass
+        if not rep.reproducir():
+            mod_red.log_conexion("AUDIO", "MCI no pudo reproducir")
+            rep.cerrar()
+            _soltar_dispositivo_local(disp)
+            _apagar_pad_si_desconectado(token)
+            return
+    t0 = time.time()
+    try:
+        while not cancelado.is_set():
+            g = ganancia_viva["v"]
+            try:
+                g *= mod_volumen_salida.factor_pc()
+            except Exception:
+                pass
+            inicio_fundido = _reproduccion_local.get("fundido_inicio")
+            if inicio_fundido is not None:
+                progreso = (time.time() - inicio_fundido) / DURACION_FUNDIDO_LOCAL_SEG
+                if progreso >= 1.0:
+                    break
+                g *= _ganancia_fundido(
+                    progreso, _reproduccion_local.get("fundido_db", 0.0))
+            rep.volumen(g)
+            if time.time() - t0 > 0.4 and rep.modo() in ("stopped", "not ready", ""):
+                break
+            time.sleep(0.025)
+    except Exception as e:
+        mod_red.log_conexion("AUDIO", f"error en el reproductor MCI: {e}")
+    finally:
+        rep.cerrar()
+        _soltar_dispositivo_local(disp)
+        _apagar_pad_si_desconectado(token)
+
+
+def _reproducir_local(ruta, token, ganancia_lineal=1.0):
+    """Audio local de un pad: miniaudio si está; si falta o falla, el
+    reproductor de Windows. Siempre queda registrado en conexion.log."""
+    if _reproducir_local_miniaudio(ruta, token, ganancia_lineal):
+        return
+    if mod_motor_mci.disponible():
+        mod_red.log_conexion("AUDIO", "usando el reproductor de Windows (MCI)")
+        _reproducir_local_mci(ruta, token, ganancia_lineal)
+        return
+    _apagar_pad_si_desconectado(token)
+    _avisar_sin_audio_local()
+
+
+def _avisar_sin_audio_local():
+    if _aviso_miniaudio["mostrado"]:
+        return
+    _aviso_miniaudio["mostrado"] = True
+    texto = ("No hay motor de audio local: instalá miniaudio "
+             "(pip install miniaudio). El sonido sólo saldrá por OBS.")
+    mod_red.log_conexion("AUDIO", texto)
+    try:
+        E.ventana.after(0, lambda: messagebox.showwarning("Sin audio local", texto))
+    except Exception:
+        pass
 
 
 def cambiar_escuchar_en_pc(valor):
@@ -367,6 +471,133 @@ def _asegurar_filtro_nivel(db):
             {"db": float(db)}, True)
     except Exception as e:
         print(f"No se pudo aplicar la nivelación ({db} dB): {e}")
+def _volumen_pad(indice):
+    """Volumen propio del pad en dB (0 a -60, relativo al fader de
+    efectos) o None si nunca se tocó (ahí manda sólo el fader)."""
+    try:
+        v = (E.config_soundboard.get(str(indice)) or {}).get("volumen_db")
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return max(-60.0, min(6.0, float(v)))
+    except Exception:
+        pass
+    return None
+
+
+def _db_total_pad(indice, nivel_db):
+    """dB que se suman al sonido de un pad: su nivelación (nivel_db) más
+    su volumen propio. Viaja en el filtro Gain propio de OBS y en la
+    ganancia local; el fader del usuario no se toca, así que sus fundidos
+    y su nivel base siguen intactos."""
+    vol = _volumen_pad(indice)
+    total = float(nivel_db) + (vol if vol is not None else 0.0)
+    return total
+
+
+def _lineal_pad(indice, nivel_db):
+    """Ganancia lineal local de un pad (0 si su volumen está en silencio).
+    Incluye el volumen general de los parlantes (Ajustes > Audio), que
+    sólo afecta a lo que suena en esta PC, nunca a lo que va a OBS."""
+    vol = _volumen_pad(indice)
+    if vol is not None and vol <= E.UMBRAL_SILENCIO:
+        return 0.0
+    lineal = mod_nivelacion.lineal_desde_db(_db_total_pad(indice, nivel_db))
+    # El volumen de los parlantes NO va acá: el generador de audio lo
+    # multiplica en cada trozo (ver _reproducir_local), así se oye en vivo.
+    return lineal
+
+
+def aplicar_volumen_pc_vivo():
+    """El volumen general de los parlantes cambió: si hay un efecto
+    sonando por la PC, se escucha el cambio en el acto. No toca OBS."""
+    try:
+        sesion = E._sesion_reproduccion
+        indice = sesion.get("indice")
+        if indice is None:
+            return
+        nivel_db = sesion.get("nivel_db")
+        if not isinstance(nivel_db, (int, float)):
+            nivel_db = 0.0
+        viva = _reproduccion_local.get("ganancia_viva")
+        if viva is not None:
+            viva["v"] = _lineal_pad(indice, nivel_db)
+    except Exception as e:
+        print(f"No se pudo aplicar el volumen de la PC en vivo: {e}")
+
+
+_vivo_pad = {"db": None, "indice": None, "token": None, "corriendo": False}
+_lock_vivo_pad = threading.Lock()
+
+
+def _empujar_volumen_pad_obs():
+    """Hilo que manda a OBS el último volumen pedido (con coalescencia:
+    arrastrando la barra llegan decenas de valores por segundo y sólo
+    importa el último)."""
+    while True:
+        with _lock_vivo_pad:
+            db, indice, token = _vivo_pad["db"], _vivo_pad["indice"], _vivo_pad["token"]
+            _vivo_pad["db"] = None
+            if db is None:
+                _vivo_pad["corriendo"] = False
+                return
+        if E.conectado and _sesion_vigente(token):
+            try:
+                _asegurar_filtro_nivel(db)
+            except Exception as e:
+                print(f"No se pudo aplicar el volumen del pad: {e}")
+
+
+def _aplicar_volumen_pad_vivo(indice):
+    """Si el pad está sonando, el volumen nuevo se escucha en el acto:
+    en la ganancia local y en el filtro de nivel de OBS."""
+    try:
+        sesion = E._sesion_reproduccion
+        if sesion.get("indice") != indice:
+            return
+        token = sesion.get("token")
+        nivel_db = sesion.get("nivel_db")
+        if not isinstance(nivel_db, (int, float)):
+            nivel_db = 0.0
+        viva = _reproduccion_local.get("ganancia_viva")
+        if viva is not None and _reproduccion_local.get("token") == token:
+            viva["v"] = _lineal_pad(indice, nivel_db)
+        if not E.conectado:
+            return
+        with _lock_vivo_pad:
+            _vivo_pad["db"] = _db_total_pad(indice, nivel_db)
+            _vivo_pad["indice"] = indice
+            _vivo_pad["token"] = token
+            if _vivo_pad["corriendo"]:
+                return
+            _vivo_pad["corriendo"] = True
+        threading.Thread(target=_empujar_volumen_pad_obs, daemon=True).start()
+    except Exception as e:
+        print(f"No se pudo aplicar el volumen del pad en vivo: {e}")
+
+
+def establecer_volumen_pad(indice, db, guardar=True):
+    """Fija el volumen propio de un pad (0 a -60 dB) y, si está sonando,
+    lo aplica en vivo. Con guardar=False no toca el disco (se usa
+    mientras se arrastra la barra; al soltar se llama guardar_volumen_pad)."""
+    datos = E.config_soundboard.get(str(indice))
+    if datos is None:
+        return
+    try:
+        db = max(-60.0, min(6.0, round(float(db) * 2) / 2))
+    except Exception:
+        return
+    datos["volumen_db"] = db
+    if guardar:
+        guardar_volumen_pad()
+    _aplicar_volumen_pad_vivo(indice)
+
+
+def guardar_volumen_pad():
+    try:
+        mod_configuracion.guardar_config_soundboard()
+    except Exception:
+        pass
+
+
 def _cargar_y_disparar(indice, accion, token):
     datos = E.config_soundboard.get(str(indice))
     if not datos or not datos.get("archivo"):
@@ -394,6 +625,11 @@ def _cargar_y_disparar(indice, accion, token):
             pass
     if not bool(getattr(E, "nivelar_efectos", True)):
         nivel_db = 0.0
+    # Volumen propio del pad (clic derecho): se suma a la nivelación.
+    # La sesión recuerda la nivelación para poder reaplicar en vivo.
+    if _sesion_vigente(token):
+        E._sesion_reproduccion["nivel_db"] = nivel_db
+    db_total = _db_total_pad(indice, nivel_db)
 
     # El audio local sale siempre que esté habilitado, haya o no
     # conexión a OBS: es independiente del trigger de OBS de abajo.
@@ -401,8 +637,7 @@ def _cargar_y_disparar(indice, accion, token):
     if suena_local:
         threading.Thread(
             target=_reproducir_local,
-            args=(datos["archivo"], token,
-                  mod_nivelacion.lineal_desde_db(nivel_db)),
+            args=(datos["archivo"], token, _lineal_pad(indice, nivel_db)),
             daemon=True
         ).start()
 
@@ -487,7 +722,7 @@ def _cargar_y_disparar(indice, accion, token):
                 )
             if not _sesion_vigente(token):
                 return
-            _asegurar_filtro_nivel(nivel_db)
+            _asegurar_filtro_nivel(db_total)
             if not _sesion_vigente(token):
                 return
             E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
@@ -642,7 +877,7 @@ def _fundido_y_detener_cuerpo(indice, token, duracion, pasos, cadena):
         db = vol_inicial + (E.UMBRAL_SILENCIO - vol_inicial) * fraccion
         try:
             if db <= E.UMBRAL_SILENCIO:
-                E.cliente_obs.set_input_volume(C.NOMBRE_FUENTE_EFECTOS, vol_mul=0)
+                E.cliente_obs.set_input_volume(C.NOMBRE_FUENTE_EFECTOS, vol_db=-100.0)
             else:
                 E.cliente_obs.set_input_volume(C.NOMBRE_FUENTE_EFECTOS, vol_db=db)
         except Exception as e:

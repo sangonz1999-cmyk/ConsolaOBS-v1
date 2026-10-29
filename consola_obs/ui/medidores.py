@@ -1,8 +1,10 @@
 import math
 import time
+import tkinter as tk
 
 from consola_obs import estado as E
 from consola_obs import constantes as C
+from consola_obs.audio import motor_local as mod_motor_local
 from consola_obs.ui import dibujo as mod_ui_dibujo
 
 
@@ -330,6 +332,368 @@ def _actualizar_barra_obs(canvas, dib, db_visual, db_pico, atenuado=False, satur
     canvas.itemconfig(dib["id_clip"], state="normal" if saturado else "hidden")
 
 
+# ---------------------------------------------------------------------
+# Control de volumen horizontal (clic derecho sobre un pad)
+# ---------------------------------------------------------------------
+
+class _ControlVolumenHorizontal:
+    """Barra de volumen horizontal estilo OBS: la hermana acostada de
+    _FaderOBS (pista negra, relleno azul, perilla circular blanca),
+    pero sin marcas ni lineas blancas, y que trabaja en porcentaje.
+    Muestra el porcentaje al pasar el mouse sobre la perilla."""
+    ALTO = 26
+    PERILLA = 16
+    COLOR_PISTA = "#0a0a0a"
+    COLOR_LLENO = "#4365cb"
+
+    def __init__(self, parent, ancho, bg, al_cambiar, pct_inicial=100.0, max_pct=100):
+        self.ancho = max(80, int(ancho))
+        self.alto = self.ALTO
+        self.al_cambiar = al_cambiar
+        self.max_pct = max_pct
+        self._pct = max(0.0, min(float(max_pct), float(pct_inicial)))
+        self._margen = self.PERILLA // 2 + 2
+        self.canvas = tk.Canvas(parent, width=self.ancho, height=self.alto,
+                                bg=bg, highlightthickness=0, cursor="hand2")
+        cy = self.alto / 2
+        self._cy = cy
+        m = self._margen
+        self.canvas.create_line(m, cy, self.ancho - m, cy, width=4,
+                                fill=self.COLOR_PISTA, capstyle="round")
+        self.id_fill = self.canvas.create_line(
+            m, cy, m, cy, width=4, fill=self.COLOR_LLENO, capstyle="round")
+        foto = mod_ui_dibujo._imagen_pildora_blanca(self.PERILLA, self.PERILLA)
+        r = self.PERILLA / 2
+        if foto is not None:
+            self.canvas.imagen_perilla = foto
+            self.id_handle = self.canvas.create_image(m, cy, image=foto)
+            self._handle_es_foto = True
+        else:
+            self.id_handle = self.canvas.create_oval(
+                m - r, cy - r, m + r, cy + r, fill="#f2f5fa", outline="#9aa4b2")
+            self._handle_es_foto = False
+        self._tooltip = None
+        self._tooltip_label = None
+        self._vigilante = None
+        self.arrastrando = False
+        self.canvas.bind("<ButtonPress-1>", self._al_presionar)
+        self.canvas.bind("<B1-Motion>", self._al_arrastrar)
+        self.canvas.bind("<ButtonRelease-1>", self._al_soltar_interno)
+        self.canvas.bind("<Motion>", self._al_hover)
+        self.canvas.bind("<Leave>", self._al_leave)
+        self.canvas.bind("<Enter>", self._al_enter)
+        # El cartelito del porcentaje es una ventanita aparte: si el
+        # control desaparece (cambio de pestaña, se cierra Ajustes) tiene
+        # que morir con él, si no queda "volando" sobre la ventana.
+        self.canvas.bind("<Destroy>", lambda e: self._ocultar_tooltip(), add="+")
+        self.canvas.bind("<Unmap>", lambda e: self._ocultar_tooltip(), add="+")
+        self._hover = False
+        self._repintar()
+
+    def _recorrido(self):
+        return max(1, self.ancho - 2 * self._margen)
+
+    def _x_de_pct(self, pct):
+        pct = max(0.0, min(self.max_pct, pct))
+        return self._margen + (pct / self.max_pct) * self._recorrido()
+
+    def _pct_de_x(self, x):
+        t = (max(self._margen, min(self.ancho - self._margen, x)) - self._margen) / self._recorrido()
+        return max(0.0, min(self.max_pct, t * self.max_pct))
+
+    def set(self, pct):
+        try:
+            self._pct = max(0.0, min(self.max_pct, float(pct)))
+        except Exception:
+            self._pct = 100.0 if self.max_pct >= 100 else self.max_pct
+        self._repintar()
+
+    def get(self):
+        return self._pct
+
+    def pack(self, *args, **kwargs):
+        return self.canvas.pack(*args, **kwargs)
+
+    def bind(self, sequence=None, func=None, add="+"):
+        # add="+" por defecto: quien enganche un evento desde afuera (por
+        # ejemplo <Leave> en Ajustes) no debe pisar los internos.
+        return self.canvas.bind(sequence, func, add)
+
+    def _repintar(self):
+        x = self._x_de_pct(self._pct)
+        m = self._margen
+        cy = self._cy
+        # Thicker bar and bigger handle on hover
+        ancho_linea = 6 if self._hover else 4
+        self.canvas.itemconfig(self.id_fill, width=ancho_linea)
+        # Update the track line width too
+        # (the track is the first line created, id_fill is the second)
+        self.canvas.coords(self.id_fill, m, cy, x, cy)
+        if self._handle_es_foto:
+            self.canvas.coords(self.id_handle, x, cy)
+        else:
+            r = (self.PERILLA / 2) + (2 if self._hover else 0)
+            self.canvas.coords(self.id_handle, x - r, cy - r, x + r, cy + r)
+
+    def _avisar(self):
+        try:
+            self.al_cambiar(self._pct)
+        except Exception as e:
+            print(f"Error en el control de volumen: {e}")
+
+    def _al_presionar(self, event):
+        self.arrastrando = True
+        self._al_arrastrar(event)
+
+    def _al_soltar_interno(self, event):
+        self.arrastrando = False
+        # Al soltar, el cartelito sólo sigue si el mouse quedó sobre la perilla.
+        if abs(event.x - self._x_de_pct(self._pct)) >= self.PERILLA + 4:
+            self._ocultar_tooltip()
+
+    def _al_arrastrar(self, event):
+        self.set(self._pct_de_x(event.x))
+        self._avisar()
+        # Durante el arrastre el cartelito acompaña a la perilla.
+        self._mostrar_tooltip(event.x_root, event.y_root)
+
+    def _al_hover(self, event):
+        if self.arrastrando:
+            return
+        x_ball = self._x_de_pct(self._pct)
+        if abs(event.x - x_ball) < self.PERILLA + 4:
+            self.canvas.configure(cursor="sb_h_double_arrow")
+            self._mostrar_tooltip(event.x_root, event.y_root)
+        else:
+            self.canvas.configure(cursor="hand2")
+            self._ocultar_tooltip()
+
+    def _al_leave(self, event):
+        self._hover = False
+        if not self.arrastrando:
+            self._ocultar_tooltip()
+        self.canvas.configure(cursor="hand2")
+        self._repintar()
+
+    def _al_enter(self, event):
+        self._hover = True
+        self._repintar()
+
+    def _mostrar_tooltip(self, x, y):
+        try:
+            if self._tooltip is None:
+                top = tk.Toplevel(self.canvas.winfo_toplevel())
+                top.overrideredirect(True)
+                top.attributes("-topmost", True)
+                lbl = tk.Label(top, bg="#222", fg="white",
+                               font=(E.FUENTE_UI, 9), padx=6, pady=2)
+                lbl.pack()
+                self._tooltip = top
+                self._tooltip_label = lbl
+                self._vigilar_tooltip()
+            self._tooltip_label.configure(text="%.0f%%" % self._pct)
+            self._tooltip.geometry("+%d+%d" % (x + 12, y - 34))
+            self._tooltip.lift()
+        except Exception:
+            self._ocultar_tooltip()
+
+    def _puntero_sobre_control(self):
+        """True si el mouse sigue encima del control y éste es visible."""
+        try:
+            if not self.canvas.winfo_exists() or not self.canvas.winfo_viewable():
+                return False
+            px, py = self.canvas.winfo_pointerxy()
+            x0, y0 = self.canvas.winfo_rootx(), self.canvas.winfo_rooty()
+            return (x0 - 2 <= px <= x0 + self.canvas.winfo_width() + 2
+                    and y0 - 2 <= py <= y0 + self.canvas.winfo_height() + 2)
+        except Exception:
+            return False
+
+    def _vigilar_tooltip(self):
+        """Red de seguridad: mientras el cartelito exista, cada tanto se
+        comprueba que el mouse siga sobre el control (o se esté
+        arrastrando). Si no, se cierra. Evita que quede flotando aunque
+        se pierda un evento <Leave>."""
+        self._vigilante = None
+        if self._tooltip is None:
+            return
+        if not self.arrastrando and not self._puntero_sobre_control():
+            self._ocultar_tooltip()
+            return
+        try:
+            self._vigilante = self.canvas.after(120, self._vigilar_tooltip)
+        except Exception:
+            self._ocultar_tooltip()
+
+    def _ocultar_tooltip(self):
+        if self._vigilante is not None:
+            try:
+                self.canvas.after_cancel(self._vigilante)
+            except Exception:
+                pass
+            self._vigilante = None
+        if self._tooltip is not None:
+            try:
+                self._tooltip.destroy()
+            except Exception:
+                pass
+            self._tooltip = None
+            self._tooltip_label = None
+
+
+def construir_control_volumen_pad(padre, al_cambiar, pct_inicial=100.0, ancho=190, bg="#151a24", max_pct=100):
+    """Barra de volumen horizontal para el popup de un pad o para los
+    ajustes. 'al_cambiar' recibe el porcentaje (0 a max_pct) mientras se
+    arrastra."""
+    return _ControlVolumenHorizontal(padre, ancho, bg, al_cambiar, pct_inicial, max_pct)
+
+
+# ---------------------------------------------------------------------
+# Medidores horizontales de solo lectura (Ajustes > Audio)
+# ---------------------------------------------------------------------
+
+# Alto extra bajo la barra para los números de la escala (-60 ... 0).
+ALTO_ETIQUETAS_MEDIDOR_H = 14
+# Zonas del medidor de izquierda (-60) a derecha (0), mismos cortes de
+# color que la barra vertical (ver _color_zona_barra).
+_ZONAS_MEDIDOR_H = (("verde", -60.0, -18.5), ("amarillo", -18.5, -9.0), ("rojo", -9.0, 0.0))
+
+
+def _hex_rgb(rgb):
+    return "#%02x%02x%02x" % tuple(int(x) for x in rgb)
+
+
+def dibujar_medidor_horizontal(canvas, ancho, alto, db_inicial=-60.0, bg="#080b10"):
+    """Barra de nivel horizontal estilo OBS (cortes duros de color sobre
+    una guía tenue, pico y escala en dB debajo). El canvas tiene que
+    medir 'alto' + ALTO_ETIQUETAS_MEDIDOR_H de alto. Devuelve el dict
+    que usa actualizar_medidor_horizontal (con el canvas adentro)."""
+    x0, x1 = 1, max(4, int(ancho) - 1)
+    y0, y1 = 1, 1 + int(alto)
+    ancho_util = x1 - x0
+
+    def x_de(db):
+        return x0 + ((max(-60.0, min(0.0, db)) + 60.0) / 60.0) * ancho_util
+
+    canvas.create_rectangle(x0, y0, x1, y1, fill=bg, outline="")
+    guia = _normalizar_paleta(_PALETA_BARRA_COLOR_TENUE, _GUIA_DEFECTO)
+    esquema = _esquema_barra_actual()
+    colores = {"rojo": esquema["alta"], "amarillo": esquema["media"], "verde": esquema["baja"]}
+    zonas = []
+    for nombre, desde, hasta in _ZONAS_MEDIDOR_H:
+        canvas.create_rectangle(x_de(desde), y0, x_de(hasta), y1,
+                                fill=_hex_rgb(guia[nombre]), outline="")
+        id_zona = canvas.create_rectangle(
+            x_de(desde), y0, x_de(desde), y1, fill=_hex_rgb(colores[nombre]),
+            outline="", state="hidden")
+        zonas.append({"id": id_zona, "desde": desde, "hasta": hasta})
+    id_pico = canvas.create_line(x0, y0, x0, y1, fill=C.MOD_PICO, width=2, state="hidden")
+    canvas.create_rectangle(x0, y0, x1, y1, fill="", outline="#0a1830", width=1)
+    for marca in MARCAS_DB_OBS:
+        x = x_de(marca)
+        canvas.create_line(x, y1, x, y1 + 3, fill=C.MOD_MARCA_DB, width=1)
+        ancla = "nw" if marca <= -60 else ("ne" if marca >= 0 else "n")
+        canvas.create_text(x, y1 + 3, text=str(marca), fill=C.MOD_MARCA_DB,
+                           font=(E.FUENTE_UI, 7), anchor=ancla)
+    dib = {"canvas": canvas, "x0": x0, "x1": x1, "y0": y0, "y1": y1,
+           "zonas": zonas, "id_pico": id_pico, "x_de": x_de,
+           "ultimo": None, "visual_db": -60.0, "pico_db": -60.0, "pico_t": 0.0}
+    actualizar_medidor_horizontal(dib, db_inicial, db_inicial)
+    return dib
+
+
+def actualizar_medidor_horizontal(dib, db, pico):
+    """Muestra la barra hasta 'db' y el pico en su marca. Sólo toca el
+    canvas si cambió algo (al píxel)."""
+    if not dib:
+        return
+    canvas = dib["canvas"]
+    x_de = dib["x_de"]
+    x_nivel = x_de(db)
+    x_pico = x_de(pico)
+    clave = (int(round(x_nivel)), int(round(x_pico)))
+    if dib.get("ultimo") == clave:
+        return
+    dib["ultimo"] = clave
+    for zona in dib["zonas"]:
+        izq = x_de(zona["desde"])
+        der = min(x_nivel, x_de(zona["hasta"]))
+        if db <= zona["desde"] or der <= izq:
+            canvas.itemconfig(zona["id"], state="hidden")
+        else:
+            canvas.coords(zona["id"], izq, dib["y0"], der, dib["y1"])
+            canvas.itemconfig(zona["id"], state="normal")
+    if pico <= -59.0:
+        canvas.itemconfig(dib["id_pico"], state="hidden")
+    else:
+        canvas.coords(dib["id_pico"], x_pico, dib["y0"], x_pico, dib["y1"])
+        canvas.itemconfig(dib["id_pico"], state="normal")
+
+
+def _db_de_mul(mul):
+    mul = max(0.0, min(1.0, mul))
+    if mul <= 0.0001:
+        return -60.0
+    return max(-60.0, min(0.0, 20 * math.log10(mul)))
+
+
+def _nivel_mul_vigente(nombre, ahora):
+    """Nivel que OBS reporta para una fuente (ya con fader, mute y
+    filtros), o 0 si los datos están viejos."""
+    if (ahora - E.ultima_actualizacion_nivel.get(nombre, 0.0)) > C.UMBRAL_DATOS_VIEJOS_SEG:
+        return 0.0
+    return E.niveles_actuales.get(nombre, 0.0)
+
+
+def _seguir_nivel_horizontal(dib, db_objetivo, ahora):
+    """Caída suave y pico sostenido 0,8 s (igual que la barra vertical)."""
+    visual = dib["visual_db"]
+    if db_objetivo >= visual:
+        visual = db_objetivo
+    else:
+        visual = max(db_objetivo, visual - E.CAIDA_POR_CUADRO)
+    pico, pico_t = dib["pico_db"], dib["pico_t"]
+    if db_objetivo >= pico:
+        pico, pico_t = db_objetivo, ahora
+    elif ahora - pico_t > 0.8:
+        pico = max(db_objetivo, pico - E.CAIDA_POR_CUADRO)
+    dib["visual_db"], dib["pico_db"], dib["pico_t"] = visual, pico, pico_t
+    return visual, pico
+
+
+def _actualizar_medidores_ajustes(ahora):
+    """Los dos medidores de Ajustes > Audio. OBS (stream): lo más fuerte
+    entre efectos y música. Parlantes (PC): sólo lo que de verdad sale
+    por los parlantes (efectos con 'Escuchar acá', música con 'Música en
+    PC' y sonando). Sólo se pintan si la pestaña está a la vista."""
+    dib_obs = getattr(E, "medidor_volumen_obs", None)
+    dib_pc = getattr(E, "medidor_volumen_pc", None)
+    if not dib_obs and not dib_pc:
+        return
+    try:
+        if not (dib_obs or dib_pc)["canvas"].winfo_ismapped():
+            return
+    except Exception:
+        return
+    # La barra de volumen de OBS (arriba del medidor) sigue a los faders.
+    refrescar_controles = getattr(E, "_refrescar_controles_audio", None)
+    if refrescar_controles is not None:
+        refrescar_controles(ahora)
+    efectos = _nivel_mul_vigente(C.NOMBRE_FUENTE_EFECTOS, ahora)
+    musica = _nivel_mul_vigente(C.NOMBRE_FUENTE_MUSICA, ahora)
+    nivel_obs = max(efectos, musica)
+    nivel_pc = 0.0
+    if getattr(E, "escuchar_en_pc", False):
+        nivel_pc = max(nivel_pc, efectos)
+    if getattr(E, "musica_en_parlantes", False) and mod_motor_local.sonando():
+        nivel_pc = max(nivel_pc, musica)
+    for dib, nivel in ((dib_obs, nivel_obs), (dib_pc, nivel_pc)):
+        if not dib:
+            continue
+        visual, pico = _seguir_nivel_horizontal(dib, _db_de_mul(nivel), ahora)
+        actualizar_medidor_horizontal(dib, visual, pico)
+
+
 def apagar_medidores():
     """Apaga todos los medidores de una sola vez. Se usa al entrar en
     modo super-optimizador; al salir, el próximo cuadro VU los repinta
@@ -377,9 +741,12 @@ def actualizar_vu_meters_ui():
     # es fija (33ms) y el costo del cuadro actual no suma delay.
     try:
         E.ventana.after(C.INTERVALO_VU_MS, actualizar_vu_meters_ui)
-    except Exception:
+    except Exception as e:
+        print("VU after error:", e)
         return
     ahora = time.monotonic()
+    if E.fuentes:
+        print("VU: fuentes =", list(E.fuentes.keys()))
     for nombre, widgets in list(E.fuentes.items()):
         atenuado = widgets.get("atenuado", False)
         datos_vigentes = (ahora - E.ultima_actualizacion_nivel.get(nombre, 0.0)) <= C.UMBRAL_DATOS_VIEJOS_SEG
@@ -555,3 +922,6 @@ def actualizar_vu_meters_ui():
             atenuado=atenuado, saturado=saturado,
             estado=widgets.setdefault("vu_led_estado", {})
         )
+
+    if not E._modo_super.get("activo"):
+        _actualizar_medidores_ajustes(ahora)

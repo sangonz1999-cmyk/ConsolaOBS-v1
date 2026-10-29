@@ -27,6 +27,10 @@ DISENOS = {
 }
 TAMANO_MINIATURA = (150, 70)
 UMBRAL_SILENCIO = -60.0
+
+# Volumen general de los parlantes de la PC en dB (Ajustes > Audio). Sólo
+# afecta al audio local; el de OBS se maneja con los faders de OBS.
+volumen_pc_db = 0.0
 CAIDA_POR_CUADRO = C.CAIDA_DB_POR_SEG * (C.INTERVALO_VU_MS / 1000.0)
 
 TIPOS_MONITOREO = [
