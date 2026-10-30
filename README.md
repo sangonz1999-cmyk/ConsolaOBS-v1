@@ -97,7 +97,8 @@ Música de fondo para el directo, controlada toda desde el programa (OBS solo ej
 - Poné `.mp3` (o wav/ogg/flac/m4a) en `assets\Musica\<categoría>\`: cada subcarpeta es una pestaña. Las duraciones se detectan solas en segundo plano.
 - Mini player al pie de fuentes: play/pausa, stop, reiniciar, anterior (con más de 3 s reinicia el tema), siguiente, modo (repetir/aleatorio/apagado), título, tiempos y barra clickeable (salta al momento exacto).
 - Botón Biblioteca (▲/▼): panel con la playlist actual a la izquierda y la biblioteca a la derecha (pestañas, buscador en toda la biblioteca, ordenar por columnas). Drag & drop o clic derecho para armarla; clic en un tema lo reproduce; doble clic en una pestaña suena la carpeta sin tocar la playlist; botón ⇄ intercambia entre playlist y carpeta retomando cada una donde iba.
-- El volumen sale del fader de la tarjeta `Música` en el mixer. La música va solo al stream, nunca por los parlantes. Recientes automático; la playlist arranca vacía en cada inicio.
+- El volumen sale del fader de la tarjeta `Música` en el mixer. La música va al stream; si querés escucharla también por los parlantes de la PC, activá **Ajustes > Audio > Música en PC** (ahí OBS manda: la consola copia play/pausa/stop/seek y corrige la deriva sola, sin tocar lo que hace OBS). Recientes automático; la playlist arranca vacía en cada inicio.
+- Con "Música en PC" activa, al conectar se sincroniza: si OBS está vacío, el local se pausa y arranca junto cuando das play; si OBS ya suena (o está en pausa), el local salta a esa posición; si OBS suena un tema que no está en la biblioteca, no se toca nada.
 - Si el OBS está en otra PC: ver "Guía de conexión" más arriba (copiar los mp3 allá + Carpeta OBS una vez).
 
 ## Orden, ocultas y escenas permitidas
@@ -723,7 +724,14 @@ Se cargan al arrancar (si existen) con try/except, y se guardan al
 cerrar (al_cerrar) junto con la posición/geometría de la ventana y la
 config del usuario. Todo cambio de fuente principal, color, orden, etc.
 se guarda de inmediato (guardar_config_interfaz / guardar_config_soundboard).
-`config_conexion.json` y `config_*.json` están ignorados por git (la contraseña de OBS nunca se versiona).
+Versionado en git (a propósito): `config_interfaz.json` y
+`config_soundboard.json`. Guardan colores de fuentes y de cada pad,
+orden, tema y geometría, así una instalación nueva (u otra PC) arranca
+ya configurada en vez de repintar pad por pad a mano. Como el programa
+los reescribe al cambiar cualquier cosa, el repo se ensucia seguido:
+normal. Lo que NUNCA se versiona: `config_conexion.json` (contraseña de
+OBS), `sync_config.json` (api_key del mini-server), `config_musica.json`
+y `ultimo_indice.json` (estado local con rutas absolutas).
 
 ### Assets (se auto-generan carpetas + LEEME.txt de ejemplo):
 - assets/iconos/   (app_icon.ico, 18 SVG originales de OBS, LEEME.txt)
@@ -832,5 +840,6 @@ para que los JSON de configuración y los assets persistan junto al
 ## Estado actual del proyecto
 - Entrada: `main.py` → paquete `consola_obs/` (ver Estructura arriba).
 - El .exe se genera con `compilar.bat` en esta misma carpeta (`ConsolaOBS.exe`, no se versiona).
-- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git); el resto de la config en `config/config_soundboard.json` y `config/config_interfaz.json`.
+- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git). `config/config_soundboard.json` y `config/config_interfaz.json` SÍ se versionan: así los colores y el layout viajan con el repo y una instalación nueva arranca configurada.
+- Versión actual: 1.2.3 (`consola_obs/update/version.py`, `version_info.txt`, `updater_version.txt` y el tag de la Release, todos iguales).
 

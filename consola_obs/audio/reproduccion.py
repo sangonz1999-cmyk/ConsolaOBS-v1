@@ -1,3 +1,4 @@
+import contextlib
 import threading
 import time
 
@@ -19,6 +20,8 @@ from consola_obs.ui import soundboard as mod_ui_soundboard
 _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
 DURACION_FUNDIDO_LOCAL_SEG = 2.0
+# Si 'deteniendo' lleva más que esto activo, se lo considera atascado.
+_TOPE_DETENIENDO_SEG = 8.0
 
 # Robo de voz ordenado (pads encimados): una sola sesión a la vez
 # toca la fuente compartida. El candado se toma con timeout y de todos
@@ -120,7 +123,7 @@ def _ganancia_fundido(progreso, db_inicial=0.0):
 
 
 def _detener_local(token=None, fundido=False, db_inicial=0.0):
-    with _lock_local:
+    with _tomar_lock_local():
         return _detener_local_cuerpo(token, fundido, db_inicial)
 
 
@@ -168,6 +171,33 @@ def _detener_local_cuerpo(token=None, fundido=False, db_inicial=0.0):
 # imposibles de frenar. Reentrante porque _reproducir_local lo toma y
 # adentro llama a _detener_local, que también lo toma.
 _lock_local = threading.RLock()
+
+
+@contextlib.contextmanager
+def _tomar_lock_local(timeout=3.0):
+    """Toma _lock_local pero con tope de espera. Si otro hilo lo tiene
+ atascado (p. ej. un dispositivo de audio que no cierra), se sigue igual
+ tras el timeout en vez de colgar para siempre a todos los pads
+ siguientes (mismo criterio que _lock_envio_efecto)."""
+    tomado = False
+    try:
+        tomado = _lock_local.acquire(timeout=timeout)
+    except Exception:
+        tomado = False
+    if not tomado:
+        try:
+            mod_red.log_conexion(
+                "AUDIO", "el candado de audio local seguía ocupado: se continúa sin él")
+        except Exception:
+            pass
+    try:
+        yield
+    finally:
+        if tomado:
+            try:
+                _lock_local.release()
+            except Exception:
+                pass
 
 
 def _soltar_dispositivo_local(dispositivo):
@@ -220,7 +250,7 @@ def _reproducir_local_miniaudio(ruta, token, ganancia_lineal=1.0):
     # el nuevo pasan como una sola operación. Sin esto, dos pads
     # rapidísimos se entrelazaban y quedaban sonidos huérfanos
     # superpuestos (el bug de "3 sonidos a la vez").
-    with _lock_local:
+    with _tomar_lock_local():
         _detener_local()
         try:
             flujo = miniaudio.stream_file(ruta)
@@ -354,7 +384,7 @@ def _reproducir_local_mci(ruta, token, ganancia_lineal=1.0):
 
     disp = _Disp()
     ganancia_viva = {"v": float(ganancia_lineal)}
-    with _lock_local:
+    with _tomar_lock_local():
         _detener_local()
         if not rep.abrir(ruta):
             mod_red.log_conexion("AUDIO", f"MCI no pudo abrir {ruta}: {rep.error}")
@@ -449,6 +479,32 @@ def cambiar_nivelar_efectos(valor):
     """Se llama desde el combobox 'Nivelar efectos' del menú de ajustes."""
     E.nivelar_efectos = (valor == "Sí")
     mod_configuracion.guardar_config_interfaz({"nivelar_efectos": E.nivelar_efectos})
+
+
+def _en_ui(funcion):
+    """Ejecuta 'funcion' en el hilo de Tk. Los messagebox NO se pueden
+ abrir desde un hilo de trabajo: se cuelgan y dejan la consola
+ trabada."""
+    try:
+        E.ventana.after(0, funcion)
+    except Exception:
+        pass
+
+
+def _falla_envio_obs(indice, token, suena_local, paso, error):
+    """Falló una llamada a OBS al disparar un efecto: se loguea, se
+ vacía la fuente (para que no quede un archivo/estado a medias que
+ trabe a los pads siguientes) y, si no hay audio local que maneje la
+ luz, se apaga el pad. Nunca abre diálogos desde el hilo."""
+    print(f"No se pudo reproducir el efecto en OBS ({paso}): {error}")
+    try:
+        mod_red.log_conexion("AUDIO", f"fallo en OBS ({paso}): {error}")
+    except Exception:
+        pass
+    if _sesion_vigente(token):
+        _vaciar_fuente_efectos()
+        if not suena_local:
+            _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
 
 
 def _asegurar_filtro_nivel(db):
@@ -645,8 +701,9 @@ def _cargar_y_disparar(indice, accion, token):
         # Sin OBS la sesión queda activa y la luz la maneja el hilo
         # local (se apaga al terminar o con el fundido del 2do clic).
         if not suena_local:
-            messagebox.showwarning("Sin conexión", "Conectate a OBS para poder reproducir los efectos.")
-            E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            _en_ui(lambda: messagebox.showwarning(
+                "Sin conexión", "Conectate a OBS para poder reproducir los efectos."))
+            _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
         return
 
     try:
@@ -666,6 +723,7 @@ def _cargar_y_disparar(indice, accion, token):
         # candado está ocupado (otra sesión mandando), se sigue igual
         # tras el timeout: cada escritura re-chequea el token, así que
         # lo peor que pasa son llamadas de más, nunca un pisotón.
+        pudo = False
         try:
             pudo = _lock_envio_efecto.acquire(timeout=2.5)
         except Exception:
@@ -710,22 +768,30 @@ def _cargar_y_disparar(indice, accion, token):
             if fijar_archivo:
                 if not _sesion_vigente(token):
                     return
-                E.cliente_obs.set_input_settings(
-                    C.NOMBRE_FUENTE_EFECTOS,
-                    {
-                        "local_file": ruta_obs,
-                        "is_local_file": True,
-                        "restart_on_activate": False,
-                        "close_when_inactive": False,
-                    },
-                    True
-                )
+                try:
+                    E.cliente_obs.set_input_settings(
+                        C.NOMBRE_FUENTE_EFECTOS,
+                        {
+                            "local_file": ruta_obs,
+                            "is_local_file": True,
+                            "restart_on_activate": False,
+                            "close_when_inactive": False,
+                        },
+                        True
+                    )
+                except Exception as e:
+                    _falla_envio_obs(indice, token, suena_local, "set_input_settings", e)
+                    return
             if not _sesion_vigente(token):
                 return
             _asegurar_filtro_nivel(db_total)
             if not _sesion_vigente(token):
                 return
-            E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
+            try:
+                E.cliente_obs.trigger_media_input_action(C.NOMBRE_FUENTE_EFECTOS, accion)
+            except Exception as e:
+                _falla_envio_obs(indice, token, suena_local, "trigger_media_input_action", e)
+                return
         finally:
             try:
                 if pudo:
@@ -741,8 +807,9 @@ def _cargar_y_disparar(indice, accion, token):
         except Exception:
             pass
     except Exception as e:
-        messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}")
-        E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+        print(f"No se pudo reproducir el efecto: {e}")
+        _en_ui(lambda: messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}"))
+        _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
 
 
 _cache_duracion = {}
@@ -795,6 +862,7 @@ def _iniciar_reproduccion(indice):
     token = E._sesion_reproduccion["token"]
     E._sesion_reproduccion["inicio"] = time.time()
     E._sesion_reproduccion["deteniendo"] = False
+    E._sesion_reproduccion.pop("deteniendo_desde", None)
     E._sesion_reproduccion["duracion"] = None
     E._sesion_reproduccion["ultimo_estado_obs"] = None
     try:
@@ -1016,8 +1084,15 @@ def reproducir_sonido(indice):
             _iniciar_reproduccion(indice)
             return
         if sesion.get("deteniendo"):
+            desde = sesion.get("deteniendo_desde")
+            if desde is None or time.time() - desde < _TOPE_DETENIENDO_SEG:
+                return
+            # El fundido quedó colgado (hilo muerto o OBS sin responder):
+            # se descarta ese estado y se arranca de cero.
+            _iniciar_reproduccion(indice)
             return
         sesion["deteniendo"] = True
+        sesion["deteniendo_desde"] = time.time()
         token = sesion["token"]
         threading.Thread(
             target=_fundido_y_detener,

@@ -15,9 +15,18 @@ _build_upd_tmp/
 ConsolaOBS-*.zip
 # Clave de sync generada por el mini-server: secreto local, nunca a git
 sync.key
-# Configuracion local (config_conexion.json contiene la contrasena de OBS)
-config_*.json
-config/*.json
+# Configuracion local que NO se versiona:
+#   config_conexion.json -> contrasena de OBS
+#   sync_config.json     -> api_key del mini-server
+#   config_musica.json   -> biblioteca/colas/duraciones locales (rutas absolutas)
+# OJO: config_interfaz.json y config_soundboard.json SI se versionan a
+# proposito: guardan colores de fuentes/pads, orden, tema y layout. Asi
+# una instalacion nueva arranca ya configurada (repintar pad por pad a
+# mano tardaba muchisimo).
+config/config_conexion.json
+config/sync_config.json
+config/config_musica.json
+config/ultimo_indice.json
 .DS_Store
 Thumbs.db
 # Musica nueva: viaja en los zips del release, no en git (~1 GB)
@@ -25,6 +34,7 @@ assets/Musica/Electronica/
 assets/Musica/Tranquila/
 assets/Musica/Variado/
 assets/Musica/Musica de fondo/
+assets/Musica/Halloween/
 
 desktop.ini
 Thumbs.db

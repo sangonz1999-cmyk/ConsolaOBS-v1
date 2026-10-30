@@ -53,6 +53,7 @@ class Reproductor:
         self.alias = f"consolaobs{next(_contador)}"
         self.abierto = False
         self.error = ""
+        self.ruta = ""
 
     def abrir(self, ruta):
         ruta = str(ruta).replace('"', "")
@@ -60,6 +61,7 @@ class Reproductor:
             err, _ = _cmd(f'open "{ruta}"{tipo} alias {self.alias}')
             if err == 0:
                 self.abierto = True
+                self.ruta = ruta
                 _cmd(f"set {self.alias} time format milliseconds")
                 return True
             self.error = _texto_error(err)
@@ -87,9 +89,38 @@ class Reproductor:
         _cmd(f"resume {self.alias}")
 
     def buscar(self, ms, seguir_sonando=True):
-        _cmd(f"seek {self.alias} to {int(max(0, ms))}")
+        """Salta a 'ms'. Devuelve True si MCI aceptó el comando.
+        Con seguir_sonando usa un solo 'play from' (el viejo 'seek' +
+        'play' sobre mp3 podía arrancar desde cero sin avisar, y el
+        error se descartaba). Sin seguir_sonando deja el tema detenido
+        en esa posición."""
+        ms = int(max(0, ms))
         if seguir_sonando:
-            _cmd(f"play {self.alias}")
+            return _cmd(f"play {self.alias} from {ms}")[0] == 0
+        return _cmd(f"seek {self.alias} to {ms}")[0] == 0
+
+    def posicion(self):
+        """Posición REAL (ms) que informa MCI, o None si no la da."""
+        err, resp = _cmd(f"status {self.alias} position")
+        if err != 0:
+            return None
+        try:
+            return float(resp.strip())
+        except Exception:
+            return None
+
+    def reabrir_en(self, ms):
+        """Último recurso cuando el seek no prende: cierra el tema, lo
+        vuelve a abrir y lo larga desde 'ms'."""
+        if not self.ruta:
+            return False
+        if self.abierto:
+            _cmd(f"stop {self.alias}")
+            _cmd(f"close {self.alias}")
+            self.abierto = False
+        if not self.abrir(self.ruta):
+            return False
+        return self.reproducir(ms)
 
     def cerrar(self):
         if self.abierto:

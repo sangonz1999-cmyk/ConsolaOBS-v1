@@ -570,6 +570,14 @@ def conectar_obs():
         messagebox.showerror("Error de conexión", texto)
         return
 
+    # Música en PC: antes de marcar la conexión se avisa a musica.py para
+    # que el sondeo no vea la fuente de OBS vacía y corte el audio local
+    # mientras se decide cómo sincronizarlos.
+    try:
+        from consola_obs.audio import musica as mod_audio_musica_conexion
+        mod_audio_musica_conexion.antes_de_conectar_obs()
+    except Exception:
+        pass
     E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
@@ -583,6 +591,12 @@ def conectar_obs():
             refrescar()
     except Exception:
         pass
+    # Sincroniza el audio local de la PC con lo que tenga OBS (en un
+    # hilo; OBS manda y no se le toca nada). Ver musica.al_conectar_obs.
+    try:
+        mod_audio_musica_conexion.al_conectar_obs()
+    except Exception as e:
+        mod_red.log_conexion("SYNC", f"no se pudo sincronizar la música local: {e!r}")
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
@@ -687,14 +701,8 @@ def _reconectar_con_lo_guardado():
 
 def desconectar_obs():
 
-    try:
-        # La música no puede seguir sonando sin UI que la controle
-        # (a diferencia de los efectos, que se dejan como están al
-        # desconectar): STOP + vaciado antes de soltar el socket.
-        from consola_obs.audio import musica as mod_audio_musica
-        mod_audio_musica.detener_y_vaciar_musica()
-    except Exception:
-        pass
+    # La música sigue sonando en OBS: no se detiene al desconectar.
+    # Al reconectar, el sondeo sincroniza el estado automáticamente.
 
     E.conectado = False
     E.host_conectado = None
@@ -806,6 +814,10 @@ def _musica_ociosa():
     la pausaría y perdería la posición)."""
     try:
         from consola_obs.audio import musica as mod_audio_musica
+        # Si OBS suena un tema ajeno a la biblioteca (el programa no lo
+        # controla) no está "ociosa": no se vacía ni se frena.
+        if mod_audio_musica._sesion.get("obs_ajeno"):
+            return False
         return mod_audio_musica._sesion.get("estado") == "DETENIDA"
     except Exception:
         return True

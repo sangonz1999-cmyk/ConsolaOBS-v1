@@ -745,8 +745,6 @@ def actualizar_vu_meters_ui():
         print("VU after error:", e)
         return
     ahora = time.monotonic()
-    if E.fuentes:
-        print("VU: fuentes =", list(E.fuentes.keys()))
     for nombre, widgets in list(E.fuentes.items()):
         atenuado = widgets.get("atenuado", False)
         datos_vigentes = (ahora - E.ultima_actualizacion_nivel.get(nombre, 0.0)) <= C.UMBRAL_DATOS_VIEJOS_SEG

@@ -8,6 +8,17 @@ ModuleNotFoundError que no dice que hacer.
 Pensado tambien para doble clic (sin terminal): el error se muestra
 en una ventana y la consola no se cierra sola antes de poder leerlo.
 """
+# DPI awareness para que Windows no escale la ventana (evita pixelado).
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        import ctypes
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 import sys
 
 PYTHON_MINIMA = (3, 9)

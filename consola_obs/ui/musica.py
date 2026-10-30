@@ -41,6 +41,8 @@ def _vivos():
 def _necesita_conexion():
     if E.conectado:
         return True
+    if getattr(E, "musica_en_parlantes", False):
+        return True
     try:
         messagebox.showinfo("Sin conexión", "Conectate a OBS para usar la música.")
     except Exception:
@@ -197,12 +199,17 @@ def _alternar_panel_biblioteca():
 
 def _clic_progreso(event):
     """Clic en la barra = salto al momento exacto (seek en ms)."""
-    if not E.conectado:
+    # Sin OBS también vale si la música suena por los parlantes de la PC.
+    if not E.conectado and not getattr(E, "musica_en_parlantes", False):
         return
     try:
         snap = mod_musica.estado_actual()
+        if not snap.get("rel"):
+            return
         dur = float(snap.get("duracion_ms") or 0.0)
-        if dur <= 0 or not snap.get("rel"):
+        if dur <= 0:
+            dur = float(mod_musica.asegurar_duracion() or 0.0)
+        if dur <= 0:
             return
         ancho = _w["progreso"].winfo_width()
         if ancho <= 1:
@@ -289,7 +296,7 @@ def _refrescar_mini_player():
 # barra vertical (Toplevel sin bordes) arriba del botón. Todo el estado
 # vive en _w (claves "vol_*"), así se limpia solo al reconstruir la barra.
 VOL_ANCHO, VOL_ALTO, VOL_MARGEN = 34, 112, 16
-VOL_RADIO_PERILLA = 7
+VOL_RADIO_PERILLA = 9
 VOL_COLOR_BORDE = "#3b4760"
 VOL_COLOR_BOTON, VOL_COLOR_BOTON_HOVER = "#242d3d", "#2f3a4d"
 
@@ -328,7 +335,7 @@ def _vol_dibujar(pct):
         return
     x, y, r = VOL_ANCHO // 2, _vol_pct_a_y(pct), VOL_RADIO_PERILLA
     canvas.coords("nivel", x, y, x, VOL_ALTO - VOL_MARGEN)
-    canvas.coords("perilla", x - r, y - r, x + r, y + r)
+    canvas.coords("perilla", x, y)
 
 
 def _vol_aplicar(pct):
@@ -449,8 +456,34 @@ def _vol_crear_popup():
                        fill=COLOR_PISTA, capstyle="round")
     canvas.create_line(x, 0, x, 0, width=6, fill=E.color_acento(),
                        capstyle="round", tags="nivel")
-    canvas.create_oval(0, 0, 1, 1, fill="white", outline="#9aa7bf",
-                       tags="perilla")
+    # Perilla con anti-aliasing (PIL a 4x, LANCZOS), compuesta sobre
+    # el color de fondo para que no haya mezcla con transparencia.
+    try:
+        from PIL import Image, ImageDraw, ImageTk
+        S = 4
+        r = VOL_RADIO_PERILLA
+        w, h = r * 2 * S, r * 2 * S
+        # Color de fondo del canvas (hex -> rgb)
+        bg = E.color_barra_titulo()
+        bg_rgb = (40, 48, 64)
+        try:
+            c = str(bg).lstrip("#")
+            if len(c) == 3:
+                c = "".join(ch * 2 for ch in c)
+            if len(c) == 6:
+                bg_rgb = (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+        except Exception:
+            pass
+        img = Image.new("RGB", (w, h), bg_rgb)
+        d = ImageDraw.Draw(img)
+        d.ellipse([S, S, w - S - 1, h - S - 1],
+                  fill=(242, 245, 250), outline=(154, 164, 178), width=S)
+        foto = ImageTk.PhotoImage(img.resize((r * 2, r * 2), Image.LANCZOS))
+        canvas.create_image(0, 0, image=foto, tags="perilla")
+        canvas._foto_perilla = foto
+    except Exception:
+        canvas.create_oval(0, 0, 1, 1, fill="white", outline="#9aa7bf",
+                            tags="perilla")
     canvas.bind("<Button-1>", _vol_presionar)
     canvas.bind("<B1-Motion>", _vol_mover)
     canvas.bind("<ButtonRelease-1>", _vol_soltar)

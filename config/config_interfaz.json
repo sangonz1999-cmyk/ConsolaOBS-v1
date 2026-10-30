@@ -1,0 +1,28 @@
+{
+  "num_pads_soundboard": 33,
+  "tema_interfaz": "Moderna",
+  "orientacion_paneles": "horizontal",
+  "orden_paneles": [
+    "fuentes",
+    "soundboard"
+  ],
+  "kinds_con_audio": [
+    "browser_source"
+  ],
+  "kinds_sin_audio": [
+    "color_source_v3",
+    "image_source"
+  ],
+  "geometria_ventana": "1920x1007+-136+384",
+  "tamano_icono": "Chico",
+  "fuentes_principales": [],
+  "colores_fuentes": {},
+  "orden_fuentes": [],
+  "posicion_divisor_horizontal": 956,
+  "alto_tarjeta": "Normal",
+  "musica_en_parlantes": true,
+  "escuchar_en_pc": true,
+  "volumen_pc_db": 0.0,
+  "nivelar_efectos": false,
+  "volumen_musica_pc": 100.0
+}

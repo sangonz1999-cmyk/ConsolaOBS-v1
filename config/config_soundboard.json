@@ -1,0 +1,245 @@
+{
+  "31": {
+    "nombre": "jumpscare-sound-fnaf-4",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\jumpscare-sound-fnaf-4.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\jumpscare-sound-fnaf-4.jpg",
+    "color": "#ff9500",
+    "nivel_db": -16.254357521916795,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\jumpscare-sound-fnaf-4.mp3",
+    "nivel_version": 2,
+    "volumen_db": 0.0
+  },
+  "30": {
+    "nombre": "cinematic_impact",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\cinematic_impact.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\cinematic_impact.png",
+    "color": "#ff9500",
+    "nivel_db": -9.744841425644882,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\cinematic_impact.mp3",
+    "nivel_version": 2,
+    "volumen_db": 0.0
+  },
+  "29": {
+    "nombre": "fnaf4-foxy-closet-jumpscare",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\fnaf4-foxy-closet-jumpscare.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\fnaf4-foxy-closet-jumpscare.png",
+    "color": "#ff9500",
+    "nivel_db": -12.43387138529032,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\fnaf4-foxy-closet-jumpscare.mp3",
+    "nivel_version": 2
+  },
+  "28": {
+    "nombre": "halloween-impact",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\halloween-impact.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\halloween-impact.png",
+    "color": "#ff9500",
+    "nivel_db": -7.99837768324036,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\halloween-impact.mp3",
+    "nivel_version": 2
+  },
+  "26": {
+    "nombre": "redoble-de-tambores",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\redoble-de-tambores.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\redoble-de-tambores.png",
+    "color": "#d500f9",
+    "nivel_db": -9.318922310852177,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\redoble-de-tambores.mp3",
+    "nivel_version": 2
+  },
+  "25": {
+    "nombre": "careless-whisper-romantic-jazz",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\careless-whisper-romantic-jazz.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\careless-whisper-romantic-jazz.png",
+    "color": "#d500f9",
+    "nivel_db": -8.02261339553296,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\careless-whisper-romantic-jazz.mp3",
+    "nivel_version": 2
+  },
+  "24": {
+    "nombre": "unos-momentos-despues-meme",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\unos-momentos-despues-meme.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\unos-momentos-despues-meme.jpg",
+    "color": "#d500f9"
+  },
+  "23": {
+    "nombre": "faaah",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\faaah.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\faaah.png",
+    "color": "#d500f9"
+  },
+  "22": {
+    "nombre": "suprise",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\suprise.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\suprise.png",
+    "color": "#d500f9"
+  },
+  "21": {
+    "nombre": "no-hay-plata",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\no-hay-plata.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\no-hay-plata.jpg",
+    "color": "#00e5ff"
+  },
+  "20": {
+    "nombre": "hello-darkness-my-old-friend",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\hello-darkness-my-old-friend.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\hello-darkness-my-old-friend.jpg",
+    "color": "#00e5ff",
+    "nivel_db": -2.5997945651205328,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\hello-darkness-my-old-friend.mp3",
+    "nivel_version": 2
+  },
+  "19": {
+    "nombre": "trompeta-meme",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\trompeta-meme.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\trompeta-meme.jpg",
+    "color": "#00e5ff",
+    "nivel_db": -9.379466638905793,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\trompeta-meme.mp3",
+    "nivel_version": 2
+  },
+  "18": {
+    "nombre": "Grillo ",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Grillo .mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Grillo .jpg",
+    "color": "#ffd600",
+    "nivel_db": -0.715174407867103,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Grillo .mp3",
+    "nivel_version": 2
+  },
+  "17": {
+    "nombre": "Estoy cansado jefe",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Estoy cansado jefe.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Estoy cansado jefe.jpg",
+    "color": "#ffd600"
+  },
+  "16": {
+    "nombre": "error---windows-xp",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\error---windows-xp.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\error---windows-xp.jpg",
+    "color": "#ffd600"
+  },
+  "15": {
+    "nombre": "dexter-meme",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\dexter-meme.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\dexter-meme.png",
+    "color": "#ffd600"
+  },
+  "14": {
+    "nombre": "sali-de-ahi-maravilla-audiotrimmer",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\sali-de-ahi-maravilla-audiotrimmer.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\sali-de-ahi-maravilla-audiotrimmer.jpg",
+    "color": "#ffd600",
+    "nivel_db": -8.226460546821361,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\sali-de-ahi-maravilla-audiotrimmer.mp3",
+    "nivel_version": 2
+  },
+  "13": {
+    "nombre": "mucha-ropa",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\mucha-ropa.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\mucha-ropa.jpg",
+    "color": "#ffd600"
+  },
+  "12": {
+    "nombre": "sonido de la roca",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\sonido de la roca.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\sonido de la roca.jpg",
+    "color": "#ffd600",
+    "nivel_db": -19.051821738277425,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\sonido de la roca.mp3",
+    "nivel_version": 2
+  },
+  "11": {
+    "nombre": "Que mandan",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Que mandan.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Que mandan.png",
+    "color": "#ffd600"
+  },
+  "10": {
+    "nombre": "Decepcion",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Decepcion.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Decepcion.jpg",
+    "color": "#ff3b30"
+  },
+  "9": {
+    "nombre": "Ponele Voluntad",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Ponele Voluntad.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Ponele Voluntad.jpg",
+    "color": "#ff3b30"
+  },
+  "8": {
+    "nombre": "Oh my god bro Hell nah",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Oh my god bro Hell nah.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Oh my god bro Hell nah.jpg",
+    "color": "#ff3b30"
+  },
+  "7": {
+    "nombre": "No Arranca",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\No Arranca.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\No Arranca.jpg",
+    "color": "#ff3b30"
+  },
+  "6": {
+    "nombre": "gato-riendo",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\gato-riendo.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\gato-riendo.jpg",
+    "color": "#ff3b30",
+    "nivel_db": -17.793752540175163,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\gato-riendo.mp3",
+    "nivel_version": 2
+  },
+  "5": {
+    "nombre": "DAA",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\DAA.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\DAA.jpg",
+    "color": "#ff3b30"
+  },
+  "4": {
+    "nombre": "aplausos",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\aplausos.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\aplausos.jpg",
+    "color": "#00e676",
+    "nivel_db": 0.0,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\aplausos.mp3",
+    "nivel_version": 2
+  },
+  "3": {
+    "nombre": "aura-funk",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\aura-funk.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\aura-funk.png",
+    "color": "#00e676",
+    "nivel_db": -19.056608355172276,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\aura-funk.mp3",
+    "nivel_version": 2
+  },
+  "2": {
+    "nombre": "Correcto",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Correcto.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Correcto.jpg",
+    "color": "#00e676",
+    "nivel_db": -9.851592794163341,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Correcto.mp3",
+    "nivel_version": 2
+  },
+  "1": {
+    "nombre": "Boeee",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Boeee.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Boeee.png",
+    "color": "#00e676"
+  },
+  "0": {
+    "nombre": "Aww",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\Aww.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\Aww.png",
+    "color": "#00e676"
+  },
+  "32": {
+    "nombre": "harold-screamer",
+    "archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\harold-screamer.mp3",
+    "imagen": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Imagenes_pad\\harold-screamer.png",
+    "color": "#ff9500",
+    "nivel_db": -22.52061960666371,
+    "nivel_archivo": "D:\\Documentos\\ConsolaOBS-v1\\assets\\Sondidos_pad\\harold-screamer.mp3",
+    "nivel_version": 2,
+    "volumen_db": 0.0
+  }
+}
