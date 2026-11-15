@@ -98,6 +98,16 @@ taskkill /F /IM ConsolaOBS.exe 2>nul
 rmdir /s /q "%CARPETA_BUILD%" 2>nul
 del ConsolaOBS.spec 2>nul
 
+REM La version se cambia SOLO en consola_obs\update\version.py: aca se
+REM copia a version_info.txt y updater_version.txt antes de compilar.
+%PY% "%~dp0sincronizar_version.py"
+if errorlevel 1 (
+    echo.
+    echo  No se pudo sincronizar la version. Revisa version.py.
+    pause
+    exit /b 1
+)
+
 echo.
 echo Compilando ConsolaOBS.exe...
 REM OJO: no quitar el \. de --distpath: como CARPETA_DESTINO termina en

@@ -19,7 +19,9 @@ from consola_obs import constantes as C
 from consola_obs import configuracion as mod_configuracion
 from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
-from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+from consola_obs.nucleo import avisos
+from consola_obs.nucleo import hilo_ui
+from consola_obs.nucleo import servicio_obs as mod_servicio
 
 
 class _ClienteOBSSincronizado:
@@ -56,6 +58,64 @@ class _ClienteOBSSincronizado:
         except Exception as e:
             mod_red.log_conexion("PEDIDOS", f"no se pudo reabrir el socket de pedidos: {e!r}")
             return False
+
+    def lote(self, pedidos, tamano=60):
+        """Manda varios pedidos en UN viaje (RequestBatch de obs-websocket
+        5, que obsws-python no trae). pedidos: lista de (tipo, datos).
+        Devuelve una lista del mismo largo con (ok, datos_respuesta) -o
+        (False, código) si OBS rechazó ese pedido puntual-. Un pedido que
+        falla no frena a los demás. Si se corta la conexión, lanza (y
+        reabre el socket, igual que los pedidos sueltos)."""
+        resultados = []
+        for desde in range(0, len(pedidos), tamano):
+            tramo = pedidos[desde:desde + tamano]
+            resultados += self._lote_tramo(tramo)
+        return resultados
+
+    def _lote_tramo(self, tramo):
+        import json as _json
+        import random as _random
+        id_lote = f"lote-{_random.randint(1, 10**9)}"
+        mensaje = {"op": 8, "d": {
+            "requestId": id_lote,
+            "haltOnFailure": False,
+            "executionType": 0,  # en serie, en el orden dado
+            "requests": [
+                dict({"requestType": tipo, "requestId": str(k)},
+                     **({"requestData": datos} if datos else {}))
+                for k, (tipo, datos) in enumerate(tramo)
+            ],
+        }}
+        with E._lock_pedidos_obs:
+            try:
+                ws = self._cliente_real.base_client.ws
+                ws.send(_json.dumps(mensaje))
+                # El socket de pedidos sólo recibe respuestas; cualquier
+                # otra cosa (una respuesta vieja) se descarta.
+                for _ in range(20):
+                    respuesta = _json.loads(ws.recv())
+                    d = respuesta.get("d") or {}
+                    if respuesta.get("op") == 9 and d.get("requestId") == id_lote:
+                        break
+                else:
+                    raise RuntimeError("OBS no devolvió el lote pedido")
+            except Exception:
+                if E.conectado:
+                    if self._reabrir_socket_pedidos():
+                        E._resync_pendiente = True
+                    else:
+                        E._socket_pedidos_roto = True
+                raise
+        por_id = {r.get("requestId"): r for r in d.get("results") or []}
+        salida = []
+        for k in range(len(tramo)):
+            r = por_id.get(str(k)) or {}
+            estado = r.get("requestStatus") or {}
+            if estado.get("result"):
+                salida.append((True, r.get("responseData") or {}))
+            else:
+                salida.append((False, estado.get("code")))
+        return salida
 
     def __getattr__(self, nombre_attr):
         if nombre_attr.startswith("_"):
@@ -114,7 +174,7 @@ def _seguro(funcion):
 # moría, E.conectado seguía en True para siempre: la consola mostraba
 # "CONECTADO" pero nada se actualizaba ni respondía. Ahora un hilo
 # revisa cada pocos segundos que el hilo de eventos siga vivo y que
-# OBS conteste; si no, avisa con un cartel. Además re-sincroniza cada
+# OBS conteste; si no, avisa sin bloquear y reconecta solo. Además re-sincroniza cada
 # tanto mute/auricular contra OBS, por si algún evento se perdió.
 INTERVALO_VIGILANCIA_S = 4
 FALLOS_PARA_AVISAR = 2
@@ -159,10 +219,7 @@ def _bucle_vigilancia(token):
         if motivo is not None:
             if _vigilancia["token"] == token and E.conectado:
                 _vigilancia["token"] += 1
-                try:
-                    E.ventana.after(0, lambda m=motivo: _avisar_conexion_perdida(m))
-                except Exception:
-                    pass
+                hilo_ui.en_ui(_avisar_conexion_perdida, motivo)
             return
         ahora = time.monotonic()
         if getattr(E, "_resync_pendiente", False) or ahora - ultimo_resync >= INTERVALO_RESYNC_S:
@@ -188,7 +245,9 @@ def _detener_vigilancia():
 
 
 def _avisar_conexion_perdida(motivo):
-    """Hilo de la interfaz: limpia la conexión muerta y muestra el cartel."""
+    """Hilo de la interfaz: limpia la conexión muerta, avisa SIN bloquear
+    y empieza a reconectar solo (antes preguntaba con un cartel modal y,
+    si nadie estaba mirando, la consola quedaba desconectada)."""
     if not E.conectado:
         return
     mod_red.log_conexion("PERDIDA", f"conexion perdida: {motivo}")
@@ -196,17 +255,132 @@ def _avisar_conexion_perdida(motivo):
         desconectar_obs()
     except Exception as e:
         mod_red.log_conexion("PERDIDA", f"error al limpiar: {e!r}")
+    _iniciar_reconexion(
+        "Es probable que se haya perdido la conexión con OBS "
+        f"({motivo}).\nReconectando automáticamente…")
+
+
+# ------------------------------------------------------------------
+# Reconexión automática
+# ------------------------------------------------------------------
+_conexion = {
+    "conectando": False,     # hay un intento de conexión en curso
+    "reconectando": False,   # modo reconexión automática activo
+    "intento": 0,
+    "id_reintento": None,    # temporizador del próximo intento
+    "token": 0,              # invalida resultados de intentos cancelados
+}
+
+
+def estado_conexion():
+    """'conectado', 'conectando', 'reconectando' o 'desconectado'."""
+    if E.conectado:
+        return "conectado"
+    if _conexion["conectando"] and not _conexion["reconectando"]:
+        return "conectando"
+    if _conexion["reconectando"]:
+        return "reconectando"
+    return "desconectado"
+
+
+def _datos_guardados():
+    datos = mod_configuracion.cargar_config_conexion() or {}
+    host = str(datos.get("host") or "localhost").strip() or "localhost"
     try:
-        quiere = messagebox.askyesno(
-            "Conexión con OBS",
-            "Es probable que se haya perdido la conexión con OBS.\n"
-            f"({motivo})\n\n"
-            "Revisá que OBS siga abierto y que la red funcione.\n"
-            "¿Querés reconectar ahora?")
+        puerto = int(str(datos.get("puerto") or "4455").strip() or "4455")
+    except ValueError:
+        puerto = 4455
+    return host, puerto, datos.get("password") or ""
+
+
+def _iniciar_reconexion(mensaje):
+    _conexion["reconectando"] = True
+    _conexion["intento"] = 0
+    _avisar("aviso", mensaje, fijo=True)
+    _programar_reintento()
+
+
+def _programar_reintento():
+    from consola_obs.nucleo import reconexion as mod_reconexion
+    if not _conexion["reconectando"]:
+        return
+    _conexion["intento"] += 1
+    espera = mod_reconexion.espera_para_intento(_conexion["intento"])
+    mod_red.log_conexion("RECONEXION", f"intento {_conexion['intento']} en {espera} s")
+    _cancelar_temporizador_reintento()
+    _conexion["id_reintento"] = E.ventana.after(int(espera * 1000), _reintentar_ahora)
+    actualizar_estado_conexion()
+
+
+def _cancelar_temporizador_reintento():
+    try:
+        if _conexion["id_reintento"] is not None:
+            E.ventana.after_cancel(_conexion["id_reintento"])
     except Exception:
-        quiere = False
-    if quiere:
-        _reconectar_con_lo_guardado()
+        pass
+    _conexion["id_reintento"] = None
+
+
+def _reintentar_ahora():
+    _conexion["id_reintento"] = None
+    if not _conexion["reconectando"] or E.conectado or _conexion["conectando"]:
+        return
+    if not mod_configuracion.hay_config_conexion_guardada():
+        cancelar_reconexion()
+        return
+    host, puerto, password = _datos_guardados()
+    _iniciar_conexion(host, puerto, password, silencioso=True)
+
+
+def cancelar_reconexion():
+    """Corta la reconexión automática (y cualquier intento en curso)."""
+    _conexion["reconectando"] = False
+    _conexion["token"] += 1
+    _conexion["conectando"] = False
+    _cancelar_temporizador_reintento()
+    _cerrar_aviso()
+    actualizar_estado_conexion()
+
+
+def conectar_al_iniciar():
+    """Al abrir el programa: si hay una conexión guardada, se conecta
+    sola. Si OBS todavía no está abierto, queda esperándolo (reconexión
+    automática) en vez de mostrar un error."""
+    if E.conectado or _conexion["conectando"]:
+        return
+    if not mod_configuracion.hay_config_conexion_guardada():
+        return
+    host, puerto, password = _datos_guardados()
+    _rellenar_campos(host, puerto, password)
+
+    def _fallo_inicial(_paso, _error):
+        _iniciar_reconexion(
+            "No se pudo conectar a OBS al abrir el programa.\n"
+            "Se va a reintentar solo hasta que OBS esté disponible.")
+
+    _iniciar_conexion(host, puerto, password, silencioso=True, al_fallar=_fallo_inicial)
+
+
+def _avisar(tipo, texto, fijo=False):
+    avisos.emitir("aviso_conexion", tipo, texto, fijo)
+
+
+def _cerrar_aviso():
+    avisos.emitir("aviso_conexion_cerrar")
+
+
+def _rellenar_campos(host, puerto, password):
+    """Muestra en Ajustes con qué datos se está conectando."""
+    try:
+        E.entrada_host.delete(0, "end")
+        E.entrada_host.insert(0, host)
+        E.entrada_puerto.delete(0, "end")
+        E.entrada_puerto.insert(0, str(puerto))
+        E.entrada_password.delete(0, "end")
+        if password:
+            E.entrada_password.insert(0, password)
+    except Exception:
+        pass
 
 
 def _version_obs_soportada(version_obs):
@@ -564,39 +738,85 @@ def _aplicar_membresia_escena(nombres_en_escena, orden_escena=None):
         E.orden_escena_actual = list(orden_escena or [])
     except Exception:
         pass
-    for nombre in list(E.fuentes.keys()):
-        try:
-            mod_ui_tarjeta._actualizar_estado_gris(nombre)
-        except Exception:
-            pass
+    avisos.emitir("escena_cambiada")
+
+
+def _host_es_esta_pc(host, ips_resueltas=()):
+    """True si el Host de conexión apunta a esta misma PC."""
     try:
-        mod_ui_tarjeta._refrescar_titulo_escena()
+        if str(host).strip().lower() in ("localhost", "127.0.0.1", "::1"):
+            return True
+        propias = set(mod_red.obtener_todas_ips_locales() or [])
+        resueltas = set(ips_resueltas or [])
+        if any(ip.startswith("127.") or ip == "::1" for ip in resueltas):
+            return True
+        return bool(propias & (resueltas | {str(host).strip()}))
     except Exception:
-        pass
-    try:
-        mod_ui_tarjeta._reubicar_si_hay_criterio()
-    except Exception:
-        pass
+        return False
 
 
 def conectar_obs():
-
+    """Botón CONECTAR / DESCONECTAR / CANCELAR de Ajustes."""
     if E.conectado:
+        cancelar_reconexion()
         desconectar_obs()
+        return
+    if _conexion["conectando"] or _conexion["reconectando"]:
+        cancelar_reconexion()
         return
 
     host = E.entrada_host.get().strip() or "localhost"
     texto_puerto = E.entrada_puerto.get().strip() or "4455"
     password = E.entrada_password.get()
-    paso = "INICIO"
-
     try:
         puerto = int(texto_puerto)
     except ValueError:
         mod_red.log_conexion("INICIO", f"puerto invalido {texto_puerto!r}")
         messagebox.showerror("Puerto inválido", "El puerto debe ser un número.")
         return
+    _iniciar_conexion(host, puerto, password, silencioso=False)
 
+
+class _FalloConexion(Exception):
+    def __init__(self, paso, error):
+        super().__init__(f"{paso}: {error}")
+        self.paso = paso
+        self.error = error
+
+
+def _iniciar_conexion(host, puerto, password, silencioso=False, al_fallar=None):
+    """Arranca un intento de conexión en un hilo aparte. Antes todo esto
+    (DNS, sockets, handshake, listas de OBS) corría en el hilo de la
+    ventana y el programa quedaba congelado varios segundos.
+
+    silencioso=True: sin carteles de error (reconexión automática y
+    conexión al abrir el programa); el error queda en conexion.log."""
+    _conexion["conectando"] = True
+    _conexion["token"] += 1
+    token = _conexion["token"]
+    actualizar_estado_conexion()
+
+    def _en_hilo():
+        try:
+            resultado = _conectar_red(host, puerto, password)
+        except _FalloConexion as f:
+            hilo_ui.en_ui(_al_fallar_conexion, token, f.paso, f.error, host, puerto,
+                          silencioso, al_fallar)
+        except Exception as e:
+            hilo_ui.en_ui(_al_fallar_conexion, token, "INICIO", e, host, puerto,
+                          silencioso, al_fallar)
+        else:
+            hilo_ui.en_ui(_al_conectar, token, resultado, host, puerto, password)
+
+    threading.Thread(target=_en_hilo, name="conexion-obs", daemon=True).start()
+
+
+def _conectar_red(host, puerto, password):
+    """Hilo de conexión: hace TODO lo de red y devuelve un diccionario con
+    los clientes ya conectados. No toca la ventana ni el estado global.
+    Si algo falla lanza _FalloConexion(paso, error)."""
+    resultado = {}
+    paso = "INICIO"
     try:
         _ip_propia = mod_red.obtener_ip_local() or "(no detectada)"
     except Exception:
@@ -612,24 +832,24 @@ def conectar_obs():
         mod_red.log_conexion("RESOLVER_HOST", f"OK {host} -> {_ips}")
     except Exception as e:
         mod_red.log_conexion("RESOLVER_HOST", f"FALLO no se pudo resolver {host!r}: {e!r}")
-        E.conectado = False
-        messagebox.showerror(
-            "Error de conexión",
-            f"No se pudo resolver el Host {host!r}.\nRevisá que sea una IP (ej. 192.168.1.76) o 'localhost'.\n\nDetalle: {e}\n(Más detalle en la terminal y en config/conexion.log)",
-        )
-        return
+        raise _FalloConexion(paso, e)
 
-    # Firewall automático (mejor esfuerzo, sin frenar la conexión):
-    # en la PC del OBS el puerto tiene que estar permitido inbound.
-    # Si ya existe la regla no hace nada; si falta y no hay admin,
-    # solo queda registrado para avisar en el error.
+    # Firewall automático: sólo para un OBS en ESTA PC (la regla abre el
+    # puerto de acá para que se conecten otras consolas). Con un OBS
+    # remoto no ayuda, y 'netsh' puede tardar hasta 25 s: va aparte.
     paso = "FIREWALL"
-    try:
-        ok_fw, admin_fw, msg_fw = mod_red.asegurar_regla_firewall(puerto)
-        mod_red.log_conexion("FIREWALL", f"ok={ok_fw} necesita_admin={admin_fw} {msg_fw}")
-    except Exception as e:
-        mod_red.log_conexion("FIREWALL", f"no se pudo chequear: {e!r}")
+    if _host_es_esta_pc(host, _ips):
+        def _firewall_en_hilo():
+            try:
+                ok_fw, admin_fw, msg_fw = mod_red.asegurar_regla_firewall(puerto)
+                mod_red.log_conexion("FIREWALL", f"ok={ok_fw} necesita_admin={admin_fw} {msg_fw}")
+            except Exception as e:
+                mod_red.log_conexion("FIREWALL", f"no se pudo chequear: {e!r}")
+        threading.Thread(target=_firewall_en_hilo, daemon=True).start()
+    else:
+        mod_red.log_conexion("FIREWALL", "OBS remoto: no se toca el firewall de esta PC")
 
+    nuevo_cliente = None
     try:
         paso = "REQCLIENT_CONNECT"
         mod_red.log_conexion(paso, f"conectando ReqClient a {host}:{puerto} timeout=5 ...")
@@ -649,11 +869,11 @@ def conectar_obs():
         # Plataforma del OBS (windows/linux/macos): sirve para validar
         # la Carpeta OBS (una ruta D:\... en un OBS Linux nunca anda).
         try:
-            E.plataforma_obs = str(getattr(_ver, "platform", "") or "").strip().lower()
+            resultado["plataforma"] = str(getattr(_ver, "platform", "") or "").strip().lower()
         except Exception:
-            E.plataforma_obs = ""
-        if getattr(E, "plataforma_obs", ""):
-            mod_red.log_conexion(paso, f"plataforma OBS: {E.plataforma_obs}")
+            resultado["plataforma"] = ""
+        if resultado["plataforma"]:
+            mod_red.log_conexion(paso, f"plataforma OBS: {resultado['plataforma']}")
         # Puerta de versión: la consola necesita OBS 28+ (WebSocket 5.x
         # integrado). Con un OBS viejo la lista de fuentes llega vacía o
         # malformada y nada funciona: se avisa claro (no se bloquea, por
@@ -663,12 +883,7 @@ def conectar_obs():
                 mod_red.log_conexion(paso, f"OBS viejo o ilegible ({_vobs}): aviso")
             except Exception:
                 pass
-            messagebox.showwarning(
-                "OBS desactualizado",
-                f"Ese OBS es la versión {_vobs} y la consola necesita OBS 28 o más "
-                "nuevo (con WebSocket 5.x).\n\nActualizá OBS en la otra PC "
-                "(Ayuda > Buscar actualizaciones) y volvé a conectar: con "
-                "versiones viejas la lista de fuentes llega vacía y nada funciona.")
+            resultado["version_vieja"] = _vobs
         # Lista de tipos de fuente que trae ese OBS: sirve para elegir
         # kinds creables sin adivinar (y para diagnosticar 605).
         try:
@@ -728,25 +943,80 @@ def conectar_obs():
         except Exception:
             _detalle_tb = ""
         mod_red.log_conexion(paso, f"FALLO en {paso}: {type(e).__name__}: {e}")
-        if _detalle_tb:
+        # En la reconexión automática el mismo error se repite en cada
+        # intento: el detalle completo sólo se guarda la primera vez.
+        if _detalle_tb and _conexion["intento"] <= 1:
             mod_red.log_conexion(paso, f"traceback: {_detalle_tb}")
-        E.conectado = False
         try:
-            texto = mod_red.mensaje_error_conexion(e, host, puerto)
+            if nuevo_cliente is not None:
+                nuevo_cliente.disconnect()
         except Exception:
-            texto = f"No se pudo conectar a OBS.\n\n{e}"
-        texto += f"\n\n(Falló en paso {paso}. Detalle en la terminal y en config/conexion.log)"
-        messagebox.showerror("Error de conexión", texto)
+            pass
+        raise _FalloConexion(paso, e)
+
+    resultado["cliente"] = nuevo_cliente
+    resultado["eventos"] = nuevo_cliente_eventos
+    return resultado
+
+
+def _al_fallar_conexion(token, paso, error, host, puerto, silencioso, al_fallar):
+    """Hilo de la ventana: un intento de conexión no salió."""
+    if token != _conexion["token"]:
+        return  # intento cancelado
+    _conexion["conectando"] = False
+    E.conectado = False
+    actualizar_estado_conexion()
+    if al_fallar is not None:
+        al_fallar(paso, error)
         return
+    if _conexion["reconectando"]:
+        _programar_reintento()
+        return
+    if silencioso:
+        return
+    if paso == "RESOLVER_HOST":
+        texto = (f"No se pudo resolver el Host {host!r}.\nRevisá que sea una IP "
+                 f"(ej. 192.168.1.76) o 'localhost'.\n\nDetalle: {error}\n"
+                 "(Más detalle en la terminal y en config/conexion.log)")
+    else:
+        try:
+            texto = mod_red.mensaje_error_conexion(error, host, puerto)
+        except Exception:
+            texto = f"No se pudo conectar a OBS.\n\n{error}"
+        texto += f"\n\n(Falló en paso {paso}. Detalle en la terminal y en config/conexion.log)"
+    messagebox.showerror("Error de conexión", texto)
+
+
+def _al_conectar(token, resultado, host, puerto, password):
+    """Hilo de la ventana: la conexión salió bien, se activa."""
+    if token != _conexion["token"]:
+        # Se canceló mientras conectaba: se sueltan los clientes nuevos.
+        for cliente in (resultado.get("cliente"), resultado.get("eventos")):
+            try:
+                cliente.disconnect()
+            except Exception:
+                pass
+        return
+    _conexion["conectando"] = False
+    estaba_reconectando = _conexion["reconectando"]
+    _conexion["reconectando"] = False
+    _conexion["intento"] = 0
+    _cancelar_temporizador_reintento()
+    nuevo_cliente = resultado["cliente"]
+    nuevo_cliente_eventos = resultado["eventos"]
+    E.plataforma_obs = resultado.get("plataforma", "")
 
     # Música en PC: antes de marcar la conexión se avisa a musica.py para
     # que el sondeo no vea la fuente de OBS vacía y corte el audio local
     # mientras se decide cómo sincronizarlos.
+    mod_audio_musica_conexion = None
     try:
         from consola_obs.audio import musica as mod_audio_musica_conexion
         mod_audio_musica_conexion.antes_de_conectar_obs()
     except Exception:
         pass
+    # Pedidos que quedaron encolados de la conexión anterior: no se mandan.
+    mod_servicio.servicio.vaciar()
     E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente, host, puerto, password)
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
@@ -763,7 +1033,8 @@ def conectar_obs():
     # Sincroniza el audio local de la PC con lo que tenga OBS (en un
     # hilo; OBS manda y no se le toca nada). Ver musica.al_conectar_obs.
     try:
-        mod_audio_musica_conexion.al_conectar_obs()
+        if mod_audio_musica_conexion is not None:
+            mod_audio_musica_conexion.al_conectar_obs()
     except Exception as e:
         mod_red.log_conexion("SYNC", f"no se pudo sincronizar la música local: {e!r}")
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
@@ -772,7 +1043,24 @@ def conectar_obs():
     mod_configuracion.guardar_config_conexion(host, puerto, password)
     _guardar_base_obs_del_campo()
     actualizar_estado_conexion()
-    mod_ui_tarjeta.actualizar()
+    avisos.emitir("conectado")
+    if estaba_reconectando:
+        _avisar("ok", "Conexión con OBS recuperada.")
+    else:
+        _cerrar_aviso()
+
+    # Puerta de versión: la consola necesita OBS 28+ (WebSocket 5.x
+    # integrado). Con un OBS viejo la lista de fuentes llega vacía o
+    # malformada y nada funciona: se avisa claro (no se bloquea, por si
+    # el número viene en un formato raro).
+    version_vieja = resultado.get("version_vieja")
+    if version_vieja:
+        messagebox.showwarning(
+            "OBS desactualizado",
+            f"Ese OBS es la versión {version_vieja} y la consola necesita OBS 28 o más "
+            "nuevo (con WebSocket 5.x).\n\nActualizá OBS en la otra PC "
+            "(Ayuda > Buscar actualizaciones) y volvé a conectar: con "
+            "versiones viejas la lista de fuentes llega vacía y nada funciona.")
 
 
 def _guardar_base_obs_del_campo():
@@ -829,44 +1117,28 @@ def _desconectar_solo_red():
 
 
 def _reconectar_con_lo_guardado():
-    """Clic sobre el cartel de estado: reconecta con el host/puerto/
-    contraseña que quedaron guardados de la última conexión exitosa.
+    """Clic sobre el cartel de estado (o sobre el aviso de conexión):
+    reconecta con el host/puerto/contraseña de la última conexión
+    exitosa.
 
-    No es un atajo a conectar_obs() sin más, porque conectar_obs() es un
-    interruptor: si ya hay conexión desconecta. Y el cartel se usa
-    justamente para reconectar, así que acá se decide:
-
-    - ya conectado -> no hace nada (cortar la conexión sigue siendo el
-      botón explícito de Ajustes);
-    - sin configuración guardada -> no hay nada con qué reconectar, así
-      que abre Ajustes en Conexión en vez de adivinar un host;
-    - si falla, el error lo muestra conectar_obs() como siempre."""
-    if getattr(E, "conectado", False):
+    - ya conectado o conectando -> no hace nada (cortar la conexión
+      sigue siendo el botón explícito de Ajustes);
+    - reconectando -> reintenta YA, sin esperar el próximo intento;
+    - sin configuración guardada -> abre Ajustes en Conexión en vez de
+      adivinar un host;
+    - si falla, se muestra el error como siempre."""
+    if E.conectado or _conexion["conectando"]:
+        return
+    if _conexion["reconectando"]:
+        _cancelar_temporizador_reintento()
+        _reintentar_ahora()
         return
     if not mod_configuracion.hay_config_conexion_guardada():
-        try:
-            from consola_obs.ui import cabecera as mod_ui_cabecera
-            mod_ui_cabecera.abrir_ajustes("Conexión")
-        except Exception:
-            pass
+        avisos.emitir("pedir_ajustes_conexion")
         return
-    datos = mod_configuracion.cargar_config_conexion() or {}
-    host = str(datos.get("host") or "localhost").strip() or "localhost"
-    puerto = str(datos.get("puerto") or "4455").strip() or "4455"
-    password = datos.get("password") or ""
-    # conectar_obs() lee de los campos de Ajustes: se rellenan para que
-    # conecte con lo guardado y para que el usuario vea de dónde salió.
-    try:
-        E.entrada_host.delete(0, "end")
-        E.entrada_host.insert(0, host)
-        E.entrada_puerto.delete(0, "end")
-        E.entrada_puerto.insert(0, puerto)
-        E.entrada_password.delete(0, "end")
-        if password:
-            E.entrada_password.insert(0, password)
-    except Exception:
-        pass
-    conectar_obs()
+    host, puerto, password = _datos_guardados()
+    _rellenar_campos(host, puerto, password)
+    _iniciar_conexion(host, puerto, password, silencioso=False)
 
 
 def desconectar_obs():
@@ -888,6 +1160,9 @@ def desconectar_obs():
 
     E.cliente_obs = None
     E.cliente_eventos = None
+    mod_servicio.servicio.vaciar()
+    from consola_obs.nucleo import modelo as _mod_modelo
+    _mod_modelo.mezclador.limpiar()
 
     for nombre in list(E.fuentes.keys()):
         E.fuentes[nombre]["tarjeta_sombra"].destroy()
@@ -897,7 +1172,11 @@ def desconectar_obs():
     E.niveles_entrada.clear()
     E.niveles_antes_mute.clear()
     E.ultima_vez_saturado.clear()
-    E.orden_fuentes.clear()
+    # E.orden_fuentes NO se vacía: es el orden manual que eligió el
+    # usuario. Antes se borraba acá y, al cerrar el programa estando
+    # desconectado, se guardaba vacío y el orden se perdía para siempre.
+    # Los nombres que ya no existan se podan solos al reconectar
+    # (ver _podar_orden_sin_tarjeta).
     E.escena_actual_nombres = set()
     E.escena_actual_obtenida = False
     try:
@@ -960,14 +1239,28 @@ def abrir_firewall_ahora():
 
 
 def actualizar_estado_conexion():
-    if E.conectado:
-        E.estado.config(text="● CONECTADO", fg=E.color_acento())
-        E.estado_chip.config(highlightbackground=E.color_acento())
-        E.boton_conectar.config(text="DESCONECTAR", bg="#ff5567", activebackground="#cb3542")
-    else:
-        E.estado.config(text="● DESCONECTADO", fg="#ff5d6c")
-        E.estado_chip.config(highlightbackground="#3f4a5e")
-        E.boton_conectar.config(text="CONECTAR", bg=E.color_acento(), activebackground=E.color_acento_claro())
+    estado = estado_conexion()
+    try:
+        if estado == "conectado":
+            E.estado.config(text="● CONECTADO", fg=E.color_acento())
+            E.estado_chip.config(highlightbackground=E.color_acento())
+            E.boton_conectar.config(text="DESCONECTAR", bg="#ff5567", activebackground="#cb3542")
+        elif estado in ("conectando", "reconectando"):
+            if estado == "conectando":
+                texto = "● CONECTANDO…"
+            elif _conexion["conectando"]:
+                texto = f"● RECONECTANDO… (intento {max(1, _conexion['intento'])})"
+            else:
+                texto = "● RECONECTANDO…"
+            E.estado.config(text=texto, fg="#ffb84d")
+            E.estado_chip.config(highlightbackground="#ffb84d")
+            E.boton_conectar.config(text="CANCELAR", bg="#ffb84d", activebackground="#d99a3a")
+        else:
+            E.estado.config(text="● DESCONECTADO", fg="#ff5d6c")
+            E.estado_chip.config(highlightbackground="#3f4a5e")
+            E.boton_conectar.config(text="CONECTAR", bg=E.color_acento(), activebackground=E.color_acento_claro())
+    except Exception:
+        pass
 
 
 def _sesion_efecto_activa():

@@ -69,6 +69,10 @@ def _marca_build():
 
 def main():
 
+    # Registro de errores a archivo (config/consola.log): lo primero,
+    # para que cualquier fallo del arranque deje rastro.
+    from consola_obs import registro as mod_registro
+    mod_registro.configurar()
 
     P._escribir_readme_assets(
         os.path.join(R.CARPETA_ICONOS, "LEEME.txt"),
@@ -209,6 +213,15 @@ def main():
             E.num_pads_soundboard = max(E.num_pads_soundboard, max(E.indices_guardados) + 1)
 
     E.ventana = tk.Tk()
+    mod_registro.instalar_en_ventana(E.ventana)
+    # Puente seguro hilo -> ventana y servicio de pedidos a OBS (ver
+    # consola_obs/nucleo): la ventana nunca espera a la red.
+    from consola_obs.nucleo import hilo_ui as mod_hilo_ui
+    from consola_obs.nucleo import servicio_obs as mod_servicio_obs
+    mod_hilo_ui.instalar(E.ventana.after)
+    mod_servicio_obs.servicio.iniciar()
+    from consola_obs.ui import suscripciones as mod_suscripciones
+    mod_suscripciones.registrar()
     _marca = _marca_build()
     E.ventana.title("Consola OBS — Panel de Audio Profesional"
                     + (f" · build {_marca}" if _marca else ""))
@@ -813,6 +826,9 @@ def main():
     mod_ui_medidores.actualizar_vu_meters_ui()
     mod_obs_eventos._programar_refresco_ganancia()
     mod_audio_reproduccion._programar_refresco_reproduccion()
+    # Conexión automática con lo guardado (en segundo plano): si OBS
+    # todavía no está abierto, queda reintentando solo.
+    E.ventana.after(600, mod_obs_cliente.conectar_al_iniciar)
     # Servidor de sync para la otra PC (hilo daemon; si FastAPI no
     # está, avisa y sigue sin servidor).
     try:

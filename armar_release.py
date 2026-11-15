@@ -35,6 +35,7 @@ TOP_CONSOLA = [
     "instalar.bat",
     "instalar.sh",
     "sincronizar_assets.bat",
+    "sincronizar_version.py",
     "version_info.txt",
     "updater_version.txt",
     "README.md",

@@ -1250,5 +1250,7 @@ def _consultar_estado_reproduccion():
 
 def _programar_refresco_reproduccion():
     if E.conectado and E._sesion_reproduccion.get("indice") is not None:
-        threading.Thread(target=_consultar_estado_reproduccion, daemon=True).start()
+        # Nunca dos consultas a la vez: con OBS lento se apilaban hilos.
+        from consola_obs.nucleo import servicio_obs as mod_servicio
+        mod_servicio.sondeo_si_libre("estado_pad", _consultar_estado_reproduccion)
     E.ventana.after(C.INTERVALO_REFRESCO_REPRODUCCION_MS, _programar_refresco_reproduccion)

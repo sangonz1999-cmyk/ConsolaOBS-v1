@@ -43,7 +43,6 @@ def log_conexion(paso, detalle=""):
     Nunca lanza excepciones ni muestra la contraseña.
     """
     import datetime
-    import os
     try:
         hora = datetime.datetime.now().strftime("%H:%M:%S")
     except Exception:
@@ -53,16 +52,10 @@ def log_conexion(paso, detalle=""):
         print(linea, flush=True)
     except Exception:
         pass
+    # El archivo ahora es rotativo (antes crecía sin límite).
     try:
-        from consola_obs import rutas as _R
-        os.makedirs(_R.CARPETA_CONFIG, exist_ok=True)
-        ruta_log = os.path.join(_R.CARPETA_CONFIG, "conexion.log")
-        with open(ruta_log, "a", encoding="utf-8") as f:
-            try:
-                fecha = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
-                fecha = hora
-            f.write(f"{fecha} [{paso}] {detalle}\n")
+        from consola_obs import registro as _registro
+        _registro.registrar_conexion(paso, detalle)
     except Exception:
         pass
 

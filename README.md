@@ -121,7 +121,7 @@ En vez de copiar `assets/` a mano cada vez que agregás un efecto o un tema, el 
 
 El programa consulta solo las Releases de GitHub al arrancar (y con Ajustes → ACTUALIZACIÓN → 🔍 BUSCAR ACTUALIZACIONES). Si hay versión más nueva, pregunta [Actualizar][Más tarde]: descarga el `ConsolaOBS-Consola.zip` a `%TEMP%`, cierra el programa y `updater.exe` (actualizador separado) reemplaza los archivos preservando `config/` (contraseña, ajustes, pads, clave de sync), verifica la instalación y reabre la nueva versión. Si algo falla (sin Internet, ZIP corrupto, versión inesperada), la instalación actual no se toca.
 
-Para publicar una actualización: 1) cambiá `VERSION` en `consola_obs/update/version.py` y en `version_info.txt` (más `updater_version.txt` si tocaste el updater), 2) doble clic en `compilar.bat` (genera `ConsolaOBS.exe` + `updater.exe`), 3) creá la Release `vX.Y.Z` y subí los dos ZIP.
+Para publicar una actualización: 1) cambiá `VERSION` en `consola_obs/update/version.py` (único lugar: `compilar.bat` copia el número a `version_info.txt` y `updater_version.txt` con `sincronizar_version.py`), 2) doble clic en `compilar.bat` (genera `ConsolaOBS.exe` + `updater.exe`), 3) creá la Release `vX.Y.Z` y subí los dos ZIP.
 
 ## Instalar Git y clonar el repo (Windows)
 
@@ -164,7 +164,15 @@ consola_obs/
 ├── rutas.py          # carpetas y archivos
 ├── compat.py         # Pillow opcional
 ├── plataforma.py     # Windows/DPI/fuentes del sistema
-├── configuracion.py  # JSONs de configuración
+├── configuracion.py  # JSONs de configuración (guardado atómico, rutas relativas)
+├── registro.py       # errores y mensajes a config/consola.log
+├── secretos.py       # contraseña de OBS y clave de sync cifradas (DPAPI)
+├── nucleo/           # lógica sin interfaz (no importa nada de ui/)
+│   ├── servicio_obs.py  # hilo propio para los pedidos a OBS (cola con reemplazo)
+│   ├── modelo.py        # estado del mezclador: volumen, mute y monitoreo por fuente
+│   ├── avisos.py        # publicar/suscribir entre núcleo e interfaz
+│   ├── hilo_ui.py       # puente seguro hilo -> ventana
+│   └── reconexion.py    # esperas de la reconexión automática
 ├── utilidades.py     # medida actual (tamaño + alto de tarjeta)
 ├── sync/             # sincronización bidireccional entre PCs
 │   ├── configuracion.py  # sync_config.json + último índice
@@ -172,7 +180,7 @@ consola_obs/
 │   ├── motor.py          # comparar + copiar + borrados + conflictos
 │   └── ui.py             # pestaña Sincronización + arranque del server
 ├── update/           # actualización automática desde GitHub
-│   ├── version.py    # VERSION (única fuente, igual que version_info.txt)
+│   ├── version.py    # VERSION (única fuente; sincronizar_version.py la copia a los .txt)
 │   ├── checker.py    # releases/latest + comparación + descarga a %TEMP%
 │   └── ui.py         # pestaña Actualización + prompt + progreso
 ├── obs/
@@ -185,6 +193,8 @@ consola_obs/
 │   └── reproduccion.py  # soundboard (OBS + audio local en PC)
 └── ui/
     ├── ventana.py         # cuerpo, divisor, tipografía, cierre
+    ├── aviso.py           # avisos que no bloquean (esquina de la ventana)
+    ├── suscripciones.py   # qué hace la ventana con cada aviso del núcleo
     ├── cabecera.py        # cabecera + menú desplegable de ajustes
     ├── tarjeta_fuente.py  # tarjetas/faders (Profesional y Moderna)
     ├── soundboard.py      # pads, grilla, detección de carpetas
@@ -357,7 +367,12 @@ Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el 
 (b) Arquitectura de hilos:
   - La UI corre en el hilo principal de Tk (ventana.mainloop()).
   - La conexión, los pedidos de volumen, la lectura de niveles VU y los refrescos de ganancia corren en hilos daemon.
-  - NUNCA se llama a la red desde el hilo de Tk directamente: las operaciones de red van a hilos secundarios y los resultados se entregan a la UI con ventana.after(0, ...) o se guardan en diccionarios globales que el bucle VU lee cada 33 ms.
+  - NUNCA se llama a la red desde el hilo de Tk directamente: los pedidos de los botones van al servicio con hilo propio (`nucleo/servicio_obs.py`), los resultados vuelven a la ventana por `nucleo/hilo_ui.py` (una cola que el hilo de Tk vacía cada 15 ms) o se guardan en diccionarios globales que el bucle VU lee cada 33 ms.
+  - Los sondeos periódicos que hacen varios pedidos (ganancia, estado del pad, resincronización) corren con `sondeo_si_libre`: nunca dos a la vez con la misma clave, así no se apilan hilos si OBS tarda.
+
+(b2) Modelo y avisos (`nucleo/modelo.py`, `nucleo/avisos.py`):
+  - El modelo del mezclador guarda lo que OBS dice de cada fuente (volumen, mute, monitoreo). Eventos de OBS, botones, barra de volumen y resincronización lo actualizan con `mezclador.actualizar(...)`, que avisa "fuente_cambiada" sólo con lo que cambió de verdad.
+  - La capa de OBS no importa nada de `ui/`: emite avisos ("escena_cambiada", "conectado", "pad_terminado", …) y `ui/suscripciones.py` decide qué hace la ventana con cada uno. Pendiente: `audio/fuentes.py` y `audio/reproduccion.py` todavía llaman a la interfaz directamente.
   - `_lock_pedidos_obs` protege el socket síncrono (see clase _ClienteOBSSincronizado, que envuelve cada método con threading.Lock vía __getattr__).
   - `_lock_sincronizar_escenas` serializa las operaciones de crear/mover fuentes entre escenas (evita duplicarla dos veces si dos hilos corren a la vez).
 
@@ -376,9 +391,16 @@ CS: Se guarda en config_conexion.json {host, puerto, password}.
 Defaults: host "localhost", puerto 4455.
 
 ### Flujo:
-- al arrancar se carga la config previa y la conexión es manual con el botón CONECTAR del menú de ajustes (Host, Puerto, Contraseña).
-- conectarse obs() → comprueba conectado y conecta con obsws-python: ClienteWebSocket(host, puerto, password). Si hay error de conexión lo muestra en un messagebox.
+- al arrancar se carga la config previa y, si hay una conexión guardada, se conecta sola (`conectar_al_iniciar`). Si OBS todavía no está abierto queda en "● RECONECTANDO…" hasta que aparezca. También se conecta a mano con el botón CONECTAR del menú de ajustes (Host, Puerto, Contraseña).
+- conectar_obs() → el intento corre en un hilo aparte (`_conectar_red`): DNS, ReqClient, get_version, EventClient. La ventana no se congela; mientras tanto el estado dice "● CONECTANDO…" y el botón pasa a CANCELAR. Si falla una conexión manual, el error se muestra en un messagebox; si es automática, sólo queda en conexion.log.
 - tras conectar: lista fuentes (get_input_list), escenas (get_scene_list), y dispara el refresco de estados.
+
+### Vigilancia y reconexión automática:
+- Un hilo de vigilancia revisa cada 4 s que el canal de eventos siga vivo y que OBS conteste (get_version). Con 2 fallos seguidos se da la conexión por perdida.
+- Al perderse: se limpia la conexión, aparece un aviso que no bloquea ("Es probable que se haya perdido la conexión con OBS… Reconectando automáticamente…") y se reintenta solo con esperas crecientes de 2, 4, 8, 15 y 30 s (después, cada 30 s). Al volver: aviso "Conexión con OBS recuperada".
+- Clic en el cartel de estado o en el aviso: reintenta ya, sin esperar. CANCELAR en Ajustes corta la reconexión.
+- Si un pedido da timeout, el socket de pedidos se reabre (la respuesta tardía desfasaba las siguientes) y se pide una resincronización.
+- Cada 10 s se resincronizan mute, monitoreo y volumen de todas las fuentes contra OBS, en un solo pedido por lote (RequestBatch). La ganancia de los filtros también se lee por lote, una vez por segundo. Un cambio hecho desde la consola en los últimos 1,5 s manda sobre lo leído, para que el botón no parpadee mientras el pedido viaja.
 
 Formato de datos: OBS-WebSocket devuelve tanto nombres snake_case como
 camelCase según la versión del cliente. Se usa `_valor(datos, clave_obs,
@@ -435,8 +457,9 @@ Volumen en dB → fader: se sondea cada ~1 s la ganancia de cada fuente
 - Cuando el usuario mueve el fader se ejecuta set_input_volume con el valor en dB (cambiar_volumen). Si el valor es muy bajo (< UMBRAL), set_input_volume con vol_mul=0.
 
 ### UI → OBS (cambios de la consola aplicados a OBS):
-- Al mover el fader: set_input_volume.
-- Al mutear: set_input_muted.
+Fader, mute y monitoreo no esperan a OBS: el botón cambia al instante y el pedido va al servicio con hilo propio (`consola_obs/nucleo/servicio_obs.py`). Si OBS lo rechaza, se relee el estado real.
+- Al mover el fader: set_input_volume. Mientras se arrastra sólo viaja el último valor (los intermedios se descartan si OBS todavía no contestó).
+- Al mutear: set_input_muted con el estado deseado (no un toggle: dos clics rápidos no se pisan).
 - Al monitorear: set_input_audio_monitor_type.
 - Al editar/cambiar filtros: set_source_filter_settings, create_source_filter, set_source_filter_enabled, remove_source_filter, set_source_filter_index.
 - Al reproducir/detener un pad: set_input_settings + trigger_media_input_action (RESTART/STOP) sobre la fuente de efectos.
@@ -840,6 +863,8 @@ para que los JSON de configuración y los assets persistan junto al
 ## Estado actual del proyecto
 - Entrada: `main.py` → paquete `consola_obs/` (ver Estructura arriba).
 - El .exe se genera con `compilar.bat` en esta misma carpeta (`ConsolaOBS.exe`, no se versiona).
-- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git). `config/config_soundboard.json` y `config/config_interfaz.json` SÍ se versionan: así los colores y el layout viajan con el repo y una instalación nueva arranca configurada.
-- Versión actual: 1.2.3 (`consola_obs/update/version.py`, `version_info.txt`, `updater_version.txt` y el tag de la Release, todos iguales).
+- La contraseña de OBS vive en `config/config_conexion.json` (local, ignorado por git) cifrada con DPAPI de Windows, igual que la clave de sync: sólo se puede abrir con la misma cuenta de Windows, así que al copiar `config/` a otra PC hay que volver a escribirlas.
+- Errores y mensajes del programa quedan en `config/consola.log` (rotativo, 1 MB x 3); el detalle de conexión sigue en `config/conexion.log`.
+- Todos los `config/*.json` se guardan de forma atómica (temporal + reemplazo) y las rutas de los pads se guardan relativas a la carpeta del programa. `config/config_soundboard.json` y `config/config_interfaz.json` SÍ se versionan: así los colores y el layout viajan con el repo y una instalación nueva arranca configurada.
+- Versión actual: 1.2.3 (se cambia sólo en `consola_obs/update/version.py`; `compilar.bat` actualiza `version_info.txt` y `updater_version.txt`. El tag de la Release tiene que coincidir).
 

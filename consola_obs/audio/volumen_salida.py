@@ -140,10 +140,6 @@ def _aplicar_obs(db_barra):
     if not offsets:
         return
     _arrastre["t"] = time.monotonic()
-    try:
-        from consola_obs.obs import eventos as mod_obs_eventos
-    except Exception:
-        mod_obs_eventos = None
     for nombre, offset in offsets.items():
         nuevo = _acotar(float(db_barra) + offset)
         silencio = nuevo <= E.UMBRAL_SILENCIO
@@ -155,12 +151,13 @@ def _aplicar_obs(db_barra):
         # La tarjeta, el nivel base de los fundidos y el audio local se
         # actualizan YA, sin esperar el eco de OBS (que puede llegar tarde
         # o desordenado). Así el volumen queda "recordado" en la app.
-        if mod_obs_eventos is not None:
-            try:
-                mod_obs_eventos._sincronizar_volumen_remoto(
-                    nombre, E.UMBRAL_SILENCIO if silencio else nuevo)
-            except Exception:
-                pass
+        try:
+            from consola_obs.nucleo import modelo as mod_modelo
+            mod_modelo.mezclador.actualizar(
+                nombre, origen="barra",
+                volumen_db=E.UMBRAL_SILENCIO if silencio else nuevo)
+        except Exception:
+            pass
 
 
 def _enviar_pendiente():

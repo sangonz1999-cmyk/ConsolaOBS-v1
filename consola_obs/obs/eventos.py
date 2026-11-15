@@ -4,8 +4,8 @@ import time
 from consola_obs import estado as E
 from consola_obs import constantes as C
 from consola_obs.obs import cliente as mod_obs_cliente
-from consola_obs.ui import dibujo as mod_ui_dibujo
-from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
+from consola_obs.nucleo import avisos
+from consola_obs.nucleo import modelo as mod_modelo
 
 
 def _valor(obj, *nombres_posibles):
@@ -156,11 +156,7 @@ def on_current_scene_collection_changed(datos):
             pass
 
     def _hacer():
-        try:
-            from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
-            mod_ui_tarjeta._refrescar_titulo_escena()
-        except Exception:
-            pass
+        avisos.emitir("coleccion_cambiada")
         try:
             _programar_refresco_lista_fuentes()
         except Exception:
@@ -231,10 +227,7 @@ def _refrescar_lista_fuentes_ahora():
             return
     except Exception:
         pass
-    try:
-        mod_ui_tarjeta.actualizar()
-    except Exception as e:
-        print(f"No se pudo refrescar la lista de fuentes: {e}")
+    avisos.emitir("lista_fuentes_cambio")
 
 
 def on_input_created(_datos):
@@ -251,28 +244,13 @@ def on_input_removed(_datos):
 
 def on_input_mute_state_changed(datos):
     """Alguien mutea/desmutea una fuente directamente desde OBS (u otro
-    controlador): reflejarlo acá en tiempo real, sin esperar al próximo
-    'Actualizar fuentes'."""
+    controlador): se anota en el modelo y la interfaz lo refleja en
+    tiempo real, sin esperar al próximo 'Actualizar fuentes'."""
     nombre = _valor(datos, "input_name", "inputName")
     muted = _valor(datos, "input_muted", "inputMuted")
     if nombre is None or muted is None:
         return
-    E.ventana.after(0, lambda: _sincronizar_mute_remoto(nombre, muted))
-
-
-def _sincronizar_mute_remoto(nombre, muted):
-    widgets = E.fuentes.get(nombre)
-    if not widgets:
-        return
-    widgets["muted"] = muted
-    mod_ui_dibujo._actualizar_boton_circular(
-        widgets["mute"],
-        texto_nuevo=("🔇" if muted else "🔊"),
-        color_nuevo=mod_ui_dibujo._color_mute(muted)
-    )
-    mod_ui_tarjeta._actualizar_estado_gris(nombre)
-    mod_ui_tarjeta._reubicar_si_hay_criterio()
-    mod_ui_tarjeta._reforzar_oculta_en_obs(nombre)
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", muted=bool(muted))
 
 
 def on_input_volume_changed(datos):
@@ -281,142 +259,129 @@ def on_input_volume_changed(datos):
     vol_db = _valor(datos, "input_volume_db", "inputVolumeDb")
     if nombre is None or vol_db is None:
         return
-    E.ventana.after(0, lambda: _sincronizar_volumen_remoto(nombre, vol_db))
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", volumen_db=vol_db)
 
 
-def _sincronizar_volumen_remoto(nombre, vol_db):
-    widgets = E.fuentes.get(nombre)
-    if not widgets or widgets.get("arrastrando"):
-        return
-    widgets["fader"].set(vol_db)
-    if nombre == C.NOMBRE_FUENTE_EFECTOS:
-        # Fader movido desde OBS: también es nivel base para fundidos
-        # (import lazy: audio importa este módulo).
-        try:
-            from consola_obs.audio import reproduccion as mod_audio_reproduccion
-            mod_audio_reproduccion.nota_volumen_usuario(vol_db)
-        except Exception:
-            pass
-    elif nombre == C.NOMBRE_FUENTE_MUSICA:
-        try:
-            from consola_obs.audio import musica as mod_audio_musica
-            mod_audio_musica.nota_volumen_musica()
-        except Exception:
-            pass
-    # En oculta la fila muestra el ojo, no el texto: no se reescribe
-    # la etiqueta.
-    if widgets.get("oculta"):
-        return
-    if vol_db <= E.UMBRAL_SILENCIO:
-        widgets["db"].config(text="SILENCIO", fg="#828da6")
-    else:
-        widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
-
-
-MONITOREO_POR_NUMERO = {
-    0: "OBS_MONITORING_TYPE_NONE",
-    1: "OBS_MONITORING_TYPE_MONITOR_ONLY",
-    2: "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT",
-}
-
-
-def _tipo_monitor_normalizado(valor):
-    """El tipo de monitoreo de OBS llega de dos formas y esta app usa una
-    sola: el NOMBRE ('OBS_MONITORING_TYPE_...'). Pero el WebSocket lo manda
-    como ENTERO (0=apagado, 1=solo monitores, 2=monitores+stream) tanto en
-    el evento como en GetInputAudioMonitorType, y comparar un 2 contra el
-    string '...MONITOR_AND_OUTPUT' nunca da igual: el auricular queda
-    siempre en apagado y nunca muestra el color correcto.
-
-    Traduce el número al nombre. Un valor desconocido (ya sea número o
-    texto que no es de monitoreo) se devuelve tal cual para no pisar lo
-    que hubiera."""
-    if isinstance(valor, bool):
-        return valor
-    if isinstance(valor, int):
-        return MONITOREO_POR_NUMERO.get(valor, valor)
-    texto = str(valor or "").strip()
-    if texto.isdigit():
-        numero = int(texto)
-        return MONITOREO_POR_NUMERO.get(numero, texto)
-    return texto
+# Compatibilidad: el resto del código sigue llamando a estos nombres.
+MONITOREO_POR_NUMERO = mod_modelo.MONITOREO_POR_NUMERO
+_tipo_monitor_normalizado = mod_modelo.tipo_monitor_normalizado
 
 
 def on_input_audio_monitor_type_changed(datos):
     """Ídem para el tipo de monitoreo (auriculares)."""
     nombre = _valor(datos, "input_name", "inputName")
-    # Normalizar ANTES de mirar si viene vacío:OBS manda 0 para 'monitoreo
-    # apagado' y 0 es falsy en Python, así que con el orden viejo el
-    # evento de apagar los auriculares se descartaba sin hacer nada.
+    # Normalizar ANTES de mirar si viene vacío: OBS manda 0 para
+    # 'monitoreo apagado' y 0 es falsy en Python.
     tipo = _tipo_monitor_normalizado(_valor(datos, "monitor_type", "monitorType"))
     if nombre is None or not tipo:
         return
-    E.ventana.after(0, lambda: _sincronizar_monitor_remoto(nombre, tipo))
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", tipo_monitor=tipo)
+
+
+def _sincronizar_mute_remoto(nombre, muted):
+    """Compatibilidad: igual que si el cambio viniera de OBS."""
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", muted=bool(muted))
 
 
 def _sincronizar_monitor_remoto(nombre, tipo):
-    widgets = E.fuentes.get(nombre)
-    if not widgets:
-        return
-    widgets["tipo_monitor"] = tipo
-    mod_ui_dibujo._actualizar_boton_circular(widgets["monitor"], color_nuevo=(
-        mod_ui_dibujo._cuadrado_monitor(tipo) if E.es_moderna()
-        else C.COLORES_MONITOREO.get(tipo, "#394151")))
-    mod_ui_tarjeta._reforzar_oculta_en_obs(nombre)
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", tipo_monitor=tipo)
+
+
+def _sincronizar_volumen_remoto(nombre, vol_db):
+    mod_modelo.mezclador.actualizar(nombre, origen="obs", volumen_db=vol_db)
+
+
+# Margen durante el cual un cambio hecho desde la consola "manda" sobre
+# lo que lee la resincronización: el pedido puede estar todavía en
+# camino y OBS contestar el valor viejo, lo que haría parpadear el botón.
+MARGEN_CAMBIO_LOCAL_S = 1.5
+_ultimo_cambio_local = {}
+
+
+def nota_cambio_local(nombre):
+    """La consola acaba de cambiar mute/monitor/volumen de 'nombre'."""
+    _ultimo_cambio_local[nombre] = time.monotonic()
+
+
+def _cambiado_hace_poco(nombre, desde):
+    return _ultimo_cambio_local.get(nombre, 0.0) >= desde - MARGEN_CAMBIO_LOCAL_S
+
+
+def _mismo_volumen(a, b):
+    return mod_modelo.mismo_volumen(a, b, E.UMBRAL_SILENCIO)
 
 
 def resincronizar_estado_audio(solo_nombre=None):
-    """Red de seguridad contra eventos perdidos: pide a OBS el mute y el
-    tipo de monitoreo reales y corrige la interfaz si difieren. Se llama
-    desde un HILO (hace pedidos a OBS); la interfaz se toca con after().
+    """Red de seguridad contra eventos perdidos: pide a OBS el mute, el
+    tipo de monitoreo y el volumen reales de las fuentes y corrige si
+    difieren. Todo va en UN pedido por lote (antes eran tres viajes por
+    fuente). Se llama desde un HILO; la interfaz se entera por el modelo.
     Es lo que evita que el programa muestre una cosa y OBS otra."""
     if not E.conectado:
         return
+    inicio = time.monotonic()
     nombres = [solo_nombre] if solo_nombre else list(E.fuentes.keys())
-    cambios = []
+    nombres = [n for n in nombres if n in E.fuentes]
+    if not nombres:
+        return
+    pedidos = []
     for nombre in nombres:
-        if not E.conectado:
-            return
-        widgets = E.fuentes.get(nombre)
-        if not widgets:
-            continue
-        muted = None
-        tipo = None
-        try:
-            muted = _valor(E.cliente_obs.get_input_mute(nombre), "input_muted", "inputMuted")
-        except mod_obs_cliente.obs.error.OBSSDKRequestError:
+        datos = {"inputName": nombre}
+        pedidos += [("GetInputMute", datos),
+                    ("GetInputAudioMonitorType", datos),
+                    ("GetInputVolume", datos)]
+    try:
+        respuestas = E.cliente_obs.lote(pedidos)
+    except Exception:
+        return  # problema de conexión: lo maneja la vigilancia
+    leidos = []
+    for k, nombre in enumerate(nombres):
+        r_mute, r_mon, r_vol = respuestas[3 * k:3 * k + 3]
+        if not r_mute[0]:
             continue  # la fuente ya no existe en OBS
-        except Exception:
-            return  # problema de conexión: lo maneja la vigilancia
-        try:
-            tipo = _tipo_monitor_normalizado(_valor(
-                E.cliente_obs.get_input_audio_monitor_type(nombre),
-                "monitor_type", "monitorType"))
-        except mod_obs_cliente.obs.error.OBSSDKRequestError:
-            tipo = None
-        except Exception:
-            return
-        cambios.append((nombre, muted, tipo))
+        muted = (r_mute[1] or {}).get("inputMuted")
+        tipo = _tipo_monitor_normalizado((r_mon[1] or {}).get("monitorType")) if r_mon[0] else None
+        vol_db = (r_vol[1] or {}).get("inputVolumeDb") if r_vol[0] else None
+        leidos.append((nombre, muted, tipo, vol_db))
 
     def _aplicar():
-        for nombre, muted, tipo in cambios:
+        for nombre, muted, tipo, vol_db in leidos:
             widgets = E.fuentes.get(nombre)
-            if not widgets:
+            if not widgets or _cambiado_hace_poco(nombre, inicio):
                 continue
+            # Se compara contra lo que MUESTRA la tarjeta (no sólo contra
+            # el modelo): si la pantalla quedó distinta por cualquier
+            # camino, se fuerza el aviso para que se repinte.
+            campos = {}
             if muted is not None and bool(widgets.get("muted")) != bool(muted):
-                _sincronizar_mute_remoto(nombre, bool(muted))
+                campos["muted"] = bool(muted)
             if tipo and widgets.get("tipo_monitor") != tipo:
-                _sincronizar_monitor_remoto(nombre, tipo)
-    if cambios:
-        try:
-            E.ventana.after(0, _aplicar)
-        except Exception:
-            pass
+                campos["tipo_monitor"] = tipo
+            if vol_db is not None and not widgets.get("arrastrando"):
+                try:
+                    actual = widgets["fader"].get()
+                except Exception:
+                    actual = None
+                if actual is not None and not _mismo_volumen(actual, vol_db):
+                    campos["volumen_db"] = float(vol_db)
+            # El modelo se alinea siempre con OBS; sólo avisa si hay algo
+            # que corregir en pantalla.
+            mod_modelo.mezclador.actualizar(
+                nombre, origen="resync", avisar=False,
+                muted=muted, tipo_monitor=tipo, volumen_db=vol_db)
+            if campos:
+                mod_modelo.mezclador.actualizar(nombre, origen="resync", forzar=True, **campos)
+    if leidos:
+        from consola_obs.nucleo import hilo_ui
+        hilo_ui.en_ui(_aplicar)
 
 
 def resincronizar_estado_audio_en_hilo(solo_nombre=None):
-    threading.Thread(
-        target=resincronizar_estado_audio, args=(solo_nombre,), daemon=True).start()
+    """Una sola resincronización a la vez por fuente (o de todas): si
+    varios botones fallan seguidos no se lanza un hilo por cada uno."""
+    from consola_obs.nucleo import servicio_obs as mod_servicio
+    mod_servicio.sondeo_si_libre(("resync", solo_nombre),
+                                 lambda: resincronizar_estado_audio(solo_nombre))
 
 
 def on_input_name_changed(datos):
@@ -432,7 +397,7 @@ def on_input_name_changed(datos):
     nombre_nuevo = _valor(datos, "input_name", "inputName")
     if not nombre_viejo or not nombre_nuevo:
         return
-    E.ventana.after(0, lambda: mod_ui_tarjeta._renombrar_fuente_localmente(nombre_viejo, nombre_nuevo))
+    avisos.emitir("fuente_renombrada", nombre_viejo, nombre_nuevo)
 
 
 def _quizas_refrescar_dialogo_filtros(datos):
@@ -494,9 +459,45 @@ def _refrescar_ganancia_fuente_en_hilo(nombre):
     threading.Thread(target=_refrescar_ganancia_fuente, args=(nombre,), daemon=True).start()
 
 
+def _ganancia_de_lista_filtros(filtros):
+    """Suma la ganancia de los filtros habilitados a partir de la lista
+    que devuelve GetSourceFilterList (que ya trae los ajustes de cada
+    filtro). Devuelve None si a algún filtro relevante le faltan los
+    ajustes (OBS viejo): ahí se usa el cálculo de a un pedido."""
+    total_db = 0.0
+    for filtro in filtros or []:
+        campo = C.CAMPOS_GANANCIA_FILTRO.get(_valor(filtro, "filter_kind", "filterKind"))
+        if not campo or not _valor(filtro, "filter_enabled", "filterEnabled"):
+            continue
+        ajustes = _valor(filtro, "filter_settings", "filterSettings")
+        if ajustes is None:
+            return None
+        try:
+            total_db += float((ajustes or {}).get(campo, 0.0) or 0.0)
+        except (TypeError, ValueError):
+            pass
+    return total_db
+
+
 def _refrescar_ganancia_todas_las_fuentes():
-    for nombre in list(E.fuentes.keys()):
-        _refrescar_ganancia_fuente(nombre)
+    """Antes: 1 pedido por fuente + 1 por cada filtro de ganancia, cada
+    segundo. Ahora: un solo pedido por lote con la lista de filtros de
+    todas las fuentes (que ya trae sus ajustes)."""
+    nombres = list(E.fuentes.keys())
+    if not nombres or not E.conectado:
+        return
+    try:
+        respuestas = E.cliente_obs.lote(
+            [("GetSourceFilterList", {"sourceName": n}) for n in nombres])
+    except Exception:
+        return
+    for nombre, (ok, datos) in zip(nombres, respuestas):
+        if not ok:
+            continue
+        total = _ganancia_de_lista_filtros((datos or {}).get("filters"))
+        if total is None:
+            total = _calcular_ganancia_extra_fuente(nombre)
+        E.ganancia_filtros_db[nombre] = total
 
 
 def _programar_refresco_ganancia():
@@ -505,7 +506,9 @@ def _programar_refresco_ganancia():
     la cambió sin pasar por ninguno de los ganchos puntuales de arriba
     (por ejemplo, tocando el filtro directamente desde OBS)."""
     if E.conectado:
-        threading.Thread(target=_refrescar_ganancia_todas_las_fuentes, daemon=True).start()
+        # Si la vuelta anterior todavía no terminó (OBS lento), se salta.
+        from consola_obs.nucleo import servicio_obs as mod_servicio
+        mod_servicio.sondeo_si_libre("ganancia", _refrescar_ganancia_todas_las_fuentes)
     E.ventana.after(C.INTERVALO_REFRESCO_GANANCIA_MS, _programar_refresco_ganancia)
 
 
@@ -520,9 +523,7 @@ def _quizas_actualizar_filtros_activos(datos):
     su fuente cuenta para el criterio 'con filtros primero'."""
     nombre = _valor(datos, "source_name", "sourceName")
     if nombre:
-        threading.Thread(
-            target=mod_ui_tarjeta._actualizar_filtros_activos_fuente,
-            args=(nombre,), daemon=True).start()
+        avisos.emitir("filtros_cambiados", nombre)
 
 
 def on_source_filter_created(datos):
@@ -567,10 +568,9 @@ def on_media_input_playback_started(datos):
     def _hacer():
         try:
             from consola_obs.audio import musica as mod_audio_musica
-            from consola_obs.ui import musica as mod_ui_musica
             mod_audio_musica._sesion["crudo"] = "OBS_MEDIA_STATE_PLAYING"
             mod_audio_musica._sesion["estado"] = "SONANDO"
-            mod_ui_musica._refrescar_mini_player()
+            avisos.emitir("musica_estado_cambio")
         except Exception:
             pass
     try:
@@ -609,8 +609,7 @@ def on_media_input_playback_ended(datos):
                         return
                 except Exception:
                     pass
-                from consola_obs.ui import soundboard as mod_ui_soundboard
-                mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token)
+                avisos.emitir("pad_terminado", indice, token)
             except Exception:
                 pass
         try:
@@ -621,10 +620,9 @@ def on_media_input_playback_ended(datos):
         def _hacer_musica():
             try:
                 from consola_obs.audio import musica as mod_audio_musica
-                from consola_obs.ui import musica as mod_ui_musica
                 mod_audio_musica._sesion["crudo"] = "OBS_MEDIA_STATE_ENDED"
                 mod_audio_musica._sesion["estado"] = "DETENIDA"
-                mod_ui_musica._refrescar_mini_player()
+                avisos.emitir("musica_estado_cambio")
             except Exception:
                 pass
         try:

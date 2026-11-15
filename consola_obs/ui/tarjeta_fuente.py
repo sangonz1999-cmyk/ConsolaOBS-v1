@@ -11,6 +11,8 @@ from consola_obs import configuracion as mod_configuracion
 from consola_obs import utilidades as mod_utilidades
 from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
+from consola_obs.nucleo import servicio_obs as mod_servicio
+from consola_obs.nucleo import modelo as mod_modelo
 from consola_obs.audio import filtros as mod_audio_filtros
 from consola_obs.audio import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
@@ -688,6 +690,9 @@ def ocultar_fuente(nombre):
 
 def _aplicar_ocultar_en_obs(nombre):
     """Mute + monitor OFF reales en OBS (hilo daemon)."""
+    mod_modelo.mezclador.actualizar(
+        nombre, origen="local", avisar=False,
+        muted=True, tipo_monitor="OBS_MONITORING_TYPE_NONE")
     try:
         E.cliente_obs.set_input_muted(nombre, True)
     except Exception as e:
@@ -892,27 +897,28 @@ def _vigilancia_escena_tick():
     try:
         if not E.conectado:
             return
-        nombre = None
-        try:
-            respuesta = E.cliente_obs.get_current_program_scene()
-            nombre = mod_obs_eventos._valor(
-                respuesta, "current_program_scene_name", "currentProgramSceneName",
-                "scene_name", "sceneName")
-        except Exception:
-            return
-        try:
-            ultima = getattr(E, "_ultima_escena_vista", None)
-        except Exception:
-            ultima = None
-        if not nombre or nombre == ultima:
-            return
-        E._ultima_escena_vista = nombre
-        try:
-            mod_obs_cliente._refrescar_membresia_escena()
-        except Exception:
-            pass
+        # La consulta va en el hilo del servicio (antes bloqueaba la
+        # ventana cada 5 s); si la anterior no terminó, no se apila otra.
+        mod_servicio.servicio.una_a_la_vez(
+            "vigilancia_escena", _consultar_escena_al_aire)
     except Exception:
         pass
+
+
+def _consultar_escena_al_aire():
+    """Hilo del servicio: si cambió la escena al aire, refresca qué
+    fuentes están en escena."""
+    if not E.conectado:
+        return
+    respuesta = E.cliente_obs.get_current_program_scene()
+    nombre = mod_obs_eventos._valor(
+        respuesta, "current_program_scene_name", "currentProgramSceneName",
+        "scene_name", "sceneName")
+    ultima = getattr(E, "_ultima_escena_vista", None)
+    if not nombre or nombre == ultima:
+        return
+    E._ultima_escena_vista = nombre
+    mod_obs_cliente._refrescar_membresia_escena()
 
 
 def _refrescar_titulo_escena():
@@ -1680,12 +1686,15 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
             # En oculta la fila de dB muestra el ojo, no el texto: el
             # fader se sigue aplicando, sólo no se reescribe la etiqueta.
             oculta_ahora = bool(E.fuentes.get(nombre, {}).get("oculta", False))
+            # El pedido a OBS va al servicio con hilo propio (ver
+            # nucleo/servicio_obs.py): la ventana no espera la red, y
+            # mientras se arrastra sólo se manda el último valor.
+            db_obs = -100.0 if db <= E.UMBRAL_SILENCIO else db
+            _encolar_volumen(nombre, db_obs)
             if db <= E.UMBRAL_SILENCIO:
-                E.cliente_obs.set_input_volume(nombre, vol_db=-100.0)
                 if not oculta_ahora:
                     etiqueta_db.config(text="SILENCIO", fg=col_db_silencio)
             else:
-                E.cliente_obs.set_input_volume(nombre, vol_db=db)
                 if not oculta_ahora:
                     etiqueta_db.config(text=f"{db:.1f} dB", fg=col_db_activo)
             if nombre == C.NOMBRE_FUENTE_EFECTOS:
@@ -1817,6 +1826,9 @@ def crear_fader_fuente(nombre, vol_db, muted, tipo_monitor, nombre_visible=None)
         "arrastrando": False,
         "en_escena": True,
     }
+    mod_modelo.mezclador.actualizar(
+        nombre, origen="carga", avisar=False,
+        volumen_db=vol_db, muted=muted, tipo_monitor=tipo_monitor)
 
     _actualizar_estado_gris(nombre)
 
@@ -2257,6 +2269,9 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
     cambió desde OBS directamente (otro control, otra escena, etc.)."""
 
     widgets = E.fuentes[nombre]
+    mod_modelo.mezclador.actualizar(
+        nombre, origen="carga", avisar=False,
+        volumen_db=vol_db, muted=muted, tipo_monitor=tipo_monitor)
 
     widgets["fader"].set(vol_db)
     # En oculta la fila muestra el ojo (ver _actualizar_estado_gris):
@@ -2287,61 +2302,181 @@ def sincronizar_fuente(nombre, vol_db, muted, tipo_monitor):
 
 
 
-def cambiar_mute(nombre):
-    if not E.conectado:
+def _encolar_volumen(nombre, db_obs):
+    """Manda el volumen a OBS sin frenar la ventana. Clave por fuente:
+    si el fader se mueve más rápido de lo que OBS contesta, los valores
+    intermedios se descartan y sólo viaja el último."""
+    mod_obs_eventos.nota_cambio_local(nombre)
+    # El fader ya está donde lo dejó el usuario: el modelo se anota sin
+    # avisar (repintarlo lo haría saltar mientras se arrastra).
+    mod_modelo.mezclador.actualizar(nombre, origen="local", avisar=False, volumen_db=db_obs)
+
+    def _pedido():
+        E.cliente_obs.set_input_volume(nombre, vol_db=db_obs)
+
+    def _fallo(error):
+        print(f"Error cambiando volumen de {nombre}: {error}")
+        mod_obs_eventos.resincronizar_estado_audio_en_hilo(nombre)
+
+    mod_servicio.servicio.encolar(_pedido, clave=("volumen", nombre), al_fallar=_fallo)
+
+
+def _pintar_mute(nombre, muted):
+    widgets = E.fuentes.get(nombre)
+    if not widgets:
         return
+    widgets["muted"] = bool(muted)
+    mod_ui_dibujo._actualizar_boton_circular(
+        widgets["mute"],
+        texto_nuevo=("🔇" if muted else "🔊"),
+        color_nuevo=mod_ui_dibujo._color_mute(bool(muted))
+    )
+    _actualizar_estado_gris(nombre)
+    _reubicar_si_hay_criterio()
+
+
+def _pintar_monitor(nombre, tipo):
+    widgets = E.fuentes.get(nombre)
+    if not widgets:
+        return
+    widgets["tipo_monitor"] = mod_obs_eventos._tipo_monitor_normalizado(tipo)
+    mod_ui_dibujo._actualizar_boton_circular(
+        widgets["monitor"], color_nuevo=(
+            mod_ui_dibujo._cuadrado_monitor(widgets["tipo_monitor"]) if E.es_moderna()
+            else C.COLORES_MONITOREO.get(widgets["tipo_monitor"], "#394151")))
+
+
+def _pintar_volumen(nombre, vol_db, origen):
+    """Mueve el fader y la etiqueta a 'vol_db' (cambio que vino de OBS,
+    de la resincronización o de la barra de volumen de salida)."""
+    widgets = E.fuentes.get(nombre)
+    if not widgets or widgets.get("arrastrando"):
+        return
+    widgets["fader"].set(vol_db)
+    if nombre == C.NOMBRE_FUENTE_EFECTOS:
+        # Fader movido desde afuera: también es nivel base para fundidos
+        # (import lazy: audio importa UI).
+        try:
+            from consola_obs.audio import reproduccion as mod_audio_reproduccion
+            mod_audio_reproduccion.nota_volumen_usuario(vol_db)
+        except Exception:
+            pass
+    elif nombre == C.NOMBRE_FUENTE_MUSICA:
+        try:
+            from consola_obs.audio import musica as mod_audio_musica
+            mod_audio_musica.nota_volumen_musica()
+        except Exception:
+            pass
+    # En oculta la fila muestra el ojo, no el texto.
+    if widgets.get("oculta"):
+        return
+    if vol_db <= E.UMBRAL_SILENCIO:
+        widgets["db"].config(text="SILENCIO", fg=C.MOD_APAGADO if E.es_moderna() else "#828da6")
+    else:
+        widgets["db"].config(text=f"{vol_db:.1f} dB", fg=C.MOD_TEXTO if E.es_moderna() else "#2fd693")
+
+
+def al_cambiar_fuente(nombre, cambios, origen):
+    """Suscriptor de "fuente_cambiada" (ver nucleo/modelo.py): repinta
+    sólo lo que cambió."""
+    if nombre not in E.fuentes:
+        return
+    if "muted" in cambios:
+        _pintar_mute(nombre, cambios["muted"])
+    if "tipo_monitor" in cambios:
+        _pintar_monitor(nombre, cambios["tipo_monitor"])
+    if "volumen_db" in cambios and origen != "local":
+        _pintar_volumen(nombre, cambios["volumen_db"], origen)
+    # Una fuente OCULTA que alguien desmuteó o monitoreó desde OBS vuelve
+    # a mute + monitor apagado. Lo local ya lo resuelve ocultar/mostrar.
+    if origen != "local" and ("muted" in cambios or "tipo_monitor" in cambios):
+        _reforzar_oculta_en_obs(nombre)
+
+
+def al_renombrar_fuente(nombre_viejo, nombre_nuevo):
+    mod_modelo.mezclador.renombrar(nombre_viejo, nombre_nuevo)
+    _renombrar_fuente_localmente(nombre_viejo, nombre_nuevo)
+
+
+def al_cambiar_escena():
+    """Suscriptor de "escena_cambiada": gris de las fuentes fuera de
+    escena, título del panel y orden por criterio."""
+    for nombre in list(E.fuentes.keys()):
+        try:
+            _actualizar_estado_gris(nombre)
+        except Exception:
+            pass
     try:
-        respuesta = E.cliente_obs.toggle_input_mute(nombre)
-        nuevo_estado = mod_obs_eventos._valor(respuesta, "input_muted", "inputMuted")
-        if nuevo_estado is None:
-            raise ValueError(f"respuesta de OBS sin estado de mute: {respuesta!r}")
-        widgets = E.fuentes[nombre]
-        widgets["muted"] = nuevo_estado
-        mod_ui_dibujo._actualizar_boton_circular(
-            widgets["mute"],
-            texto_nuevo=("🔇" if nuevo_estado else "🔊"),
-            color_nuevo=mod_ui_dibujo._color_mute(nuevo_estado)
-        )
-        _actualizar_estado_gris(nombre)
+        _refrescar_titulo_escena()
+    except Exception:
+        pass
+    try:
         _reubicar_si_hay_criterio()
-    except Exception as e:
-        print(f"Error cambiando mute de {nombre}: {e}")
+    except Exception:
+        pass
+
+
+def al_cambiar_filtros(nombre):
+    threading.Thread(target=_actualizar_filtros_activos_fuente,
+                     args=(nombre,), daemon=True).start()
+
+
+def cambiar_mute(nombre):
+    """Alterna el mute. El botón cambia AL INSTANTE (optimista) y el
+    pedido va en segundo plano con el estado deseado explícito
+    (set_input_muted, no toggle: dos clics rápidos no pueden invertirse
+    entre sí). Si OBS rechaza el cambio, se relee el estado real."""
+    if not E.conectado or nombre not in E.fuentes:
+        return
+    deseado = not bool(E.fuentes[nombre].get("muted", False))
+    mod_obs_eventos.nota_cambio_local(nombre)
+    # forzar: la tarjeta se repinta aunque el modelo ya tuviera ese valor.
+    mod_modelo.mezclador.actualizar(nombre, origen="local", forzar=True, muted=deseado)
+
+    def _pedido():
+        E.cliente_obs.set_input_muted(nombre, deseado)
+
+    def _fallo(error):
+        print(f"Error cambiando mute de {nombre}: {error}")
         # La UI puede haber quedado distinta de OBS: se vuelve a leer.
         mod_obs_eventos.resincronizar_estado_audio_en_hilo(nombre)
+
+    mod_servicio.servicio.encolar(_pedido, clave=("mute", nombre), al_fallar=_fallo)
 
 
 def _fijar_monitor(nombre, tipo):
     """Pone el monitoreo de la fuente en 'tipo' (uno de TIPOS_MONITOREO)
     y actualiza el color del botón. Lo usan el toggle, el menú y vale
-    para cualquier estado, incluido el azul."""
-    if not E.conectado:
+    para cualquier estado, incluido el azul. Igual que el mute: el color
+    cambia al instante y el pedido va en segundo plano."""
+    if not E.conectado or nombre not in E.fuentes:
         return
-    try:
+    mod_obs_eventos.nota_cambio_local(nombre)
+    mod_modelo.mezclador.actualizar(nombre, origen="local", forzar=True, tipo_monitor=tipo)
+
+    def _pedido():
         E.cliente_obs.set_input_audio_monitor_type(nombre, tipo)
 
-        widgets = E.fuentes[nombre]
-        widgets["tipo_monitor"] = mod_obs_eventos._tipo_monitor_normalizado(tipo)
-        mod_ui_dibujo._actualizar_boton_circular(
-            widgets["monitor"], color_nuevo=(
-                mod_ui_dibujo._cuadrado_monitor(widgets["tipo_monitor"]) if E.es_moderna()
-                else C.COLORES_MONITOREO.get(widgets["tipo_monitor"], "#394151")))
-    except Exception as e:
-        print(f"Error cambiando monitoreo de {nombre}: {e}")
+    def _fallo(error):
+        print(f"Error cambiando monitoreo de {nombre}: {error}")
         mod_obs_eventos.resincronizar_estado_audio_en_hilo(nombre)
+
+    mod_servicio.servicio.encolar(_pedido, clave=("monitor", nombre), al_fallar=_fallo)
 
 
 def cambiar_monitor(nombre):
     """Clic IZQUIERDO del auricular: alterna sólo entre apagado y verde
     (monitoreo + salida). A propósito nunca pasa por el azul (solo
     monitoreo), porque ese estado saca la fuente del stream y llegar a
-    él de paso cortaría el audio un instante."""
+    él de paso cortaría el audio un instante.
+
+    Se decide con el estado que muestra la tarjeta (antes se le
+    preguntaba a OBS en el hilo de la ventana): ese estado se mantiene
+    fiel con los eventos y la resincronización periódica."""
     if not E.conectado:
         return
-    try:
-        actual = E.cliente_obs.get_input_audio_monitor_type(nombre).monitor_type
-    except Exception:
-        actual = E.fuentes.get(nombre, {}).get("tipo_monitor", "OBS_MONITORING_TYPE_NONE")
-    actual = mod_obs_eventos._tipo_monitor_normalizado(actual)
+    actual = mod_obs_eventos._tipo_monitor_normalizado(
+        E.fuentes.get(nombre, {}).get("tipo_monitor", "OBS_MONITORING_TYPE_NONE"))
     if actual == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT":
         _fijar_monitor(nombre, "OBS_MONITORING_TYPE_NONE")
     else:

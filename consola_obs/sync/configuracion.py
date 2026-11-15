@@ -11,6 +11,8 @@ import os
 import secrets
 
 from consola_obs import rutas as R
+from consola_obs import secretos
+from consola_obs import configuracion as mod_configuracion
 
 ARCHIVO_SYNC_CONFIG = os.path.join(R.CARPETA_CONFIG, "sync_config.json")
 ARCHIVO_ULTIMO_INDICE = os.path.join(R.CARPETA_CONFIG, "ultimo_indice.json")
@@ -39,6 +41,9 @@ def cargar():
                 for k in cfg:
                     if k in datos and isinstance(datos[k], type(cfg[k])):
                         cfg[k] = datos[k]
+                # La clave se guarda cifrada (ver secretos.py); una
+                # clave vieja en texto plano se sigue leyendo.
+                cfg["api_key"] = secretos.desproteger(cfg.get("api_key") or "")
     except Exception as e:
         print(f"No se pudo leer la configuración de sync: {e}")
     # La key del entorno manda sobre la guardada (para no dejarla sólo
@@ -62,12 +67,15 @@ def guardar(datos_nuevos):
     except Exception:
         pass
     cfg.update(datos_nuevos)
+    a_disco = dict(cfg)
+    # La key que vino del entorno no se escribe en disco.
     try:
-        os.makedirs(R.CARPETA_CONFIG, exist_ok=True)
-        with open(ARCHIVO_SYNC_CONFIG, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"No se pudo guardar la configuración de sync: {e}")
+        if (os.getenv(VAR_ENTORNO_KEY) or "").strip():
+            a_disco["api_key"] = ""
+    except Exception:
+        pass
+    a_disco["api_key"] = secretos.proteger(a_disco.get("api_key") or "")
+    mod_configuracion.escribir_json_atomico(ARCHIVO_SYNC_CONFIG, a_disco)
     return cfg
 
 
@@ -110,9 +118,4 @@ def cargar_ultimo_indice():
 
 def guardar_ultimo_indice(indice):
     """Guarda el snapshot post-sync. Nunca lanza."""
-    try:
-        os.makedirs(R.CARPETA_CONFIG, exist_ok=True)
-        with open(ARCHIVO_ULTIMO_INDICE, "w", encoding="utf-8") as f:
-            json.dump(indice, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"No se pudo guardar el último índice de sync: {e}")
+    mod_configuracion.escribir_json_atomico(ARCHIVO_ULTIMO_INDICE, indice)
