@@ -2292,7 +2292,9 @@ def cambiar_mute(nombre):
         return
     try:
         respuesta = E.cliente_obs.toggle_input_mute(nombre)
-        nuevo_estado = respuesta.input_muted
+        nuevo_estado = mod_obs_eventos._valor(respuesta, "input_muted", "inputMuted")
+        if nuevo_estado is None:
+            raise ValueError(f"respuesta de OBS sin estado de mute: {respuesta!r}")
         widgets = E.fuentes[nombre]
         widgets["muted"] = nuevo_estado
         mod_ui_dibujo._actualizar_boton_circular(
@@ -2304,6 +2306,8 @@ def cambiar_mute(nombre):
         _reubicar_si_hay_criterio()
     except Exception as e:
         print(f"Error cambiando mute de {nombre}: {e}")
+        # La UI puede haber quedado distinta de OBS: se vuelve a leer.
+        mod_obs_eventos.resincronizar_estado_audio_en_hilo(nombre)
 
 
 def _fijar_monitor(nombre, tipo):
@@ -2323,6 +2327,7 @@ def _fijar_monitor(nombre, tipo):
                 else C.COLORES_MONITOREO.get(widgets["tipo_monitor"], "#394151")))
     except Exception as e:
         print(f"Error cambiando monitoreo de {nombre}: {e}")
+        mod_obs_eventos.resincronizar_estado_audio_en_hilo(nombre)
 
 
 def cambiar_monitor(nombre):

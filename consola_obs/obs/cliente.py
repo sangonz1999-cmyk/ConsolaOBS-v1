@@ -1,3 +1,6 @@
+import functools
+import threading
+import time
 from tkinter import messagebox
 import obsws_python as obs
 
@@ -25,19 +28,185 @@ class _ClienteOBSSincronizado:
     antes de tocar el socket, así nunca hay dos pedidos en simultáneo
     sin importar desde qué hilo se llamen."""
 
-    def __init__(self, cliente_real):
+    def __init__(self, cliente_real, host=None, puerto=None, password=""):
         self._cliente_real = cliente_real
+        self._datos_conexion = (host, puerto, password)
+
+    def _reabrir_socket_pedidos(self):
+        """Tras un timeout (u otro corte del transporte) el socket de
+        pedidos queda DESFASADO: la respuesta tardía del pedido viejo
+        sigue en el buffer y el pedido siguiente lee ESA respuesta (la
+        librería no compara el requestId). Resultado: botones de
+        mute/auricular que muestran el estado de otra fuente, o que
+        'no hacen nada' porque la respuesta no tiene el campo esperado.
+        La única forma segura de resincronizar es abrir un socket nuevo."""
+        host, puerto, password = self._datos_conexion
+        if host is None or puerto is None:
+            return False
+        try:
+            viejo = self._cliente_real
+            nuevo = obs.ReqClient(host=host, port=puerto, password=password, timeout=5)
+            self._cliente_real = nuevo
+            try:
+                viejo.disconnect()
+            except Exception:
+                pass
+            mod_red.log_conexion("PEDIDOS", "socket de pedidos reabierto tras un corte/timeout")
+            return True
+        except Exception as e:
+            mod_red.log_conexion("PEDIDOS", f"no se pudo reabrir el socket de pedidos: {e!r}")
+            return False
 
     def __getattr__(self, nombre_attr):
+        if nombre_attr.startswith("_"):
+            raise AttributeError(nombre_attr)
         atributo = getattr(self._cliente_real, nombre_attr)
         if not callable(atributo):
             return atributo
 
         def _llamada_con_lock(*args, **kwargs):
             with E._lock_pedidos_obs:
-                return atributo(*args, **kwargs)
+                try:
+                    return getattr(self._cliente_real, nombre_attr)(*args, **kwargs)
+                except obs.error.OBSSDKRequestError:
+                    # OBS contestó con un código de error bien formado:
+                    # el socket sigue sincronizado, no hay nada que reabrir.
+                    raise
+                except Exception:
+                    if nombre_attr == "disconnect" or not E.conectado:
+                        raise
+                    # Timeout, socket cerrado, respuesta ilegible: el
+                    # socket puede haber quedado desfasado. Se reabre y
+                    # se pide un resincronizado del estado de la UI.
+                    if self._reabrir_socket_pedidos():
+                        E._resync_pendiente = True
+                    else:
+                        E._socket_pedidos_roto = True
+                    raise
 
         return _llamada_con_lock
+
+
+def _seguro(funcion):
+    """Envuelve un callback de evento de OBS. La librería obsws-python
+    NO captura las excepciones de los callbacks: la primera que se
+    escapa mata el hilo de eventos EN SILENCIO y la consola queda sorda
+    (el mute/auricular dejan de actualizarse hasta reconectar). Acá se
+    capturan y además se anota cuándo llegó el último evento."""
+    @functools.wraps(funcion)
+    def _envuelto(datos):
+        E._ultimo_evento_obs = time.monotonic()
+        try:
+            return funcion(datos)
+        except Exception as e:
+            try:
+                mod_red.log_conexion(
+                    "EVENTO", f"error en {funcion.__name__}: {type(e).__name__}: {e}")
+            except Exception:
+                pass
+    return _envuelto
+
+
+# ------------------------------------------------------------------
+# Vigilancia de la conexión
+# ------------------------------------------------------------------
+# Antes, si OBS se cerraba, la red se cortaba o el hilo de eventos
+# moría, E.conectado seguía en True para siempre: la consola mostraba
+# "CONECTADO" pero nada se actualizaba ni respondía. Ahora un hilo
+# revisa cada pocos segundos que el hilo de eventos siga vivo y que
+# OBS conteste; si no, avisa con un cartel. Además re-sincroniza cada
+# tanto mute/auricular contra OBS, por si algún evento se perdió.
+INTERVALO_VIGILANCIA_S = 4
+FALLOS_PARA_AVISAR = 2
+INTERVALO_RESYNC_S = 10
+_vigilancia = {"token": 0}
+
+
+def _hacer_ping():
+    """True si OBS contestó, False si falló. Si el candado de pedidos
+    está ocupado mucho rato (algo largo en curso) no cuenta como fallo."""
+    if not E._lock_pedidos_obs.acquire(timeout=8):
+        return True
+    E._lock_pedidos_obs.release()
+    try:
+        E.cliente_obs.get_version()
+        return True
+    except Exception:
+        return False
+
+
+def _bucle_vigilancia(token):
+    fallos = 0
+    ultimo_resync = time.monotonic()
+    while True:
+        time.sleep(INTERVALO_VIGILANCIA_S)
+        if _vigilancia["token"] != token or not E.conectado:
+            return
+        motivo = None
+        try:
+            worker = getattr(E.cliente_eventos, "worker", None)
+            if worker is not None and not worker.is_alive():
+                motivo = "se cerró el canal de eventos de OBS"
+        except Exception:
+            pass
+        if motivo is None:
+            if _hacer_ping():
+                fallos = 0
+            else:
+                fallos += 1
+                if fallos >= FALLOS_PARA_AVISAR:
+                    motivo = "OBS dejó de responder"
+        if motivo is not None:
+            if _vigilancia["token"] == token and E.conectado:
+                _vigilancia["token"] += 1
+                try:
+                    E.ventana.after(0, lambda m=motivo: _avisar_conexion_perdida(m))
+                except Exception:
+                    pass
+            return
+        ahora = time.monotonic()
+        if getattr(E, "_resync_pendiente", False) or ahora - ultimo_resync >= INTERVALO_RESYNC_S:
+            E._resync_pendiente = False
+            ultimo_resync = ahora
+            try:
+                mod_obs_eventos.resincronizar_estado_audio()
+            except Exception as e:
+                mod_red.log_conexion("RESYNC", f"fallo: {e!r}")
+
+
+def _iniciar_vigilancia():
+    _vigilancia["token"] += 1
+    E._ultimo_evento_obs = time.monotonic()
+    E._resync_pendiente = False
+    E._socket_pedidos_roto = False
+    threading.Thread(
+        target=_bucle_vigilancia, args=(_vigilancia["token"],), daemon=True).start()
+
+
+def _detener_vigilancia():
+    _vigilancia["token"] += 1
+
+
+def _avisar_conexion_perdida(motivo):
+    """Hilo de la interfaz: limpia la conexión muerta y muestra el cartel."""
+    if not E.conectado:
+        return
+    mod_red.log_conexion("PERDIDA", f"conexion perdida: {motivo}")
+    try:
+        desconectar_obs()
+    except Exception as e:
+        mod_red.log_conexion("PERDIDA", f"error al limpiar: {e!r}")
+    try:
+        quiere = messagebox.askyesno(
+            "Conexión con OBS",
+            "Es probable que se haya perdido la conexión con OBS.\n"
+            f"({motivo})\n\n"
+            "Revisá que OBS siga abierto y que la red funcione.\n"
+            "¿Querés reconectar ahora?")
+    except Exception:
+        quiere = False
+    if quiere:
+        _reconectar_con_lo_guardado()
 
 
 def _version_obs_soportada(version_obs):
@@ -531,26 +700,26 @@ def conectar_obs():
         )
         mod_red.log_conexion(paso, "OK")
         paso = "REGISTRO_CALLBACKS"
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_meters)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_media_input_playback_started)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_media_input_playback_ended)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_created)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_program_scene_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_current_scene_collection_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_enable_state_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_created)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_scene_item_removed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_created)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_removed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_mute_state_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_volume_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_audio_monitor_type_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_input_name_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_created)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_removed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_enable_state_changed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_list_reindexed)
-        nuevo_cliente_eventos.callback.register(mod_obs_eventos.on_source_filter_name_changed)
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_volume_meters))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_media_input_playback_started))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_media_input_playback_ended))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_scene_created))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_current_program_scene_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_current_scene_collection_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_scene_item_enable_state_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_scene_item_created))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_scene_item_removed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_created))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_removed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_mute_state_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_volume_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_audio_monitor_type_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_input_name_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_source_filter_created))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_source_filter_removed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_source_filter_enable_state_changed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_source_filter_list_reindexed))
+        nuevo_cliente_eventos.callback.register(_seguro(mod_obs_eventos.on_source_filter_name_changed))
 
     except Exception as e:
         import traceback as _tb
@@ -578,7 +747,7 @@ def conectar_obs():
         mod_audio_musica_conexion.antes_de_conectar_obs()
     except Exception:
         pass
-    E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente)
+    E.cliente_obs = _ClienteOBSSincronizado(nuevo_cliente, host, puerto, password)
     E.cliente_eventos = nuevo_cliente_eventos
     E.conectado = True
     E.host_conectado = host
@@ -598,6 +767,7 @@ def conectar_obs():
     except Exception as e:
         mod_red.log_conexion("SYNC", f"no se pudo sincronizar la música local: {e!r}")
     mod_red.log_conexion("EXITO", f"conectado a {host}:{puerto}, config guardada")
+    _iniciar_vigilancia()
 
     mod_configuracion.guardar_config_conexion(host, puerto, password)
     _guardar_base_obs_del_campo()
@@ -707,6 +877,7 @@ def desconectar_obs():
     E.conectado = False
     E.host_conectado = None
     E.plataforma_obs = ""
+    _detener_vigilancia()
 
     for cliente in (E.cliente_obs, E.cliente_eventos):
         try:

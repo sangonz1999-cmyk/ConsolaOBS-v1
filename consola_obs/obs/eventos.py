@@ -365,6 +365,60 @@ def _sincronizar_monitor_remoto(nombre, tipo):
     mod_ui_tarjeta._reforzar_oculta_en_obs(nombre)
 
 
+def resincronizar_estado_audio(solo_nombre=None):
+    """Red de seguridad contra eventos perdidos: pide a OBS el mute y el
+    tipo de monitoreo reales y corrige la interfaz si difieren. Se llama
+    desde un HILO (hace pedidos a OBS); la interfaz se toca con after().
+    Es lo que evita que el programa muestre una cosa y OBS otra."""
+    if not E.conectado:
+        return
+    nombres = [solo_nombre] if solo_nombre else list(E.fuentes.keys())
+    cambios = []
+    for nombre in nombres:
+        if not E.conectado:
+            return
+        widgets = E.fuentes.get(nombre)
+        if not widgets:
+            continue
+        muted = None
+        tipo = None
+        try:
+            muted = _valor(E.cliente_obs.get_input_mute(nombre), "input_muted", "inputMuted")
+        except mod_obs_cliente.obs.error.OBSSDKRequestError:
+            continue  # la fuente ya no existe en OBS
+        except Exception:
+            return  # problema de conexión: lo maneja la vigilancia
+        try:
+            tipo = _tipo_monitor_normalizado(_valor(
+                E.cliente_obs.get_input_audio_monitor_type(nombre),
+                "monitor_type", "monitorType"))
+        except mod_obs_cliente.obs.error.OBSSDKRequestError:
+            tipo = None
+        except Exception:
+            return
+        cambios.append((nombre, muted, tipo))
+
+    def _aplicar():
+        for nombre, muted, tipo in cambios:
+            widgets = E.fuentes.get(nombre)
+            if not widgets:
+                continue
+            if muted is not None and bool(widgets.get("muted")) != bool(muted):
+                _sincronizar_mute_remoto(nombre, bool(muted))
+            if tipo and widgets.get("tipo_monitor") != tipo:
+                _sincronizar_monitor_remoto(nombre, tipo)
+    if cambios:
+        try:
+            E.ventana.after(0, _aplicar)
+        except Exception:
+            pass
+
+
+def resincronizar_estado_audio_en_hilo(solo_nombre=None):
+    threading.Thread(
+        target=resincronizar_estado_audio, args=(solo_nombre,), daemon=True).start()
+
+
 def on_input_name_changed(datos):
     """Alguien renombró una fuente directamente desde OBS (o desde
     otra instancia de este mismo programa): reflejarlo acá sin que el
