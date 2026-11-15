@@ -90,8 +90,10 @@ def test_suscriptor_que_explota_no_frena_a_los_demas():
 
 
 def test_la_capa_obs_no_carga_la_interfaz():
-    """El ciclo obs/cliente -> obs/eventos -> ui/tarjeta_fuente quedó roto."""
-    codigo = ("import sys; import consola_obs.obs.cliente, consola_obs.obs.eventos;"
+    """La capa de OBS y la de audio no dependen de la interfaz (el ciclo
+    obs/cliente -> obs/eventos -> ui/tarjeta_fuente quedó roto)."""
+    codigo = ("import sys; import consola_obs.obs.cliente, consola_obs.obs.eventos,"
+              " consola_obs.audio.reproduccion, consola_obs.audio.musica, consola_obs.audio.volumen_salida;"
               "print([m for m in sys.modules if m.startswith('consola_obs.ui')])")
     salida = subprocess.run([sys.executable, "-c", codigo], cwd=RAIZ,
                             capture_output=True, text=True, check=True).stdout.strip()

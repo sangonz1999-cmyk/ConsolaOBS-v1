@@ -33,3 +33,4 @@ def registrar():
     avisos.suscribir("pedir_ajustes_conexion", lambda: mod_ui_cabecera.abrir_ajustes("Conexión"))
     avisos.suscribir("musica_estado_cambio", mod_ui_musica._refrescar_mini_player)
     avisos.suscribir("pad_terminado", mod_ui_soundboard._apagar_pad_si_token_vigente)
+    avisos.suscribir("pad_activo", mod_ui_soundboard._fijar_pad_activo)

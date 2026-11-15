@@ -17,8 +17,8 @@ from tkinter import messagebox, simpledialog, ttk
 from consola_obs import estado as E
 from consola_obs import red as mod_red
 from consola_obs.obs import eventos as mod_obs_eventos
-from consola_obs.audio import filtros as mod_audio_filtros
-from consola_obs.audio import propiedades as mod_audio_propiedades
+from consola_obs.ui import filtros as mod_audio_filtros
+from consola_obs.ui import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta
 

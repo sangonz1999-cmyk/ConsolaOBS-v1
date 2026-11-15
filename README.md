@@ -186,14 +186,14 @@ consola_obs/
 ├── obs/
 │   ├── cliente.py    # comandos: volumen, filtros, fuentes, escenas, efectos
 │   └── eventos.py    # callbacks push de OBS-WebSocket
-├── audio/
-│   ├── filtros.py       # editor de filtros en vivo
-│   ├── propiedades.py   # ventana de Propiedades por fuente
-│   ├── fuentes.py       # agregar fuente
+├── audio/            # lógica de audio (no importa nada de ui/)
 │   └── reproduccion.py  # soundboard (OBS + audio local en PC)
 └── ui/
     ├── ventana.py         # cuerpo, divisor, tipografía, cierre
     ├── aviso.py           # avisos que no bloquean (esquina de la ventana)
+    ├── filtros.py         # editor de filtros en vivo
+    ├── propiedades.py     # ventana de Propiedades por fuente
+    ├── agregar_fuente.py  # agregar fuente
     ├── suscripciones.py   # qué hace la ventana con cada aviso del núcleo
     ├── cabecera.py        # cabecera + menú desplegable de ajustes
     ├── tarjeta_fuente.py  # tarjetas/faders (Profesional y Moderna)
@@ -372,7 +372,7 @@ Código separado en el paquete `consola_obs/` (cada parte en su módulo, con el 
 
 (b2) Modelo y avisos (`nucleo/modelo.py`, `nucleo/avisos.py`):
   - El modelo del mezclador guarda lo que OBS dice de cada fuente (volumen, mute, monitoreo). Eventos de OBS, botones, barra de volumen y resincronización lo actualizan con `mezclador.actualizar(...)`, que avisa "fuente_cambiada" sólo con lo que cambió de verdad.
-  - La capa de OBS no importa nada de `ui/`: emite avisos ("escena_cambiada", "conectado", "pad_terminado", …) y `ui/suscripciones.py` decide qué hace la ventana con cada uno. Pendiente: `audio/fuentes.py` y `audio/reproduccion.py` todavía llaman a la interfaz directamente.
+  - La capa de OBS no importa nada de `ui/`: emite avisos ("escena_cambiada", "conectado", "pad_terminado", …) y `ui/suscripciones.py` decide qué hace la ventana con cada uno. `audio/` tampoco importa nada de `ui/` (los diálogos de filtros, propiedades y agregar fuente viven en `ui/`).
   - `_lock_pedidos_obs` protege el socket síncrono (see clase _ClienteOBSSincronizado, que envuelve cada método con threading.Lock vía __getattr__).
   - `_lock_sincronizar_escenas` serializa las operaciones de crear/mover fuentes entre escenas (evita duplicarla dos veces si dos hilos corren a la vez).
 

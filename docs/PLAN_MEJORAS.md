@@ -8,7 +8,7 @@ ConsolaOBS funciona, pero se siente básico por tres motivos que encontré al le
 - **La interfaz habla directo con OBS.** Mover un fader, mutear o conectar hace el pedido de red en el hilo de la ventana, así que cualquier demora de OBS congela el programa hasta 5 s. De ahí venían también los dos errores que ya corregimos.
 - **No hay red de seguridad.** No hay tests, no hay registro de errores (los `print` se pierden en el `.exe`), casi 600 errores se tragan con `except: pass`, y los ajustes se guardan de forma que un corte los puede corromper.
 
-Decisiones tuyas que este plan asume: **migrar la interfaz a Qt (PySide6)** y sumar **atajos de teclado globales** y **presets del mezclador**. Cambio de escenas, control de transmisión y control desde el celular quedan fuera, pero la arquitectura nueva los deja fáciles de agregar después.
+Decisiones tuyas que este plan asume: **migrar la interfaz a Qt (PySide6)** y sumar (sin atajos globales ni presets: se descartaron). Cambio de escenas, control de transmisión y control desde el celular quedan fuera, pero la arquitectura nueva los deja fáciles de agregar después.
 
 Resultado buscado: un programa que se vea y se sienta como una app profesional de audio, que nunca se congele ni se desincronice de OBS, y que se pueda seguir mejorando sin miedo a romperlo.
 
@@ -24,7 +24,7 @@ El programa nuevo debe cumplir **todas** las funciones y micro funciones del pro
 
 ## Enfoque general
 
-Se hace en 5 etapas. Cada una termina con el programa funcionando y se puede publicar por separado. La versión Tkinter sigue siendo la que se usa hasta que la versión Qt la iguale; recién ahí se borra.
+Se hace en 4 etapas (la 3 se descartó). Cada una termina con el programa funcionando y se puede publicar por separado. La versión Tkinter sigue siendo la que se usa hasta que la versión Qt la iguale; recién ahí se borra (al final de la Etapa 2).
 
 La idea central: separar un **núcleo sin interfaz** (OBS, audio, configuración, sync) de la **capa visual**. El núcleo se arma primero y lo usan las dos interfaces durante la transición.
 
@@ -33,7 +33,7 @@ consola_obs/
   nucleo/     estado del mezclador, servicio OBS, config, presets, atajos   (sin Tk ni Qt)
   audio/      se mantiene, sin importar nada de ui/
   sync/ update/   se mantienen
-  ui/         interfaz Tkinter actual (se elimina al final de la etapa 3)
+  ui/         interfaz Tkinter actual (se elimina al final de la etapa 2)
   qt/         interfaz nueva en PySide6
 ```
 
@@ -88,15 +88,11 @@ Lo que arregla la fluidez y la sincronía de raíz, antes de cambiar una sola pa
 
 Orden de construcción: tema y ventana → mezclador → efectos → música → ajustes. Se arranca con `main.py --qt` hasta tener paridad.
 
-## Etapa 3 — Funciones nuevas
+## Etapa 3 — DESCARTADA
 
-1. **Atajos de teclado globales** (`nucleo/atajos.py`). Con `RegisterHotKey` de Windows, sin dependencias ni permisos de administrador. Asignables a: disparar un pad, detener efectos, mutear una fuente, alternar auricular, música (play/pausa, siguiente), cargar un preset. Pantalla de ajustes con captura de tecla y aviso de conflictos.
-2. **Presets del mezclador** (`nucleo/presets.py`). Guardan volumen, mute y monitoreo de las fuentes elegidas, por colección de escenas. Aplicar con un clic o un atajo, con transición suave de volumen opcional. Incluye "deshacer último preset".
-3. **Mejoras a lo que ya existe:**
-   - efectos: varios pads sonando a la vez (hoy comparten una sola fuente de OBS), fundido de entrada y salida configurable, modo bucle;
-   - música: fundido cruzado entre temas y bajada automática de la música cuando suena un efecto o se abre un micrófono;
-   - mezclador: deshacer para los cambios de volumen y mute.
-4. Al terminar esta etapa se elimina `consola_obs/ui/` y la dependencia de Tkinter.
+Se quitó del plan por decisión del usuario: el programa siempre va a estar en primer plano, así que los atajos de teclado globales no hacen falta, y con ellos se descartan los presets, los pads simultáneos, el fundido cruzado, la bajada automática de música y el deshacer. Si más adelante se quiere alguna, se vuelve a evaluar por separado.
+
+La eliminación de la interfaz Tkinter (`consola_obs/ui/`) que estaba al final de esa etapa pasa al final de la Etapa 2, cuando todos los ítems de `docs/PARIDAD.md` estén verificados.
 
 ## Etapa 4 — Lo que no se ve pero importa
 
@@ -141,5 +137,4 @@ Se reutiliza sin reescribir: motor de audio local (`audio/motor_local.py`), nive
 - **Etapa 0:** cerrar el programa desconectado y comprobar que el orden de fuentes se conserva; forzar un error y verlo en el archivo de registro.
 - **Etapa 1:** `pytest` con OBS simulado. Con OBS real: mover faders rápido sin que la ventana se trabe, cerrar OBS y ver "reconectando…", abrirlo y ver que todo vuelve solo, mutear desde OBS y desde la consola alternando 50 veces sin diferencias.
 - **Etapa 2:** lista de paridad pantalla por pantalla contra la versión Tkinter; redimensionar y mover entre monitores con distinto escalado; medidores a 60 fps con 20 fuentes.
-- **Etapa 3:** atajos con la ventana minimizada y con un juego en primer plano; guardar un preset, desordenar la mezcla, aplicarlo y comparar con OBS.
 - **Etapa 4:** actualizar desde la versión anterior con una descarga corrupta (debe rechazarla) y con una buena; intentar emparejar sync sin confirmación.

@@ -4,7 +4,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from consola_obs import estado as E
 from consola_obs.obs import eventos as mod_obs_eventos
-from consola_obs.audio import filtros as mod_audio_filtros
+from consola_obs.ui import filtros as mod_audio_filtros
 
 
 def abrir_propiedades(nombre):

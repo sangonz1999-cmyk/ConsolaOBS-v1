@@ -1,3 +1,4 @@
+import os
 import contextlib
 import threading
 import time
@@ -15,7 +16,7 @@ from consola_obs.audio import volumen_salida as mod_volumen_salida
 from consola_obs.audio import rampa_ganancia as mod_rampa_ganancia
 from consola_obs.audio import motor_mci as mod_motor_mci
 from consola_obs.audio import estado_audio_local as mod_estado_audio_local
-from consola_obs.ui import soundboard as mod_ui_soundboard
+from consola_obs.nucleo import avisos
 
 _reproduccion_local = {"dispositivo": None, "token": None}
 _aviso_miniaudio = {"mostrado": False}
@@ -228,7 +229,7 @@ def _apagar_pad_si_desconectado(token):
         indice = E._sesion_reproduccion.get("indice")
         E.ventana.after(
             0,
-            lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            lambda: avisos.emitir("pad_terminado", indice, token))
     except Exception:
         pass
 
@@ -481,6 +482,13 @@ def cambiar_nivelar_efectos(valor):
     mod_configuracion.guardar_config_interfaz({"nivelar_efectos": E.nivelar_efectos})
 
 
+def _normalizar_ruta(ruta):
+    try:
+        return os.path.normcase(os.path.normpath(os.path.abspath(ruta)))
+    except Exception:
+        return ruta
+
+
 def _en_ui(funcion):
     """Ejecuta 'funcion' en el hilo de Tk. Los messagebox NO se pueden
  abrir desde un hilo de trabajo: se cuelgan y dejan la consola
@@ -504,7 +512,7 @@ def _falla_envio_obs(indice, token, suena_local, paso, error):
     if _sesion_vigente(token):
         _vaciar_fuente_efectos()
         if not suena_local:
-            _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            _en_ui(lambda: avisos.emitir("pad_terminado", indice, token))
 
 
 def _asegurar_filtro_nivel(db):
@@ -703,7 +711,7 @@ def _cargar_y_disparar(indice, accion, token):
         if not suena_local:
             _en_ui(lambda: messagebox.showwarning(
                 "Sin conexión", "Conectate a OBS para poder reproducir los efectos."))
-            _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            _en_ui(lambda: avisos.emitir("pad_terminado", indice, token))
         return
 
     try:
@@ -809,7 +817,7 @@ def _cargar_y_disparar(indice, accion, token):
     except Exception as e:
         print(f"No se pudo reproducir el efecto: {e}")
         _en_ui(lambda: messagebox.showerror("Error", f"No se pudo reproducir el efecto.\n\n{e}"))
-        _en_ui(lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+        _en_ui(lambda: avisos.emitir("pad_terminado", indice, token))
 
 
 _cache_duracion = {}
@@ -870,7 +878,7 @@ def _iniciar_reproduccion(indice):
     except Exception:
         ruta = None
     E._sesion_reproduccion["archivo"] = ruta
-    mod_ui_soundboard._fijar_pad_activo(indice)
+    avisos.emitir("pad_activo", indice)
     threading.Thread(
         target=_cargar_duracion,
         args=(indice, token, ruta),
@@ -907,9 +915,9 @@ def _fundido_y_detener_cuerpo(indice, token, duracion, pasos, cadena):
         # Sin OBS no hay fundido de aquel lado, pero el local sí se
         # desvanece igual; la luz se apaga cuando termina (~2 s).
         if _detener_local(token, fundido=True):
-            E.ventana.after(2100, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            E.ventana.after(2100, lambda: avisos.emitir("pad_terminado", indice, token))
         else:
-            E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+            E.ventana.after(0, lambda: avisos.emitir("pad_terminado", indice, token))
         return
 
     try:
@@ -990,7 +998,7 @@ def _fundido_y_detener_cuerpo(indice, token, duracion, pasos, cadena):
         _vaciar_fuente_efectos()
 
     _detener_local(token)
-    E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+    E.ventana.after(0, lambda: avisos.emitir("pad_terminado", indice, token))
 
 
 def _esperar_a_que_se_detenga(token, tope_seg=1.0):
@@ -1108,7 +1116,7 @@ def detener_sonido(indice):
     _detener_local()
     if E._sesion_reproduccion.get("indice") == indice:
         E._sesion_reproduccion["token"] += 1
-        mod_ui_soundboard._fijar_pad_activo(None)
+        avisos.emitir("pad_activo", None)
     if not E.conectado:
         return
     token = E._sesion_reproduccion.get("token")
@@ -1202,8 +1210,8 @@ def _consultar_estado_reproduccion():
                     esperado = E._sesion_reproduccion.get("archivo")
                     esperado_obs = (mod_rutas_obs.resolver_para_obs(esperado)
                                     if esperado else None)
-                    ok = bool(cargado and esperado_obs and mod_ui_soundboard._normalizar_ruta(
-                        cargado) == mod_ui_soundboard._normalizar_ruta(esperado_obs))
+                    ok = bool(cargado and esperado_obs and _normalizar_ruta(
+                        cargado) == _normalizar_ruta(esperado_obs))
                 except Exception:
                     ok = False
                 if ok:
@@ -1242,7 +1250,7 @@ def _consultar_estado_reproduccion():
             _fin_confirmado["token"] = None
             _fin_confirmado["rachas"] = 0
             return
-        E.ventana.after(0, lambda: mod_ui_soundboard._apagar_pad_si_token_vigente(indice, token))
+        E.ventana.after(0, lambda: avisos.emitir("pad_terminado", indice, token))
     else:
         _fin_confirmado["token"] = None
         _fin_confirmado["rachas"] = 0

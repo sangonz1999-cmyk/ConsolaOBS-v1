@@ -35,6 +35,7 @@ TEMAS = {
     "pedir_ajustes_conexion":   "() abrir Ajustes en la pestaña Conexión",
     "musica_estado_cambio":     "() refrescar el mini reproductor",
     "pad_terminado":            "(indice, token) apagar el pad si sigue vigente",
+    "pad_activo":               "(indice|None) qué pad está sonando (brillo en la interfaz)",
 }
 
 

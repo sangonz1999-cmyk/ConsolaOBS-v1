@@ -18,7 +18,7 @@ from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.audio import reproduccion as mod_audio_reproduccion
 from consola_obs.audio import musica as mod_audio_musica
 from consola_obs.audio import rutas_obs as mod_rutas_obs
-from consola_obs.audio import fuentes as mod_audio_fuentes
+from consola_obs.ui import agregar_fuente as mod_audio_fuentes
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import tarjeta_fuente as mod_ui_tarjeta

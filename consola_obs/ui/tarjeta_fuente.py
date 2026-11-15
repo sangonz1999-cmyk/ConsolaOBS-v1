@@ -13,8 +13,8 @@ from consola_obs.obs import cliente as mod_obs_cliente
 from consola_obs.obs import eventos as mod_obs_eventos
 from consola_obs.nucleo import servicio_obs as mod_servicio
 from consola_obs.nucleo import modelo as mod_modelo
-from consola_obs.audio import filtros as mod_audio_filtros
-from consola_obs.audio import propiedades as mod_audio_propiedades
+from consola_obs.ui import filtros as mod_audio_filtros
+from consola_obs.ui import propiedades as mod_audio_propiedades
 from consola_obs.ui import dibujo as mod_ui_dibujo
 from consola_obs.ui import medidores as mod_ui_medidores
 from consola_obs.ui import menu_moderno
@@ -2048,10 +2048,10 @@ def _abrir_menu_contextual_panel_fuentes(event):
     tarjeta ya tiene su propio menú (_abrir_menu_contextual_fuente) y
     Tk manda el evento primero al widget de más adentro."""
     # Import acá adentro y no arriba del archivo a propósito:
-    # consola_obs.audio.fuentes importa este mismo módulo (necesita
+    # consola_obs.ui.agregar_fuente importa este mismo módulo (necesita
     # actualizar() para refrescar la consola después de crear), así que
     # importarlo arriba sería una dependencia circular.
-    from consola_obs.audio import fuentes as mod_audio_fuentes
+    from consola_obs.ui import agregar_fuente as mod_audio_fuentes
 
     def _construir(m):
         if not E.conectado:
